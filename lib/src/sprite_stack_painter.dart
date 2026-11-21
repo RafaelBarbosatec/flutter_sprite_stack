@@ -13,6 +13,10 @@ class SpriteStackPainter extends CustomPainter {
     this.scale = 1,
     this.spacing = 1,
     this.offset = Offset.zero,
+    this.outline = true,
+    this.shadow = true,
+    this.outlineColor = const Color(0xFF181C24),
+    this.shadowColor = const Color(0xFFBAC6D4),
     this.stackPaint,
   });
 
@@ -32,7 +36,19 @@ class SpriteStackPainter extends CustomPainter {
   /// Optional offset applied on top of the default bottom-center anchor.
   final Offset offset;
 
-  /// Optional paint, e.g. to apply a color filter.
+  /// Whether to draw the crisp 1 px outer outline.
+  final bool outline;
+
+  /// Whether to draw the projected ground shadow.
+  final bool shadow;
+
+  /// Outline color for the finished stack.
+  final Color outlineColor;
+
+  /// Ground shadow color.
+  final Color shadowColor;
+
+  /// Optional paint, e.g. to apply a color filter to the body.
   final Paint? stackPaint;
 
   @override
@@ -45,6 +61,10 @@ class SpriteStackPainter extends CustomPainter {
       scale: scale,
       spacing: spacing,
       paint: stackPaint,
+      outline: outline,
+      shadow: shadow,
+      outlineColor: outlineColor,
+      shadowColor: shadowColor,
     );
   }
 
@@ -56,5 +76,9 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.scale != scale ||
       oldDelegate.spacing != spacing ||
       oldDelegate.offset != offset ||
+      oldDelegate.outline != outline ||
+      oldDelegate.shadow != shadow ||
+      oldDelegate.outlineColor != outlineColor ||
+      oldDelegate.shadowColor != shadowColor ||
       oldDelegate.stackPaint != stackPaint;
 }

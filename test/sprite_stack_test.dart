@@ -126,6 +126,8 @@ void main() {
         yaw: 1.2,
         pitch: 0.6,
         scale: 4,
+        outline: false,
+        shadow: false,
       );
       final picture = recorder.endRecording();
       final rendered = await picture.toImage(200, 260);
@@ -135,6 +137,53 @@ void main() {
 
       rendered.dispose();
       picture.dispose();
+      stack.dispose();
+    });
+  });
+
+  group('outline and shadow', () {
+    test('draws a 1 px outline around the finished stack', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFF0000);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final pixels = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        outline: true,
+        shadow: false,
+      );
+
+      // Interior stays red; the four 4-connected neighbours become ink.
+      expect(_pixelAt(pixels, 24, 12, 18), 0xFFFF0000);
+      expect(_pixelAt(pixels, 24, 12, 15), 0xFF181C24);
+      expect(_pixelAt(pixels, 24, 12, 20), 0xFF181C24);
+      expect(_pixelAt(pixels, 24, 9, 18), 0xFF181C24);
+      expect(_pixelAt(pixels, 24, 14, 18), 0xFF181C24);
+
+      stack.dispose();
+    });
+
+    test('draws a projected ground shadow offset +2,+3', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFF0000);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final pixels = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: true,
+      );
+
+      // Shadow is the slice dropped at (+2, +3), body is on top of it.
+      expect(_pixelAt(pixels, 24, 12, 18), 0xFFFF0000);
+      expect(_pixelAt(pixels, 24, 15, 22), 0xFFBAC6D4);
+
       stack.dispose();
     });
   });
@@ -192,6 +241,8 @@ Future<Uint8List> _renderToPixels(
   required ui.Offset position,
   required double pitch,
   double spacing = 1,
+  bool outline = false,
+  bool shadow = false,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -200,6 +251,8 @@ Future<Uint8List> _renderToPixels(
     position: position,
     pitch: pitch,
     spacing: spacing,
+    outline: outline,
+    shadow: shadow,
   );
   final picture = recorder.endRecording();
   final image = await picture.toImage(width, height);

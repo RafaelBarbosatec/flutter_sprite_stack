@@ -16,6 +16,10 @@ class SpriteStackComponent extends PositionComponent {
     this.pitch = SpriteStack.defaultPitch,
     this.stackScale = 1,
     this.spacing = 1,
+    this.outline = true,
+    this.shadow = true,
+    this.outlineColor = const Color(0xFF181C24),
+    this.shadowColor = const Color(0xFFBAC6D4),
     super.position,
     super.priority,
   }) : super(
@@ -40,6 +44,18 @@ class SpriteStackComponent extends PositionComponent {
   /// Lift between slices, in source pixels.
   double spacing;
 
+  /// Whether to draw the crisp 1 px outer outline.
+  bool outline;
+
+  /// Whether to draw the projected ground shadow.
+  bool shadow;
+
+  /// Outline color for the finished stack.
+  Color outlineColor;
+
+  /// Ground shadow color.
+  Color shadowColor;
+
   @override
   void render(Canvas canvas) {
     stack.render(
@@ -49,6 +65,10 @@ class SpriteStackComponent extends PositionComponent {
       pitch: pitch,
       scale: stackScale,
       spacing: spacing,
+      outline: outline,
+      shadow: shadow,
+      outlineColor: outlineColor,
+      shadowColor: shadowColor,
     );
   }
 

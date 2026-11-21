@@ -4,7 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/sprite_stack.dart';
 
-const int _sliceCount = 24;
+enum _SpriteKind { car, house, robot }
+
+extension on _SpriteKind {
+  String get label => switch (this) {
+        _SpriteKind.car => 'Car',
+        _SpriteKind.house => 'House',
+        _SpriteKind.robot => 'Robot',
+      };
+
+  String get asset => switch (this) {
+        _SpriteKind.car => 'sprites/car/slices.png',
+        _SpriteKind.house => 'sprites/house/slices.png',
+        _SpriteKind.robot => 'assets/robot_stack.png',
+      };
+
+  int get sliceCount => switch (this) {
+        _SpriteKind.car => 18,
+        _SpriteKind.house => 28,
+        _SpriteKind.robot => 24,
+      };
+}
 
 void main() => runApp(const SpriteStackExampleApp());
 
@@ -36,9 +56,12 @@ class DemoScreen extends StatefulWidget {
 class _DemoScreenState extends State<DemoScreen>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
-  late final Future<SpriteStack> _stackFuture;
 
-  SpriteStack? _stack;
+  _SpriteKind _selected = _SpriteKind.car;
+  SpriteStack? _carStack;
+  SpriteStack? _houseStack;
+  SpriteStack? _robotStack;
+
   Duration _lastTick = Duration.zero;
 
   double _yaw = 0.6;
@@ -46,15 +69,32 @@ class _DemoScreenState extends State<DemoScreen>
   double _scale = 6;
   double _spacing = 1;
   bool _spinning = true;
+  bool _outline = true;
+  bool _shadow = true;
+
+  SpriteStack? get _stack => switch (_selected) {
+        _SpriteKind.car => _carStack,
+        _SpriteKind.house => _houseStack,
+        _SpriteKind.robot => _robotStack,
+      };
 
   @override
   void initState() {
     super.initState();
-    _stackFuture = SpriteStack.load(
-      'assets/robot_stack.png',
-      sliceCount: _sliceCount,
-    );
+    _load(_SpriteKind.car).then((stack) {
+      if (mounted) setState(() => _carStack = stack);
+    });
+    _load(_SpriteKind.house).then((stack) {
+      if (mounted) setState(() => _houseStack = stack);
+    });
+    _load(_SpriteKind.robot).then((stack) {
+      if (mounted) setState(() => _robotStack = stack);
+    });
     _ticker = createTicker(_onTick)..start();
+  }
+
+  Future<SpriteStack> _load(_SpriteKind kind) {
+    return SpriteStack.load(kind.asset, sliceCount: kind.sliceCount);
   }
 
   void _onTick(Duration elapsed) {
@@ -67,107 +107,135 @@ class _DemoScreenState extends State<DemoScreen>
   @override
   void dispose() {
     _ticker.dispose();
-    _stack?.dispose();
+    _carStack?.dispose();
+    _houseStack?.dispose();
+    _robotStack?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final stack = _stack;
     return Scaffold(
       appBar: AppBar(title: const Text('flutter_sprite_stack — turntable')),
-      body: FutureBuilder<SpriteStack>(
-        future: _stackFuture,
-        builder: (context, snapshot) {
-          final stack = snapshot.data;
-          if (stack != null) _stack = stack;
-
-          return Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: snapshot.hasError
-                      ? Text('Could not load the strip: ${snapshot.error}')
-                      : stack == null
-                          ? const SizedBox(
-                              width: 460,
-                              height: 460,
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          : CustomPaint(
-                              size: const Size(460, 460),
-                              painter: SpriteStackPainter(
-                                stack: stack,
-                                yaw: _yaw,
-                                pitch: _pitch,
-                                scale: _scale,
-                                spacing: _spacing,
-                              ),
-                            ),
-                ),
+      body: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: ColoredBox(
+              // Same light stage as the reference viewer, so the ink outline
+              // and the projected shadow read like the HTML preview.
+              color: const Color(0xFFF1F4F8),
+              child: Center(
+                child: stack == null
+                    ? const SizedBox(
+                        width: 460,
+                        height: 460,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : CustomPaint(
+                        size: const Size(460, 460),
+                        painter: SpriteStackPainter(
+                          stack: stack,
+                          yaw: _yaw,
+                          pitch: _pitch,
+                          scale: _scale,
+                          spacing: _spacing,
+                          outline: _outline,
+                          shadow: _shadow,
+                        ),
+                      ),
               ),
-              Expanded(
-                flex: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${stack?.sliceCount ?? _sliceCount} slices · '
-                        '${stack?.sliceWidth ?? 32}x${stack?.sliceHeight ?? 32} px',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 24),
-                      _Slider(
-                        label: 'Yaw',
-                        value: _yaw % (2 * math.pi),
-                        min: 0,
-                        max: 2 * math.pi,
-                        onChanged: (value) => setState(() => _yaw = value),
-                      ),
-                      _Slider(
-                        label: 'Pitch',
-                        value: _pitch,
-                        min: 0.05,
-                        max: math.pi / 2,
-                        onChanged: (value) => setState(() => _pitch = value),
-                      ),
-                      _Slider(
-                        label: 'Scale',
-                        value: _scale,
-                        min: 1,
-                        max: 12,
-                        onChanged: (value) => setState(() => _scale = value),
-                      ),
-                      _Slider(
-                        label: 'Slice spacing',
-                        value: _spacing,
-                        min: 0.5,
-                        max: 3,
-                        onChanged: (value) => setState(() => _spacing = value),
-                      ),
-                      const SizedBox(height: 8),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: _spinning,
-                        title: const Text('Auto spin'),
-                        onChanged: (value) => setState(() => _spinning = value),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Drag the sliders to rotate in place. Rendering is one '
-                        'drawImageRect per slice, no 3D pipeline involved.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SegmentedButton<_SpriteKind>(
+                    segments: _SpriteKind.values
+                        .map(
+                          (kind) => ButtonSegment(
+                            value: kind,
+                            label: Text(kind.label),
+                          ),
+                        )
+                        .toList(),
+                    selected: {_selected},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _selected = selection.first),
                   ),
-                ),
+                  const SizedBox(height: 24),
+                  Text(
+                    '${stack?.sliceCount ?? _selected.sliceCount} slices · '
+                    '${stack?.sliceWidth ?? 0}x${stack?.sliceHeight ?? 0} px',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  _Slider(
+                    label: 'Yaw',
+                    value: _yaw % (2 * math.pi),
+                    min: 0,
+                    max: 2 * math.pi,
+                    onChanged: (value) => setState(() => _yaw = value),
+                  ),
+                  _Slider(
+                    label: 'Pitch',
+                    value: _pitch,
+                    min: 0.05,
+                    max: math.pi / 2,
+                    onChanged: (value) => setState(() => _pitch = value),
+                  ),
+                  _Slider(
+                    label: 'Scale',
+                    value: _scale,
+                    min: 1,
+                    max: 8,
+                    onChanged: (value) => setState(() => _scale = value),
+                  ),
+                  _Slider(
+                    label: 'Slice spacing',
+                    value: _spacing,
+                    min: 0.5,
+                    max: 3,
+                    onChanged: (value) => setState(() => _spacing = value),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _spinning,
+                    title: const Text('Auto spin'),
+                    onChanged: (value) => setState(() => _spinning = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _outline,
+                    title: const Text('1 px outline'),
+                    onChanged: (value) => setState(() => _outline = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _shadow,
+                    title: const Text('Ground shadow'),
+                    onChanged: (value) => setState(() => _shadow = value),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Car and house strips carved from four orthographic views, '
+                    'plus the generated robot stack. The stack is drawn '
+                    'bottom-to-top at 1x art pixels, outlined once and scaled '
+                    'with nearest filtering.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
