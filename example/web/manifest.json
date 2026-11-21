@@ -1,6 +1,6 @@
 {
-  "name": "sprite_stack example",
-  "short_name": "sprite_stack",
+  "name": "flutter_sprite_stack example",
+  "short_name": "flutter_sprite_stack",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#101828",
