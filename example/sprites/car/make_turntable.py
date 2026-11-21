@@ -15,7 +15,7 @@ from views_to_slices import views_to_slices, render_stack_image  # noqa: E402
 
 def main() -> None:
     sheet = np.array(Image.open("views.png").convert("RGBA"))
-    vol, _ = views_to_slices(sheet, slices=18, top_nose="down", side_nose="left", order="reading")
+    vol, _ = views_to_slices(sheet, slices=16, top_nose="down", side_nose="left", order="reading")
 
     scale = 6
     frames = []

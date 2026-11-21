@@ -3,6 +3,9 @@
 [![pub package](https://img.shields.io/pub/v/flutter_sprite_stack.svg)](https://pub.dev/packages/flutter_sprite_stack)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.22-02569B?logo=flutter)](https://flutter.dev)
+[![docs](https://img.shields.io/badge/docs-docs.page-6FA0FF)](https://docs.page/RafaelBarbosatec/flutter_sprite_stack)
+
+📖 **Documentation:** https://docs.page/RafaelBarbosatec/flutter_sprite_stack
 
 Render **sprite-stacking** props in Flutter with free turntable rotation.
 
@@ -238,8 +241,9 @@ cd example
 flutter run -d chrome
 ```
 
-The demo ships the car and house strips carved with the sprite-stacking skill
-(`example/sprites/car/slices.png` and `example/sprites/house/slices.png`) plus
+The demo ships a Formula 1 car, a cottage and a cherry-blossom tree carved
+with the sprite-stacking skill (`example/sprites/car/slices.png`,
+`example/sprites/house/slices.png` and `example/sprites/tree/slices.png`) plus
 the generated `robot_stack.png`, with sliders for yaw, pitch, scale and spacing
 plus toggles for auto-spin, the 1 px outline and the ground shadow.
 

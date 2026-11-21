@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Draw the four orthographic views of a chunky blue car and compose the model sheet.
+"""Draw four orthographic views of a chunky red Formula 1 car.
 
-Outputs views.png: a 1x4 row (TOP, SIDE, FRONT, BACK), flat white, 8x nearest upscale.
+Layout: 1x4 row (TOP, SIDE, FRONT, BACK) on flat white, 8x nearest upscale.
+Geometry: 72px long, 36px wide, 22px tall, with open wheels and full-width wings.
 """
 from __future__ import annotations
 
@@ -11,20 +12,43 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 PAL = {
-    "outline": (26, 26, 46),
-    "body": (46, 98, 216),       # saturated mid blue
-    "shadow": (26, 58, 142),     # cool deep shadow
-    "light": (150, 188, 255),    # warm bright highlight
-    "glass": (36, 66, 128),      # windshield / windows
-    "glass_h": (205, 225, 255),  # glass specular
-    "tire": (32, 32, 40),
-    "tire_h": (74, 74, 86),
-    "head": (255, 226, 92),      # headlight
-    "tail": (226, 52, 52),       # taillight
-    "bumper": (198, 202, 212),
-    "bumper_d": (120, 124, 134),
-    "grille": (18, 22, 34),
+    "outline": (14, 16, 22),
+    "body": (208, 32, 40),
+    "body_sh": (140, 20, 28),
+    "body_hi": (255, 118, 88),
+    "wing": (30, 32, 44),
+    "wing_hi": (120, 130, 156),
+    "tire": (22, 22, 30),
+    "tire_hi": (74, 74, 88),
+    "hub": (160, 164, 180),
+    "cockpit": (16, 20, 30),
+    "halo": (210, 216, 228),
+    "accent": (244, 246, 250),
+    "diffuser": (48, 50, 62),
 }
+
+W = 36          # front/back width (including outline)
+L = 72          # side length / top-view height (including outline)
+H = 16          # slice count (side view height, excluding outline)
+
+# s runs 0 (front) .. 71 (rear) along the car's length.
+FRONT_S = 0
+REAR_S = L - 1
+
+
+def top_y(s: int) -> int:
+    """Top view y for a length coordinate s (front points down)."""
+    return L - 1 - s
+
+
+def side_x(s: int) -> int:
+    """Side view x for a length coordinate s (front points left)."""
+    return s
+
+
+def py(z: int) -> int:
+    """Image y for a height coordinate z (ground is z=0 at the bottom)."""
+    return H - 1 - z
 
 
 def add_outline(img: Image.Image, color=PAL["outline"]) -> Image.Image:
@@ -51,117 +75,147 @@ def crop(img: Image.Image) -> Image.Image:
     return Image.fromarray(a[ys.min(): ys.max() + 1, xs.min(): xs.max() + 1])
 
 
-def top_view() -> Image.Image:
-    # 16 wide x 32 long, front pointing DOWN (row 31). +1 px margin for outline.
-    img = Image.new("RGBA", (18, 34), (0, 0, 0, 0))
+def _top_view() -> Image.Image:
+    img = Image.new("RGBA", (W + 2, L + 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     ox = oy = 1
-    d.rounded_rectangle([ox + 0, oy + 0, ox + 15, oy + 31], radius=2, fill=PAL["body"])
-    d.rectangle([ox + 1, oy + 1, ox + 2, oy + 30], fill=PAL["shadow"])
-    d.rectangle([ox + 13, oy + 1, ox + 14, oy + 30], fill=PAL["shadow"])
-    d.rectangle([ox + 6, oy + 1, ox + 8, oy + 30], fill=PAL["light"])
-    # windshield (front, bottom) + rear window (back, top): glass seen from above.
-    # These top-view glass areas become the windshield/rear-window faces in the hull.
-    d.rectangle([ox + 2, oy + 3, ox + 13, oy + 6], fill=PAL["glass"])
-    d.rectangle([ox + 6, oy + 4, ox + 7, oy + 5], fill=PAL["glass_h"])
-    d.rectangle([ox + 2, oy + 25, ox + 13, oy + 28], fill=PAL["glass"])
-    d.rectangle([ox + 6, oy + 26, ox + 7, oy + 27], fill=PAL["glass_h"])
+
+    # Rear wing (s 62..71) and front wing (s 0..8): full width.
+    d.rectangle([ox + 0, oy + top_y(REAR_S), ox + W - 1, oy + top_y(62)], fill=PAL["wing"])
+    d.rectangle([ox + 0, oy + top_y(62), ox + W - 1, oy + top_y(62) + 1], fill=PAL["wing_hi"])
+    d.rectangle([ox + 0, oy + top_y(8), ox + W - 1, oy + top_y(FRONT_S)], fill=PAL["wing"])
+    d.rectangle([ox + 0, oy + top_y(FRONT_S), ox + W - 1, oy + top_y(FRONT_S) + 1], fill=PAL["wing_hi"])
+
+    # Rear wheels (s 49..61, outboard) and front wheels (s 11..23, outboard).
+    d.ellipse([ox + 0, oy + top_y(61), ox + 8, oy + top_y(49)], fill=PAL["tire"])
+    d.ellipse([ox + W - 9, oy + top_y(61), ox + W - 1, oy + top_y(49)], fill=PAL["tire"])
+    d.ellipse([ox + 3, oy + top_y(23), ox + 10, oy + top_y(11)], fill=PAL["tire"])
+    d.ellipse([ox + W - 10, oy + top_y(23), ox + W - 3, oy + top_y(11)], fill=PAL["tire"])
+
+    # Central body: nose (s 8..28) and engine cover / sidepods (s 28..52).
+    d.rectangle([ox + 12, oy + top_y(28), ox + 24, oy + top_y(8)], fill=PAL["body"])
+    d.rectangle([ox + 8, oy + top_y(52), ox + 28, oy + top_y(28)], fill=PAL["body"])
+    d.ellipse([ox + 5, oy + top_y(43), ox + 31, oy + top_y(33)], fill=PAL["body"])
+
+    # Racing stripe down the middle.
+    d.rectangle([ox + 17, oy + top_y(52), ox + 18, oy + top_y(8)], fill=PAL["accent"])
+
+    # Cockpit opening (kept opaque so it does not carve a hole) + halo.
+    d.rectangle([ox + 14, oy + top_y(34), ox + 22, oy + top_y(28)], fill=PAL["cockpit"])
+    d.rectangle([ox + 13, oy + top_y(28), ox + 23, oy + top_y(26)], fill=PAL["halo"])
+
+    # Wheel hubs.
+    d.ellipse([ox + 4, oy + top_y(57), ox + 7, oy + top_y(54)], fill=PAL["hub"])
+    d.ellipse([ox + W - 7, oy + top_y(57), ox + W - 4, oy + top_y(54)], fill=PAL["hub"])
+    d.ellipse([ox + 5, oy + top_y(19), ox + 8, oy + top_y(16)], fill=PAL["hub"])
+    d.ellipse([ox + W - 8, oy + top_y(19), ox + W - 5, oy + top_y(16)], fill=PAL["hub"])
+
     return crop(add_outline(img))
 
 
-def side_view() -> Image.Image:
-    # 32 long x 16 tall, front pointing LEFT (col 0). +1 px margin for outline.
-    img = Image.new("RGBA", (34, 18), (0, 0, 0, 0))
+def _side_view() -> Image.Image:
+    img = Image.new("RGBA", (L + 2, H + 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     ox = oy = 1
-    # cabin: cols 9-20, rows 0-10 (roof at 0)
-    d.rectangle([ox + 9, oy + 0, ox + 20, oy + 10], fill=PAL["body"])
-    # main body: hood + doors + trunk, cols 1-29, rows 2-10
-    d.rectangle([ox + 1, oy + 2, ox + 29, oy + 10], fill=PAL["body"])
-    # bumpers
-    d.rectangle([ox + 0, oy + 5, ox + 1, oy + 10], fill=PAL["bumper"])
-    d.rectangle([ox + 30, oy + 5, ox + 31, oy + 10], fill=PAL["bumper"])
-    # glass band (windows)
-    d.rectangle([ox + 10, oy + 1, ox + 20, oy + 4], fill=PAL["glass"])
-    d.rectangle([ox + 13, oy + 1, ox + 14, oy + 4], fill=PAL["glass_h"])
-    # deck highlights
-    d.rectangle([ox + 2, oy + 2, ox + 8, oy + 2], fill=PAL["light"])
-    d.rectangle([ox + 22, oy + 2, ox + 28, oy + 2], fill=PAL["light"])
-    d.rectangle([ox + 11, oy + 0, ox + 19, oy + 0], fill=PAL["light"])
-    # door highlight
-    d.rectangle([ox + 11, oy + 6, ox + 19, oy + 6], fill=PAL["light"])
-    # bottom shadow
-    d.rectangle([ox + 1, oy + 9, ox + 29, oy + 10], fill=PAL["shadow"])
-    # wheels (rows 11-15, directly under body bottom row 10)
-    d.ellipse([ox + 4, oy + 11, ox + 8, oy + 15], fill=PAL["tire"])
-    d.ellipse([ox + 21, oy + 11, ox + 25, oy + 15], fill=PAL["tire"])
-    d.rectangle([ox + 5, oy + 12, ox + 6, oy + 13], fill=PAL["tire_h"])
-    d.rectangle([ox + 22, oy + 12, ox + 23, oy + 13], fill=PAL["tire_h"])
+
+    # Front wing (s 0..8).
+    d.rectangle([ox + side_x(0), oy + py(4), ox + side_x(8), oy + py(1)], fill=PAL["wing"])
+
+    # Nose wedge (s 8..28, z 2..8).
+    d.polygon(
+        [
+            (ox + side_x(8), oy + py(4)),
+            (ox + side_x(28), oy + py(8)),
+            (ox + side_x(28), oy + py(6)),
+            (ox + side_x(8), oy + py(2)),
+        ],
+        fill=PAL["body"],
+    )
+
+    # Cockpit + halo (s 28..38).
+    d.rectangle([ox + side_x(28), oy + py(11), ox + side_x(38), oy + py(8)], fill=PAL["body"])
+    d.rectangle([ox + side_x(31), oy + py(9), ox + side_x(35), oy + py(8)], fill=PAL["cockpit"])
+    d.rectangle([ox + side_x(29), oy + py(12), ox + side_x(37), oy + py(11)], fill=PAL["halo"])
+
+    # Engine cover (s 38..52) + shark fin.
+    d.rectangle([ox + side_x(38), oy + py(11), ox + side_x(52), oy + py(6)], fill=PAL["body"])
+    d.rectangle([ox + side_x(44), oy + py(14), ox + side_x(48), oy + py(11)], fill=PAL["body"])
+
+    # Diffuser (s 54..60) and beam wing (s 56..62).
+    d.rectangle([ox + side_x(54), oy + py(5), ox + side_x(60), oy + py(1)], fill=PAL["diffuser"])
+    d.rectangle([ox + side_x(56), oy + py(6), ox + side_x(62), oy + py(4)], fill=PAL["wing"])
+
+    # Rear wing (s 62..71), as tall as the wheels so all views share one height.
+    d.rectangle([ox + side_x(62), oy + py(14), ox + side_x(71), oy + py(6)], fill=PAL["wing"])
+    d.rectangle([ox + side_x(62), oy + py(14), ox + side_x(63), oy + py(6)], fill=PAL["wing_hi"])
+
+    # Wheels (front s 11..23, rear s 49..61).
+    d.ellipse([ox + side_x(11), oy + py(14), ox + side_x(23), oy + py(2)], fill=PAL["tire"])
+    d.ellipse([ox + side_x(49), oy + py(14), ox + side_x(61), oy + py(2)], fill=PAL["tire"])
+    d.ellipse([ox + side_x(15), oy + py(10), ox + side_x(19), oy + py(6)], fill=PAL["hub"])
+    d.ellipse([ox + side_x(53), oy + py(10), ox + side_x(57), oy + py(6)], fill=PAL["hub"])
+
     return crop(add_outline(img))
 
 
-def front_view() -> Image.Image:
-    img = Image.new("RGBA", (18, 18), (0, 0, 0, 0))
+def _front_view() -> Image.Image:
+    img = Image.new("RGBA", (W + 2, H + 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     ox = oy = 1
-    d.rounded_rectangle([ox + 0, oy + 0, ox + 15, oy + 10], radius=2, fill=PAL["body"])
-    # wheels
-    d.ellipse([ox + 0, oy + 11, ox + 4, oy + 15], fill=PAL["tire"])
-    d.ellipse([ox + 11, oy + 11, ox + 15, oy + 15], fill=PAL["tire"])
-    d.rectangle([ox + 1, oy + 12, ox + 2, oy + 13], fill=PAL["tire_h"])
-    d.rectangle([ox + 12, oy + 12, ox + 13, oy + 13], fill=PAL["tire_h"])
-    # windshield
-    d.rectangle([ox + 3, oy + 1, ox + 12, oy + 4], fill=PAL["glass"])
-    d.rectangle([ox + 6, oy + 2, ox + 7, oy + 3], fill=PAL["glass_h"])
-    # headlights + grille
-    d.rectangle([ox + 2, oy + 6, ox + 4, oy + 8], fill=PAL["head"])
-    d.rectangle([ox + 11, oy + 6, ox + 13, oy + 8], fill=PAL["head"])
-    d.rectangle([ox + 5, oy + 6, ox + 10, oy + 8], fill=PAL["grille"])
-    # bumper + bottom shadow
-    d.rectangle([ox + 2, oy + 9, ox + 13, oy + 9], fill=PAL["bumper"])
-    d.rectangle([ox + 0, oy + 10, ox + 15, oy + 10], fill=PAL["shadow"])
+
+    # Front wing (full width).
+    d.rectangle([ox + 0, oy + py(4), ox + W - 1, oy + py(1)], fill=PAL["wing"])
+
+    # Front wheels.
+    d.ellipse([ox + 3, oy + py(14), ox + 10, oy + py(2)], fill=PAL["tire"])
+    d.ellipse([ox + W - 10, oy + py(14), ox + W - 3, oy + py(2)], fill=PAL["tire"])
+
+    # Nose + halo.
+    d.rectangle([ox + 12, oy + py(8), ox + 24, oy + py(4)], fill=PAL["body"])
+    d.rectangle([ox + 13, oy + py(12), ox + 23, oy + py(11)], fill=PAL["halo"])
+
     return crop(add_outline(img))
 
 
-def back_view() -> Image.Image:
-    img = Image.new("RGBA", (18, 18), (0, 0, 0, 0))
+def _back_view() -> Image.Image:
+    img = Image.new("RGBA", (W + 2, H + 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     ox = oy = 1
-    d.rounded_rectangle([ox + 0, oy + 0, ox + 15, oy + 10], radius=2, fill=PAL["body"])
-    d.ellipse([ox + 0, oy + 11, ox + 4, oy + 15], fill=PAL["tire"])
-    d.ellipse([ox + 11, oy + 11, ox + 15, oy + 15], fill=PAL["tire"])
-    d.rectangle([ox + 1, oy + 12, ox + 2, oy + 13], fill=PAL["tire_h"])
-    d.rectangle([ox + 12, oy + 12, ox + 13, oy + 13], fill=PAL["tire_h"])
-    # rear window
-    d.rectangle([ox + 3, oy + 1, ox + 12, oy + 4], fill=PAL["glass"])
-    d.rectangle([ox + 6, oy + 2, ox + 7, oy + 3], fill=PAL["glass_h"])
-    # taillights + rear panel
-    d.rectangle([ox + 2, oy + 6, ox + 4, oy + 8], fill=PAL["tail"])
-    d.rectangle([ox + 11, oy + 6, ox + 13, oy + 8], fill=PAL["tail"])
-    d.rectangle([ox + 5, oy + 6, ox + 10, oy + 8], fill=PAL["bumper_d"])
-    d.rectangle([ox + 2, oy + 9, ox + 13, oy + 9], fill=PAL["bumper"])
-    d.rectangle([ox + 0, oy + 10, ox + 15, oy + 10], fill=PAL["shadow"])
+
+    # Rear wing + beam wing (full width).
+    d.rectangle([ox + 0, oy + py(14), ox + W - 1, oy + py(6)], fill=PAL["wing"])
+    d.rectangle([ox + 0, oy + py(6), ox + W - 1, oy + py(4)], fill=PAL["wing"])
+
+    # Rear wheels.
+    d.ellipse([ox + 0, oy + py(14), ox + 8, oy + py(2)], fill=PAL["tire"])
+    d.ellipse([ox + W - 9, oy + py(14), ox + W - 1, oy + py(2)], fill=PAL["tire"])
+
+    # Gearbox / engine cover + diffuser.
+    d.rectangle([ox + 8, oy + py(11), ox + 28, oy + py(4)], fill=PAL["body"])
+    d.rectangle([ox + 8, oy + py(5), ox + 28, oy + py(1)], fill=PAL["diffuser"])
+
     return crop(add_outline(img))
 
 
 def compose_sheet(views: list[Image.Image], out_path: Path, scale: int = 8, gap: int = 6) -> None:
     up = [v.resize((v.width * scale, v.height * scale), Image.NEAREST) for v in views]
     gap_px = gap * scale
+    pad = gap_px
     h = max(v.height for v in up)
     w = sum(v.width for v in up) + gap_px * (len(up) - 1)
-    sheet = Image.new("RGBA", (w, h), (255, 255, 255, 255))
-    x = 0
+    sheet = Image.new("RGBA", (w + pad * 2, h + pad * 2), (255, 255, 255, 255))
+    x = pad
     for v in up:
-        sheet.paste(v, (x, (h - v.height) // 2), v)  # alpha mask keeps white gaps
+        sheet.paste(v, (x, pad + (h - v.height) // 2), v)
         x += v.width + gap_px
     sheet.convert("RGB").save(out_path)
 
 
 def main() -> None:
     out_dir = Path(__file__).resolve().parent
-    views = [top_view(), side_view(), front_view(), back_view()]
-    for i, name in enumerate(["top", "side", "front", "back"]):
-        print(name, views[i].size)
+    views = [_top_view(), _side_view(), _front_view(), _back_view()]
+    for name, v in zip(("top", "side", "front", "back"), views):
+        print(name, v.size)
     compose_sheet(views, out_dir / "views.png")
     print("wrote", out_dir / "views.png")
 

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.page/schema.json",
+  "name": "flutter_sprite_stack",
+  "description": "Render sprite-stacking props in Flutter with free turntable rotation from a horizontal strip of top-down cross-sections.",
+  "logo": {
+    "light": "/docs/assets/logo-light.svg",
+    "dark": "/docs/assets/logo-dark.svg"
+  },
+  "favicon": "/docs/assets/favicon.svg",
+  "theme": {
+    "primary": "#6FA0FF"
+  },
+  "content": {
+    "headerDepth": 3,
+    "zoomImages": true
+  },
+  "sidebar": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        { "title": "Introduction", "href": "/" },
+        { "title": "Installation", "href": "/installation" },
+        { "title": "Quick Start", "href": "/quick-start" }
+      ]
+    },
+    {
+      "group": "Guide",
+      "pages": [
+        { "title": "Plain Flutter", "href": "/guide/flutter" },
+        { "title": "Flame / Bonfire", "href": "/guide/flame" },
+        { "title": "Asset Format", "href": "/guide/asset-format" },
+        { "title": "Creating Assets", "href": "/guide/creating-assets" },
+        { "title": "Example", "href": "/guide/example" }
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        { "title": "API", "href": "/reference/api" },
+        { "title": "Performance", "href": "/reference/performance" },
+        { "title": "Limitations", "href": "/reference/limitations" }
+      ]
+    }
+  ]
+}

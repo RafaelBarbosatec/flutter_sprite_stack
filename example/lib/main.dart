@@ -4,24 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/sprite_stack.dart';
 
-enum _SpriteKind { car, house, robot }
+enum _SpriteKind { car, house, tree, robot }
 
 extension on _SpriteKind {
   String get label => switch (this) {
         _SpriteKind.car => 'Car',
         _SpriteKind.house => 'House',
+        _SpriteKind.tree => 'Tree',
         _SpriteKind.robot => 'Robot',
       };
 
   String get asset => switch (this) {
         _SpriteKind.car => 'sprites/car/slices.png',
         _SpriteKind.house => 'sprites/house/slices.png',
+        _SpriteKind.tree => 'sprites/tree/slices.png',
         _SpriteKind.robot => 'assets/robot_stack.png',
       };
 
   int get sliceCount => switch (this) {
-        _SpriteKind.car => 18,
+        _SpriteKind.car => 16,
         _SpriteKind.house => 28,
+        _SpriteKind.tree => 43,
         _SpriteKind.robot => 24,
       };
 }
@@ -60,6 +63,7 @@ class _DemoScreenState extends State<DemoScreen>
   _SpriteKind _selected = _SpriteKind.car;
   SpriteStack? _carStack;
   SpriteStack? _houseStack;
+  SpriteStack? _treeStack;
   SpriteStack? _robotStack;
 
   Duration _lastTick = Duration.zero;
@@ -75,6 +79,7 @@ class _DemoScreenState extends State<DemoScreen>
   SpriteStack? get _stack => switch (_selected) {
         _SpriteKind.car => _carStack,
         _SpriteKind.house => _houseStack,
+        _SpriteKind.tree => _treeStack,
         _SpriteKind.robot => _robotStack,
       };
 
@@ -86,6 +91,9 @@ class _DemoScreenState extends State<DemoScreen>
     });
     _load(_SpriteKind.house).then((stack) {
       if (mounted) setState(() => _houseStack = stack);
+    });
+    _load(_SpriteKind.tree).then((stack) {
+      if (mounted) setState(() => _treeStack = stack);
     });
     _load(_SpriteKind.robot).then((stack) {
       if (mounted) setState(() => _robotStack = stack);
@@ -109,6 +117,7 @@ class _DemoScreenState extends State<DemoScreen>
     _ticker.dispose();
     _carStack?.dispose();
     _houseStack?.dispose();
+    _treeStack?.dispose();
     _robotStack?.dispose();
     super.dispose();
   }
@@ -225,10 +234,10 @@ class _DemoScreenState extends State<DemoScreen>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Car and house strips carved from four orthographic views, '
-                    'plus the generated robot stack. The stack is drawn '
-                    'bottom-to-top at 1x art pixels, outlined once and scaled '
-                    'with nearest filtering.',
+                    'Formula 1 car, cottage and cherry-blossom tree strips '
+                    'carved from four orthographic views, plus the generated '
+                    'robot stack. The stack is drawn bottom-to-top at 1x art '
+                    'pixels, outlined once and scaled with nearest filtering.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],

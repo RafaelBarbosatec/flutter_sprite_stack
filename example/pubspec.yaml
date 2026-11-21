@@ -24,3 +24,4 @@ flutter:
     - assets/robot_stack.png
     - sprites/car/slices.png
     - sprites/house/slices.png
+    - sprites/tree/slices.png
