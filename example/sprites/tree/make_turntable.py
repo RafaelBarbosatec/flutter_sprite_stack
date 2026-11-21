@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a turntable GIF of the carved cherry-blossom tree stack."""
+"""Render a turntable GIF of the carved leafy green tree stack."""
 from __future__ import annotations
 
 import sys

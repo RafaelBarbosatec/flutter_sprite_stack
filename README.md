@@ -243,7 +243,7 @@ cd example
 flutter run -d chrome
 ```
 
-The demo ships a Formula 1 car, a cottage and a cherry-blossom tree carved
+The demo ships a Formula 1 car, a cottage and a leafy green tree carved
 with the sprite-stacking skill (`example/sprites/car/slices.png`,
 `example/sprites/house/slices.png` and `example/sprites/tree/slices.png`) plus
 the generated `robot_stack.png`, with sliders for yaw, pitch, scale and spacing

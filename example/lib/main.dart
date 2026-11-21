@@ -234,7 +234,7 @@ class _DemoScreenState extends State<DemoScreen>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Formula 1 car, cottage and cherry-blossom tree strips '
+                    'Formula 1 car, cottage and leafy green tree strips '
                     'carved from four orthographic views, plus the generated '
                     'robot stack. The stack is drawn bottom-to-top at 1x art '
                     'pixels, outlined once and scaled with nearest filtering.',
