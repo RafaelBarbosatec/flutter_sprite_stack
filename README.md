@@ -12,7 +12,7 @@ Render **sprite-stacking** props in Flutter with free turntable rotation.
 A sprite stack is a set of horizontal cross-sections of a 3D shape. Drawing
 them bottom-up — each one rotated and vertically squashed — produces a fake-3D
 billboard you can spin in any direction. It is the same trick pixel-art games
-have used since the 90s, with **one `drawImageRect` per slice** and no 3D
+have used since the 90s, with a **1x art-pixel software rasterizer** and no 3D
 pipeline.
 
 ```
@@ -29,7 +29,7 @@ slices (ground slice on the left)
 ## Features
 
 - **Free rotation**, not 8 or 16 baked directions: any `yaw` at runtime.
-- **Cheap**: one texture, one draw call per slice, nearest-neighbour filtering.
+- **Cheap**: one texture, a 1x art-pixel software rasterizer, nearest-neighbour filtering.
 - **Pixel-art finish**: crisp 1 px ink outline and a projected ground shadow,
   matching the reference `viewer.html` look.
 - **Tiny API**: load a strip, call `render`.
@@ -210,12 +210,14 @@ collapses to nothing.
 
 ## Performance
 
-- One `drawImageRect` per slice, from a single decoded texture. The outline
-  pass draws the stack four extra times (4-connected ink ring), so a 24-slice
-  prop costs 24 draws with `outline: false` and ~120 with `outline: true`.
-- A hundred 24-slice props is ~2.4k draws without outlines — fine for Flame; if
-  a scene gets heavy, disable outlines or bake 16 directions ahead of time and
-  use a normal sprite sheet instead.
+- The software rasterizer renders into a 1x art-pixel buffer with nearest
+  inverse sampling, then draws the opaque pixels grouped by color as integer
+  squares. Cost scales with the prop's on-screen footprint, not the slice
+  count, so 16-slice and 43-slice props cost about the same.
+- The `fromImage` fallback keeps the old per-slice `drawImageRect` path (one
+  draw per slice, plus four outline passes when enabled).
+- If a scene gets heavy, disable outlines or bake 16 directions ahead of time
+  and use a normal sprite sheet instead.
 - Cache the `SpriteStack` (and therefore the `ui.Image`) per asset, not per
   instance.
 - Keep `scale` at an integer value and filtering at nearest for crisp pixels.

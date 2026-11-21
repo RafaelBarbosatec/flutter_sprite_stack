@@ -26,7 +26,7 @@ slices (ground slice on the left)
 ## Features
 
 - **Free rotation**, not 8 or 16 baked directions: any `yaw` at runtime.
-- **Cheap**: one texture, one `drawImageRect` per slice, nearest-neighbour filtering.
+- **Cheap**: one texture, a 1x art-pixel software rasterizer, nearest-neighbour filtering.
 - **Pixel-art finish**: crisp 1 px ink outline and a projected ground shadow,
   matching the reference `viewer.html` look.
 - **Tiny API**: load a strip, call `render`.
