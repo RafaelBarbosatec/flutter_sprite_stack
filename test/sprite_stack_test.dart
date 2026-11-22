@@ -693,7 +693,7 @@ void main() {
 
       expect(motion.offsetAt(1, 2, 0).dx, closeTo(4, 1e-9)); // sin(π/2)
       expect(motion.offsetAt(1, 2, math.pi / 2).dx, closeTo(0, 1e-9)); // sin(π)
-      expect(motion.offsetAt(1, 2, 3 * math.pi / 2).dx, closeTo(-4, 1e-9));
+      expect(motion.offsetAt(1, 2, math.pi).dx, closeTo(-4, 1e-9));
     });
 
     test('isEmpty ignores the ground slice', () async {
