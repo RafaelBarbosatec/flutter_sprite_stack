@@ -3,10 +3,10 @@
   "name": "flutter_sprite_stack",
   "description": "Render sprite-stacking props in Flutter with free turntable rotation from a horizontal strip of top-down cross-sections.",
   "logo": {
-    "light": "/docs/assets/logo-light.svg",
-    "dark": "/docs/assets/logo-dark.svg"
+    "light": "/assets/logo-light.svg",
+    "dark": "/assets/logo-dark.svg"
   },
-  "favicon": "/docs/assets/favicon.svg",
+  "favicon": "/assets/favicon.svg",
   "theme": {
     "primary": "#6FA0FF"
   },
