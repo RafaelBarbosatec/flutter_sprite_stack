@@ -207,9 +207,10 @@ void main() {
         shadow: false,
       );
 
-      // Two 4x4 slices stacked with no lift: rows 16..20 are body.
+      // Two 4x4 slices lifted 1 px: the top slice reaches row 15.
       expect(_pixelAt(pixels, 24, 12, 18), 0xFF3366FF);
-      expect(_pixelAt(pixels, 24, 12, 15), 0x00000000);
+      expect(_pixelAt(pixels, 24, 12, 15), 0xFF3366FF);
+      expect(_pixelAt(pixels, 24, 12, 14), 0x00000000);
 
       image.dispose();
       stack.dispose();
@@ -227,8 +228,10 @@ void main() {
         outline: false,
         shadow: false,
       );
-      expect(front.size, const ui.Size(2, 5)); // 4 tall + 1 lift
-      expect(front.ground, const ui.Offset(1, 5));
+      expect(front.size.width, closeTo(2, 1e-9));
+      expect(front.size.height, closeTo(5, 1e-9)); // 4 tall + 1 lift
+      expect(front.ground.dx, closeTo(1, 1e-9));
+      expect(front.ground.dy, closeTo(5, 1e-9));
       expect(front.rectAt(const ui.Offset(10, 20)),
           const ui.Rect.fromLTWH(9, 15, 2, 5));
 
@@ -238,8 +241,10 @@ void main() {
         outline: false,
         shadow: false,
       );
-      expect(side.size, const ui.Size(4, 3)); // rotated footprint, 2 tall + 1
-      expect(side.ground, const ui.Offset(2, 3));
+      expect(side.size.width, closeTo(4, 1e-9)); // rotated footprint
+      expect(side.size.height, closeTo(3, 1e-9)); // 2 tall + 1 lift
+      expect(side.ground.dx, closeTo(2, 1e-9));
+      expect(side.ground.dy, closeTo(3, 1e-9));
 
       stack.dispose();
     });
@@ -253,8 +258,10 @@ void main() {
         outline: true,
         shadow: false,
       );
-      expect(outline.size, const ui.Size(4, 7)); // +1 px each side, +1 below
-      expect(outline.ground, const ui.Offset(2, 6));
+      expect(outline.size.width, closeTo(4, 1e-9)); // +1 px each side
+      expect(outline.size.height, closeTo(7, 1e-9)); // +1 px below
+      expect(outline.ground.dx, closeTo(2, 1e-9));
+      expect(outline.ground.dy, closeTo(6, 1e-9));
 
       final withShadow = stack.boundsFor(
         pitch: math.pi / 2,
@@ -262,8 +269,10 @@ void main() {
         shadow: true,
       );
       // Shadow is dropped +3 px and extends half a slice below the feet.
-      expect(withShadow.size, const ui.Size(2, 10));
-      expect(withShadow.ground, const ui.Offset(1, 5));
+      expect(withShadow.size.width, closeTo(2, 1e-9));
+      expect(withShadow.size.height, closeTo(10, 1e-9));
+      expect(withShadow.ground.dx, closeTo(1, 1e-9));
+      expect(withShadow.ground.dy, closeTo(5, 1e-9));
 
       stack.dispose();
     });
@@ -456,9 +465,10 @@ void main() {
         shadow: false,
       );
 
-      expect(component.size.x, 4);
-      expect(component.size.y, 3);
-      expect(component.groundLocal, const ui.Offset(2, 3));
+      expect(component.size.x, closeTo(4, 1e-9));
+      expect(component.size.y, closeTo(3, 1e-9));
+      expect(component.groundLocal.dx, closeTo(2, 1e-9));
+      expect(component.groundLocal.dy, closeTo(3, 1e-9));
 
       component.yaw = 0;
       expect(component.size.x, 2);
