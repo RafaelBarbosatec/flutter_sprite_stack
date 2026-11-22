@@ -29,9 +29,12 @@ The **Play F1 game** button in the app bar opens `example/lib/f1_game/`, a small
 [Bonfire](https://docs.page/rafaelbarbosatec/bonfire) game that drives the
 Formula 1 car around a circuit.
 
-- `W/A/S/D` or arrow keys to drive, `Space` for the handbrake (touch devices get
-  a joystick).
+- `W/A/S/D` or arrow keys to drive, `Space` for the handbrake. On touch devices (or via the
+  touch icon next to the back button) on-screen controls appear: left/right
+  steering buttons on the left, brake and accelerator pedals on the right, all
+  usable at the same time with multi-touch.
 - The car, trees and houses are sprite stacks. `CachedStack` pre-renders them
   into one `Picture` per yaw bucket, so the software rasterizer never runs per
   frame; Bonfire Y-sorts them like any other `GameComponent`.
+- Exhaust smoke is a Flame `ParticleSystemComponent` emitted while the car moves.
 - Barriers collide, grass slows you down, and the HUD tracks speed and lap times.

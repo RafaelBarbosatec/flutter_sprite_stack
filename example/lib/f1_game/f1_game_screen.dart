@@ -10,6 +10,7 @@ import 'cached_stack.dart';
 import 'f1_car.dart';
 import 'race_state.dart';
 import 'stack_prop.dart';
+import 'touch_controls.dart';
 import 'track.dart';
 
 /// A small Bonfire game: drive the sprite-stacked F1 car around a circuit.
@@ -23,6 +24,9 @@ class F1GameScreen extends StatefulWidget {
 class _F1GameScreenState extends State<F1GameScreen> {
   final Track _track = Track();
   final RaceState _race = RaceState();
+  final DriveInput _input = DriveInput();
+  Widget? _game;
+  late bool _showTouch = _isTouch;
 
   final List<SpriteStack> _stacks = [];
   CachedStack? _car;
@@ -160,7 +164,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
         ? Center(child: Text('Failed to load assets: $_error'))
         : _car == null
             ? const Center(child: CircularProgressIndicator())
-            : _buildGame();
+            : (_game ??= _buildGame());
 
     return Scaffold(
       backgroundColor: const Color(0xFF3F8A41),
@@ -174,10 +178,28 @@ class _F1GameScreenState extends State<F1GameScreen> {
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: IconButton.filledTonal(
-                  tooltip: 'Back',
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.of(context).maybePop(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton.filledTonal(
+                      tooltip: 'Back',
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: _showTouch
+                          ? 'Hide touch controls'
+                          : 'Show touch controls',
+                      isSelected: _showTouch,
+                      icon: const Icon(Icons.touch_app_outlined),
+                      selectedIcon: const Icon(Icons.touch_app),
+                      onPressed: () => setState(() {
+                        _showTouch = !_showTouch;
+                        _input.reset();
+                      }),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -187,7 +209,9 @@ class _F1GameScreenState extends State<F1GameScreen> {
             right: 0,
             child: SafeArea(child: _Hud(race: _race)),
           ),
-          if (!_isTouch)
+          if (_showTouch)
+            Positioned.fill(child: TouchControls(input: _input))
+          else
             const Positioned(
               left: 0,
               right: 0,
@@ -205,24 +229,13 @@ class _F1GameScreenState extends State<F1GameScreen> {
       visual: _car!,
       track: _track,
       race: _race,
+      touch: _input,
     );
 
     return BonfireWidget(
       map: WorldMap([Layer(id: 0, tiles: _track.buildTiles())]),
       player: car,
       components: [TrackRenderer(_track), ..._buildProps()],
-      playerControllers: [
-        if (_isTouch)
-          Joystick(
-            directional: JoystickDirectional(
-              spriteBackgroundDirectional: null,
-              size: 110,
-              margin: const EdgeInsets.all(40),
-              isFixed: false,
-            ),
-            observer: car,
-          ),
-      ],
       cameraConfig: CameraConfig(
         zoom: 2,
         speed: 8,

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import 'cached_stack.dart';
 import 'race_state.dart';
+import 'smoke.dart';
+import 'touch_controls.dart';
 import 'track.dart';
 
 /// Player-controlled Formula 1 car drawn with a sprite stack.
@@ -16,6 +18,7 @@ class F1Car extends Player with WithCollision {
     required this.visual,
     required this.track,
     required this.race,
+    required this.touch,
     double heading = 0,
   })  : _heading = heading,
         super(
@@ -38,12 +41,14 @@ class F1Car extends Player with WithCollision {
   final Track track;
   final RaceState race;
 
+  /// On-screen controls (steering buttons and pedals).
+  final DriveInput touch;
+
   double _heading;
   double _speed = 0;
 
-  // Touch joystick input.
-  bool _joyActive = false;
-  double _joyAngle = 0;
+  final math.Random _random = math.Random();
+  double _smokeClock = 0;
 
   bool _checkpoint = false;
   double? _lastX;
@@ -57,17 +62,43 @@ class F1Car extends Player with WithCollision {
   }
 
   @override
-  void onJoystickChangeDirectional(JoystickDirectionalEvent event) {
-    super.onJoystickChangeDirectional(event);
-    _joyActive = event.directional != JoystickMoveDirectional.IDLE;
-    _joyAngle = event.radAngle;
-  }
-
-  @override
   void update(double dt) {
     _drive(dt);
     super.update(dt);
+    _emitSmoke(dt);
     _trackRace(dt);
+  }
+
+  /// Exhaust smoke: more and bigger puffs the faster (or harder) the car goes.
+  void _emitSmoke(double dt) {
+    final speed = _speed.abs();
+    if (speed < 25 || !hasGameRef) return;
+
+    final load = (speed / _maxSpeed).clamp(0.0, 1.0);
+    _smokeClock += dt;
+    final interval = 0.11 - 0.07 * load;
+    if (_smokeClock < interval) return;
+    _smokeClock = 0;
+
+    // Rear of the car along the heading (the exhaust sits ~25 px behind the
+    // centre and ~5 px above the ground in the stack).
+    final dir = Vector2(math.cos(_heading), math.sin(_heading));
+    final back = _speed >= 0 ? -dir : dir;
+    final origin = center + back * 26 + Vector2(0, -5);
+    final jitter = Vector2(
+      (_random.nextDouble() - 0.5) * 8,
+      (_random.nextDouble() - 0.5) * 8,
+    );
+
+    gameRef.add(
+      buildSmokePuff(
+        position: origin + jitter,
+        velocity: back * (18 + 30 * load) + jitter * 1.5,
+        random: _random,
+        priority: priority + 1,
+        intensity: load,
+      ),
+    );
   }
 
   void _drive(double dt) {
@@ -91,13 +122,13 @@ class F1Car extends Player with WithCollision {
     }
     final handbrake = keys.contains(LogicalKeyboardKey.space);
 
-    if (_joyActive) {
-      // Touch: the car steers toward the stick and keeps the throttle down.
-      var diff = _joyAngle - _heading;
-      diff = math.atan2(math.sin(diff), math.cos(diff));
-      steer = (diff * 2).clamp(-1.0, 1.0);
-      throttle = 1;
-    }
+    // On-screen controls add to the keyboard input.
+    if (touch.gas) throttle += 1;
+    if (touch.brake) throttle -= 1;
+    if (touch.left) steer -= 1;
+    if (touch.right) steer += 1;
+    throttle = throttle.clamp(-1.0, 1.0);
+    steer = steer.clamp(-1.0, 1.0);
 
     final onGrass = track.cellAt(center) == TrackCell.grass;
     final topSpeed = onGrass ? _maxGrassSpeed : _maxSpeed;
