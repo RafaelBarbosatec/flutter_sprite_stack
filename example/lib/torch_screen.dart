@@ -23,7 +23,7 @@ class _TorchScreenState extends State<TorchScreen>
   Duration _last = Duration.zero;
   double _yaw = 0.5;
   double _speed = 1;
-  double _scale = 9;
+  final double _scale = 9;
   bool _spinning = true;
 
   @override

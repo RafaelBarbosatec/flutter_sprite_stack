@@ -1,5 +1,3 @@
-import 'package:flame/components.dart';
-
 import 'sprite_stack_animation.dart';
 import 'sprite_stack_component.dart';
 
