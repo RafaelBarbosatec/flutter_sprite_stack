@@ -9,3 +9,4 @@
   boxes and Y sorting.
 - Offline-cached projection helpers (`squashFor`, `heightFor`).
 - Example app with sliders and a generated demo asset.
+- Example Bonfire game: drive the sprite-stacked F1 car around a circuit.

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/sprite_stack.dart';
 
+import 'f1_game/f1_game_screen.dart';
+
 enum _SpriteKind { car, house, tree, robot }
 
 extension on _SpriteKind {
@@ -126,7 +128,19 @@ class _DemoScreenState extends State<DemoScreen>
   Widget build(BuildContext context) {
     final stack = _stack;
     return Scaffold(
-      appBar: AppBar(title: const Text('flutter_sprite_stack — turntable')),
+      appBar: AppBar(
+        title: const Text('flutter_sprite_stack — turntable'),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.sports_score),
+            label: const Text('Play F1 game'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const F1GameScreen()),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Row(
         children: [
           Expanded(

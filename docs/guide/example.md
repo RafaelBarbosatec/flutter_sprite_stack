@@ -22,3 +22,16 @@ the 1 px outline and the ground shadow.
 
 Each sprite folder also contains the source `views.png`, a `check.png` contact
 sheet, a standalone `viewer.html` and a `turntable.gif` preview.
+
+## F1 game (Bonfire)
+
+The **Play F1 game** button in the app bar opens `example/lib/f1_game/`, a small
+[Bonfire](https://docs.page/rafaelbarbosatec/bonfire) game that drives the
+Formula 1 car around a circuit.
+
+- `W/A/S/D` or arrow keys to drive, `Space` for the handbrake (touch devices get
+  a joystick).
+- The car, trees and houses are sprite stacks. `CachedStack` pre-renders them
+  into one `Picture` per yaw bucket, so the software rasterizer never runs per
+  frame; Bonfire Y-sorts them like any other `GameComponent`.
+- Barriers collide, grass slows you down, and the HUD tracks speed and lap times.
