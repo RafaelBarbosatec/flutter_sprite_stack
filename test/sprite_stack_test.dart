@@ -211,7 +211,7 @@ void main() {
     });
 
     test('adds the slice lifts to the height', () async {
-      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final image = await _solidImage(width: 6, height: 4, color: 0xFFFFFFFF);
       final stack = SpriteStack.fromImage(image, sliceCount: 3);
 
       final bounds = stack.boundsFor(pitch: math.pi / 2, spacing: 2);
