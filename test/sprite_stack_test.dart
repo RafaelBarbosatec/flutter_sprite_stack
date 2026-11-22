@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flame/components.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 void main() {
@@ -114,8 +115,11 @@ void main() {
     });
 
     test('renders without throwing for a full stack', () async {
-      final image =
-          await _solidImage(width: 32 * 24, height: 32, color: 0xFF00FF00);
+      final image = await _solidImage(
+        width: 32 * 24,
+        height: 32,
+        color: 0xFF00FF00,
+      );
       final stack = SpriteStack.fromImage(image, sliceCount: 24);
 
       final recorder = ui.PictureRecorder();
@@ -187,6 +191,144 @@ void main() {
       stack.dispose();
     });
   });
+
+  group('boundsFor', () {
+    test('accounts for rotation', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final straight = stack.boundsFor(pitch: math.pi / 2);
+      expect(straight.size.width, 4);
+      expect(straight.size.height, 4);
+      expect(straight.ground, const ui.Offset(2, 4));
+
+      final rotated = stack.boundsFor(yaw: math.pi / 4, pitch: math.pi / 2);
+      expect(rotated.size.width, closeTo(4 * math.sqrt2, 1e-6));
+      expect(rotated.size.height, closeTo(4 * math.sqrt2, 1e-6));
+      expect(rotated.ground.dx, closeTo(rotated.size.width / 2, 1e-6));
+
+      stack.dispose();
+    });
+
+    test('adds the slice lifts to the height', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 3);
+
+      final bounds = stack.boundsFor(pitch: math.pi / 2, spacing: 2);
+      expect(bounds.size.height, 4 + 2 * 2);
+
+      stack.dispose();
+    });
+  });
+
+  group('pixelSnap', () {
+    test('rounds the ground point to whole pixels', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFF0000);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final pixels = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12.6, 20.4),
+        pitch: math.pi / 2,
+        pixelSnap: true,
+      );
+
+      // Ground snaps to (13, 20); the 4x4 slice covers x 11..15, y 16..20.
+      expect(_pixelAt(pixels, 24, 13, 18), 0xFFFF0000);
+      expect(_pixelAt(pixels, 24, 10, 18), 0x00000000);
+
+      stack.dispose();
+    });
+  });
+
+  group('bake', () {
+    test('renders once into an image with a ground offset', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFF00FF00);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final baked = await stack.bake(pitch: math.pi / 2, scale: 2, padding: 1);
+
+      expect(baked.image.width, 10);
+      expect(baked.image.height, 10);
+      expect(baked.groundOffset, const ui.Offset(5, 9));
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      baked.draw(canvas, const ui.Offset(20, 20));
+      final picture = recorder.endRecording();
+      final rendered = await picture.toImage(40, 40);
+      final data = await rendered.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      final pixels = data!.buffer.asUint8List();
+      expect(_pixelAt(pixels, 40, 20, 16), 0xFF00FF00);
+
+      rendered.dispose();
+      picture.dispose();
+      baked.dispose();
+      stack.dispose();
+    });
+  });
+
+  group('SpriteStackCache', () {
+    setUp(() => SpriteStackCache.instance.clear());
+
+    test('returns the same instance for the same key', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+      final cache = SpriteStackCache.instance;
+      final key = SpriteStackCache.keyFor('memory://strip', 1);
+
+      cache.put(key, stack);
+      final first = await cache.load('memory://strip', sliceCount: 1);
+      final second = await cache.load('memory://strip', sliceCount: 1);
+
+      expect(identical(first, second), isTrue);
+      expect(identical(first, stack), isTrue);
+      cache.clear();
+    });
+
+    test('evict can dispose the stack', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+      final cache = SpriteStackCache.instance;
+      final key = SpriteStackCache.keyFor('memory://strip', 1);
+
+      cache.put(key, stack);
+      cache.evict(key, dispose: true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(stack.isDisposed, isTrue);
+      expect(cache.containsKey(key), isFalse);
+    });
+  });
+
+  group('SpriteStackComponent', () {
+    test('size follows yaw changes', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+      final component = SpriteStackComponent(stack: stack);
+
+      expect(component.size.x, 4);
+      component.yaw = math.pi / 4;
+      expect(component.size.x, closeTo(6, 0.001));
+
+      stack.dispose();
+    });
+
+    test('hit testing uses the rendered bounds', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+      final component = SpriteStackComponent(stack: stack);
+
+      expect(component.containsLocalPoint(Vector2(2, 2)), isTrue);
+      expect(component.containsLocalPoint(Vector2(-10, -10)), isFalse);
+
+      stack.dispose();
+    });
+  });
 }
 
 Future<ui.Image> _solidImage({
@@ -241,6 +383,7 @@ Future<Uint8List> _renderToPixels(
   required ui.Offset position,
   required double pitch,
   double spacing = 1,
+  bool pixelSnap = true,
   bool outline = false,
   bool shadow = false,
 }) async {
@@ -251,6 +394,7 @@ Future<Uint8List> _renderToPixels(
     position: position,
     pitch: pitch,
     spacing: spacing,
+    pixelSnap: pixelSnap,
     outline: outline,
     shadow: shadow,
   );

@@ -10,25 +10,25 @@ enum _SpriteKind { car, house, tree, robot }
 
 extension on _SpriteKind {
   String get label => switch (this) {
-        _SpriteKind.car => 'Car',
-        _SpriteKind.house => 'House',
-        _SpriteKind.tree => 'Tree',
-        _SpriteKind.robot => 'Robot',
-      };
+    _SpriteKind.car => 'Car',
+    _SpriteKind.house => 'House',
+    _SpriteKind.tree => 'Tree',
+    _SpriteKind.robot => 'Robot',
+  };
 
   String get asset => switch (this) {
-        _SpriteKind.car => 'sprites/car/slices.png',
-        _SpriteKind.house => 'sprites/house/slices.png',
-        _SpriteKind.tree => 'sprites/tree/slices.png',
-        _SpriteKind.robot => 'assets/robot_stack.png',
-      };
+    _SpriteKind.car => 'sprites/car/slices.png',
+    _SpriteKind.house => 'sprites/house/slices.png',
+    _SpriteKind.tree => 'sprites/tree/slices.png',
+    _SpriteKind.robot => 'assets/robot_stack.png',
+  };
 
   int get sliceCount => switch (this) {
-        _SpriteKind.car => 15,
-        _SpriteKind.house => 29,
-        _SpriteKind.tree => 43,
-        _SpriteKind.robot => 24,
-      };
+    _SpriteKind.car => 15,
+    _SpriteKind.house => 29,
+    _SpriteKind.tree => 43,
+    _SpriteKind.robot => 24,
+  };
 }
 
 void main() => runApp(const SpriteStackExampleApp());
@@ -79,11 +79,11 @@ class _DemoScreenState extends State<DemoScreen>
   bool _shadow = true;
 
   SpriteStack? get _stack => switch (_selected) {
-        _SpriteKind.car => _carStack,
-        _SpriteKind.house => _houseStack,
-        _SpriteKind.tree => _treeStack,
-        _SpriteKind.robot => _robotStack,
-      };
+    _SpriteKind.car => _carStack,
+    _SpriteKind.house => _houseStack,
+    _SpriteKind.tree => _treeStack,
+    _SpriteKind.robot => _robotStack,
+  };
 
   @override
   void initState() {

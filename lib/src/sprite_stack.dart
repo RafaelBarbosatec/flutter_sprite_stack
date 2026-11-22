@@ -19,8 +19,8 @@ import 'package:flutter/services.dart' show rootBundle;
 /// seam-free pixel-art silhouette as the HTML preview.
 class SpriteStack {
   SpriteStack._(this.image, this.sliceCount, this._pixels, this._footprintMask)
-      : sliceWidth = image.width ~/ sliceCount,
-        sliceHeight = image.height;
+    : sliceWidth = image.width ~/ sliceCount,
+      sliceHeight = image.height;
 
   /// Builds a stack from an already decoded strip image.
   ///
@@ -33,7 +33,10 @@ class SpriteStack {
   factory SpriteStack.fromImage(Image image, {required int sliceCount}) {
     if (sliceCount <= 0) {
       throw ArgumentError.value(
-          sliceCount, 'sliceCount', 'must be greater than 0');
+        sliceCount,
+        'sliceCount',
+        'must be greater than 0',
+      );
     }
     if (image.width % sliceCount != 0) {
       throw ArgumentError(
@@ -62,7 +65,10 @@ class SpriteStack {
   }) async {
     if (sliceCount <= 0) {
       throw ArgumentError.value(
-          sliceCount, 'sliceCount', 'must be greater than 0');
+        sliceCount,
+        'sliceCount',
+        'must be greater than 0',
+      );
     }
 
     final codec = await instantiateImageCodec(bytes);
@@ -132,6 +138,34 @@ class SpriteStack {
   double heightFor({double pitch = defaultPitch, double spacing = 1}) =>
       sliceHeight * squashFor(pitch) + (sliceCount - 1) * spacing;
 
+  /// Axis-aligned bounds of the rendered body, in device pixels.
+  ///
+  /// Unlike [heightFor], this accounts for [yaw]: a rotated slice is wider than
+  /// the source slice. Use it to size hit boxes and cull props. The projected
+  /// shadow and outline may extend a few pixels past these bounds.
+  SpriteStackBounds boundsFor({
+    double yaw = 0,
+    double pitch = defaultPitch,
+    double scale = 1,
+    double spacing = 1,
+    bool pixelSnap = false,
+  }) {
+    final squash = squashFor(pitch);
+    final cos = math.cos(yaw).abs();
+    final sin = math.sin(yaw).abs();
+    final width = (sliceWidth * cos + sliceHeight * sin) * scale;
+    final sliceVisualHeight = (sliceWidth * sin + sliceHeight * cos) * squash;
+    final height =
+        sliceVisualHeight * scale + (sliceCount - 1) * spacing * scale;
+
+    final snappedWidth = pixelSnap ? width.ceilToDouble() : width;
+    final snappedHeight = pixelSnap ? height.ceilToDouble() : height;
+    return SpriteStackBounds(
+      size: Size(snappedWidth, snappedHeight),
+      ground: Offset(snappedWidth / 2, snappedHeight),
+    );
+  }
+
   /// Draws the stack with its **bottom-center** at [position].
   ///
   /// [yaw] is the rotation around the vertical axis, in radians.
@@ -150,6 +184,7 @@ class SpriteStack {
     double pitch = defaultPitch,
     double scale = 1,
     double spacing = 1,
+    bool pixelSnap = true,
     Paint? paint,
     bool outline = true,
     bool shadow = true,
@@ -166,6 +201,7 @@ class SpriteStack {
         squash: squash,
         scale: scale,
         spacing: spacing,
+        pixelSnap: pixelSnap,
         outline: outline,
         shadow: shadow,
         outlineColor: outlineColor,
@@ -181,6 +217,7 @@ class SpriteStack {
       squash: squash,
       scale: scale,
       spacing: spacing,
+      pixelSnap: pixelSnap,
       paint: paint,
       outline: outline,
       shadow: shadow,
@@ -200,6 +237,7 @@ class SpriteStack {
     required double squash,
     required double scale,
     required double spacing,
+    required bool pixelSnap,
     required bool outline,
     required bool shadow,
     required Color outlineColor,
@@ -220,7 +258,8 @@ class SpriteStack {
     final ch =
         (diag * squash).ceil() + liftMax + 20 + (shadowPad * squash).ceil();
     final cx = cw >> 1;
-    final baseY = ch -
+    final baseY =
+        ch -
         ((diag * squash) / 2).ceil() -
         8 -
         (shadowPad * squash * 0.45).ceil();
@@ -312,7 +351,10 @@ class SpriteStack {
     // The ground slice centre is a fixed anchor, exactly like the reference
     // viewer's `baseY`. Anchoring to a fixed point keeps the prop from bobbing
     // while it spins.
-    final anchorY = position.dy - h * squash * scale / 2;
+    final anchorX = pixelSnap ? position.dx.roundToDouble() : position.dx;
+    final anchorY = pixelSnap
+        ? (position.dy - h * squash * scale / 2).roundToDouble()
+        : position.dy - h * squash * scale / 2;
     _drawBuffer(
       canvas,
       out,
@@ -320,7 +362,7 @@ class SpriteStack {
       ch,
       cx,
       baseY,
-      anchorX: position.dx,
+      anchorX: anchorX,
       anchorY: anchorY,
       scale: scale,
     );
@@ -388,7 +430,8 @@ class SpriteStack {
       var idx = y * cw * 4;
       for (var x = 0; x < cw; x++, idx += 4) {
         if (out[idx + 3] == 0) continue;
-        final color = (out[idx + 3] << 24) |
+        final color =
+            (out[idx + 3] << 24) |
             (out[idx] << 16) |
             (out[idx + 1] << 8) |
             out[idx + 2];
@@ -420,20 +463,28 @@ class SpriteStack {
     required double squash,
     required double scale,
     required double spacing,
+    required bool pixelSnap,
     Paint? paint,
     required bool outline,
     required bool shadow,
     required Color outlineColor,
     required Color shadowColor,
   }) {
-    final effectivePaint = paint ??
+    final effectivePaint =
+        paint ??
         (Paint()
           ..filterQuality = FilterQuality.none
           ..isAntiAlias = false);
 
     final sourceWidth = sliceWidth.toDouble();
     final sourceHeight = sliceHeight.toDouble();
-    final groundSliceCenterY = position.dy - sourceHeight * squash * scale / 2;
+    final anchorX = pixelSnap ? position.dx.roundToDouble() : position.dx;
+    final anchorY = pixelSnap ? position.dy.roundToDouble() : position.dy;
+    final groundSliceCenterY = anchorY - sourceHeight * squash * scale / 2;
+
+    double liftFor(int slice) => pixelSnap
+        ? (slice * spacing * scale).roundToDouble()
+        : slice * spacing * scale;
 
     if (shadow && sliceCount > 0) {
       final shadowPaint = Paint()
@@ -441,8 +492,8 @@ class SpriteStack {
         ..isAntiAlias = false
         ..colorFilter = ColorFilter.mode(shadowColor, BlendMode.srcIn);
       final shadowCenter = Offset(
-        position.dx + 2 * scale,
-        position.dy + 3 * scale - sourceHeight * squash * scale / 2,
+        anchorX + 2 * scale,
+        anchorY + 3 * scale - sourceHeight * squash * scale / 2,
       );
       _drawSliceAt(
         canvas,
@@ -466,14 +517,13 @@ class SpriteStack {
         final oy = offset.dy * scale;
         for (var slice = 0; slice < sliceCount; slice++) {
           final center = Offset(
-            position.dx + ox,
-            groundSliceCenterY - slice * spacing * scale + oy,
+            anchorX + ox,
+            groundSliceCenterY - liftFor(slice) + oy,
           );
           _drawSliceAt(
             canvas,
             image,
-            Rect.fromLTWH(
-                slice * sourceWidth, 0, sourceWidth, sourceHeight),
+            Rect.fromLTWH(slice * sourceWidth, 0, sourceWidth, sourceHeight),
             center,
             yaw,
             squash,
@@ -485,10 +535,7 @@ class SpriteStack {
     }
 
     for (var slice = 0; slice < sliceCount; slice++) {
-      final center = Offset(
-        position.dx,
-        groundSliceCenterY - slice * spacing * scale,
-      );
+      final center = Offset(anchorX, groundSliceCenterY - liftFor(slice));
       _drawSliceAt(
         canvas,
         image,
@@ -536,8 +583,119 @@ class SpriteStack {
     Offset(1, 0),
   ];
 
+  /// Renders the prop once into an offscreen [Image] for a fixed camera.
+  ///
+  /// Drawing the baked image later costs a single `drawImage`, which is the
+  /// cheapest option for static props or props that rotate in coarse steps.
+  /// Re-bake whenever `yaw`, `pitch`, `scale` or `spacing` change.
+  ///
+  /// [padding] adds transparent margin around the body (in device pixels).
+  /// Increase it when [shadow] or a heavy outline must not be clipped.
+  Future<BakedSpriteStack> bake({
+    double yaw = 0,
+    double pitch = defaultPitch,
+    double scale = 1,
+    double spacing = 1,
+    bool pixelSnap = true,
+    double padding = 8,
+    bool outline = true,
+    bool shadow = true,
+    Color outlineColor = const Color(0xFF181C24),
+    Color shadowColor = const Color(0xFFBAC6D4),
+  }) async {
+    final bounds = boundsFor(
+      yaw: yaw,
+      pitch: pitch,
+      scale: scale,
+      spacing: spacing,
+      pixelSnap: true,
+    );
+    final width = (bounds.size.width + padding * 2).ceil();
+    final height = (bounds.size.height + padding * 2).ceil();
+    if (width <= 0 || height <= 0) {
+      throw StateError('baked image would be empty ($width x $height)');
+    }
+
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    final ground = Offset(
+      padding + bounds.ground.dx,
+      padding + bounds.ground.dy,
+    );
+    render(
+      canvas,
+      position: ground,
+      yaw: yaw,
+      pitch: pitch,
+      scale: scale,
+      spacing: spacing,
+      pixelSnap: pixelSnap,
+      outline: outline,
+      shadow: shadow,
+      outlineColor: outlineColor,
+      shadowColor: shadowColor,
+    );
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, height);
+    picture.dispose();
+
+    return BakedSpriteStack._(image, ground);
+  }
+
+  bool _disposed = false;
+
+  /// Whether [dispose] has already run.
+  bool get isDisposed => _disposed;
+
   /// Releases the decoded image. Do not use the stack afterwards.
-  void dispose() => image.dispose();
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    image.dispose();
+  }
+}
+
+/// Bounds of a rendered stack.
+class SpriteStackBounds {
+  const SpriteStackBounds({required this.size, required this.ground});
+
+  /// Axis-aligned size of the prop, in device pixels.
+  final Size size;
+
+  /// Where the ground contact point sits inside [size], measured from the
+  /// top-left corner.
+  final Offset ground;
+}
+
+/// A stack rendered once into a single [Image].
+///
+/// Use [draw] to place it, keeping the same ground-contact semantics as
+/// [SpriteStack.render].
+class BakedSpriteStack {
+  BakedSpriteStack._(this.image, this.groundOffset);
+
+  /// The pre-rendered prop.
+  final Image image;
+
+  /// Ground contact point inside [image], from its top-left corner.
+  final Offset groundOffset;
+
+  /// Size of the baked image.
+  Size get size => Size(image.width.toDouble(), image.height.toDouble());
+
+  bool _disposed = false;
+
+  /// Draws the baked prop with its ground contact at [position].
+  void draw(Canvas canvas, Offset position, {Paint? paint}) {
+    canvas.drawImage(image, position - groundOffset, paint);
+  }
+
+  /// Releases the baked image.
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    image.dispose();
+  }
 }
 
 /// Builds a 1x art-pixel mask of the union of every slice's alpha.

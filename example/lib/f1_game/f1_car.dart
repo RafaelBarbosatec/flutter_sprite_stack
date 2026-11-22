@@ -20,12 +20,12 @@ class F1Car extends Player with WithCollision {
     required this.race,
     required this.touch,
     double heading = 0,
-  })  : _heading = heading,
-        super(
-          position: center - Vector2.all(_bodySize / 2),
-          size: Vector2.all(_bodySize),
-          speed: 0,
-        ) {
+  }) : _heading = heading,
+       super(
+         position: center - Vector2.all(_bodySize / 2),
+         size: Vector2.all(_bodySize),
+         speed: 0,
+       ) {
     setupMovementByJoystick(enabled: false);
   }
 
@@ -158,8 +158,10 @@ class F1Car extends Player with WithCollision {
       _speed = 0;
       stop();
     } else {
-      moveByAngle(_speed >= 0 ? _heading : _heading + math.pi,
-          speed: _speed.abs());
+      moveByAngle(
+        _speed >= 0 ? _heading : _heading + math.pi,
+        speed: _speed.abs(),
+      );
     }
   }
 

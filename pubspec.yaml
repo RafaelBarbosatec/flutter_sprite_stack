@@ -2,7 +2,7 @@ name: flutter_sprite_stack
 description: >-
   Render sprite-stacking props in Flutter with free turntable rotation from a
   horizontal strip of top-down cross-sections. One draw per slice.
-version: 0.1.0
+version: 0.2.0
 
 homepage: https://github.com/RafaelBarbosatec/flutter_sprite_stack
 repository: https://github.com/RafaelBarbosatec/flutter_sprite_stack
@@ -15,6 +15,10 @@ topics:
   - sprites
   - pixel-art
   - rendering
+
+screenshots:
+  - description: A 24-slice robot rendered at four turntable angles.
+    path: doc/preview.png
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

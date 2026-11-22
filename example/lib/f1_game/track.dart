@@ -22,11 +22,21 @@ class Track {
   static const int rows = 80;
 
   // Outer edge of the asphalt, in tiles (right/bottom exclusive).
-  static const _outer =
-      (left: 14.0, top: 14.0, right: 94.0, bottom: 66.0, r: 18.0);
+  static const _outer = (
+    left: 14.0,
+    top: 14.0,
+    right: 94.0,
+    bottom: 66.0,
+    r: 18.0,
+  );
   // Infield (non-asphalt area inside the ring).
-  static const _inner =
-      (left: 24.0, top: 24.0, right: 84.0, bottom: 56.0, r: 8.0);
+  static const _inner = (
+    left: 24.0,
+    top: 24.0,
+    right: 84.0,
+    bottom: 56.0,
+    r: 8.0,
+  );
 
   /// Column of the start/finish line.
   static const int startColumn = 54;
@@ -148,13 +158,12 @@ class Track {
   /// the full map bounds for the camera.
   List<Tile> buildTiles() {
     Tile tile(int c, int r, {bool wall = false}) => Tile(
-          x: c.toDouble(),
-          y: r.toDouble(),
-          width: tileSize,
-          height: tileSize,
-          collisions:
-              wall ? [RectangleHitbox(size: Vector2.all(tileSize))] : null,
-        );
+      x: c.toDouble(),
+      y: r.toDouble(),
+      width: tileSize,
+      height: tileSize,
+      collisions: wall ? [RectangleHitbox(size: Vector2.all(tileSize))] : null,
+    );
 
     final tiles = <Tile>[tile(0, 0), tile(cols - 1, rows - 1)];
     for (var r = 0; r < rows; r++) {
@@ -181,8 +190,12 @@ class Track {
             for (var sc = 0; sc < 2; sc++) {
               paint.color = _colorFor(cell, c * 2 + sc, r * 2 + sr);
               canvas.drawRect(
-                Rect.fromLTWH(c * tileSize + sc * half,
-                    r * tileSize + sr * half, half, half),
+                Rect.fromLTWH(
+                  c * tileSize + sc * half,
+                  r * tileSize + sr * half,
+                  half,
+                  half,
+                ),
                 paint,
               );
             }

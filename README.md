@@ -7,6 +7,8 @@
 
 📖 **Documentation:** https://docs.page/RafaelBarbosatec/flutter_sprite_stack
 
+![Turntable](doc/turntable.gif)
+
 Render **sprite-stacking** props in Flutter with free turntable rotation.
 
 A sprite stack is a set of horizontal cross-sections of a 3D shape. Drawing
@@ -32,6 +34,9 @@ slices (ground slice on the left)
 - **Cheap**: one texture, a 1x art-pixel software rasterizer, nearest-neighbour filtering.
 - **Pixel-art finish**: crisp 1 px ink outline and a projected ground shadow,
   matching the reference `viewer.html` look.
+- **Pixel-perfect placement**: `pixelSnap` keeps the ground anchor and slice
+  lifts on whole pixels.
+- **Fast at scale**: shared asset cache and a one-draw `bake()` for static props.
 - **Tiny API**: load a strip, call `render`.
 - **Flutter and Flame/Bonfire**: `CustomPainter` for plain canvases,
   `PositionComponent` for scenes with Y sorting and hit boxes.
@@ -71,6 +76,7 @@ robot.render(
   pitch: SpriteStack.defaultPitch, // asin(0.75), the reference 0.75 squash
   scale: 6,                        // integer scale keeps pixels crisp
   spacing: 1,                      // lift per slice, in source pixels
+  pixelSnap: true,                 // rounds anchor and lifts (default)
   outline: true,                   // crisp 1 px ink outline around the stack
   shadow: true,                    // projected ground shadow
 );
@@ -198,15 +204,50 @@ produces.
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
 | `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
+| `render(..., pixelSnap:)` | Snaps the ground anchor and lifts to whole pixels |
+| `boundsFor(yaw:, pitch:, scale:, spacing:)` | Axis-aligned bounds of the rendered body |
+| `bake(...)` | Renders once into a `BakedSpriteStack` (one draw later) |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
+| `SpriteStackCache.instance.load(path, sliceCount:)` | Shares decoded strips |
 | `SpriteStackPainter(...)` | `CustomPainter` for plain Flutter |
 | `SpriteStackComponent(...)` | Flame/Bonfire `PositionComponent` |
 
 `pitch` is clamped to `0..π/2` and its squash to `0.08..1`, so the stack never
 collapses to nothing.
+
+## Caching and baking
+
+Decoding a strip allocates a texture. Load each asset once and share it:
+
+```dart
+final tree = await SpriteStackCache.instance.load(
+  'assets/tree.png',
+  sliceCount: 28,
+);
+```
+
+The cache is keyed by `assetPath` + `sliceCount`, so the same file can be used
+with different slice counts. Cached stacks are shared — do not call `dispose()`
+on them; use `evict(key)` or `clear()` instead.
+
+For static props (or props that rotate in coarse steps), render once:
+
+```dart
+final baked = await tree.bake(yaw: 0.6, pitch: SpriteStack.defaultPitch, scale: 4);
+
+// later, one draw call instead of the whole rasterizer
+baked.draw(canvas, groundPoint);
+```
+
+`BakedSpriteStack.groundOffset` tells where the ground contact sits inside the
+image, so `draw` keeps the same positioning semantics as `render`.
+
+`SpriteStackComponent.size` follows `boundsFor`, so hit boxes and visibility
+culling already account for the rotated prop. The setters for `yaw`, `pitch`,
+`stackScale` and `spacing` refresh the size automatically.
 
 ## Performance
 
