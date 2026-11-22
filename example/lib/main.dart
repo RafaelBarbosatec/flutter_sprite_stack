@@ -38,7 +38,6 @@ class _DemoScreenState extends State<DemoScreen>
   late final Ticker _ticker;
   late final Future<SpriteStack> _stackFuture;
 
-  SpriteStack? _stack;
   Duration _lastTick = Duration.zero;
 
   double _yaw = 0.6;
@@ -46,11 +45,12 @@ class _DemoScreenState extends State<DemoScreen>
   double _scale = 6;
   double _spacing = 1;
   bool _spinning = true;
+  bool _pixelSnap = true;
 
   @override
   void initState() {
     super.initState();
-    _stackFuture = SpriteStack.load(
+    _stackFuture = SpriteStackCache.instance.load(
       'assets/robot_stack.png',
       sliceCount: _sliceCount,
     );
@@ -67,7 +67,7 @@ class _DemoScreenState extends State<DemoScreen>
   @override
   void dispose() {
     _ticker.dispose();
-    _stack?.dispose();
+    // The stack is shared by SpriteStackCache, so it is not disposed here.
     super.dispose();
   }
 
@@ -79,7 +79,6 @@ class _DemoScreenState extends State<DemoScreen>
         future: _stackFuture,
         builder: (context, snapshot) {
           final stack = snapshot.data;
-          if (stack != null) _stack = stack;
 
           return Row(
             children: [
@@ -89,21 +88,22 @@ class _DemoScreenState extends State<DemoScreen>
                   child: snapshot.hasError
                       ? Text('Could not load the strip: ${snapshot.error}')
                       : stack == null
-                          ? const SizedBox(
-                              width: 460,
-                              height: 460,
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          : CustomPaint(
-                              size: const Size(460, 460),
-                              painter: SpriteStackPainter(
-                                stack: stack,
-                                yaw: _yaw,
-                                pitch: _pitch,
-                                scale: _scale,
-                                spacing: _spacing,
-                              ),
-                            ),
+                      ? const SizedBox(
+                          width: 460,
+                          height: 460,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : CustomPaint(
+                          size: const Size(460, 460),
+                          painter: SpriteStackPainter(
+                            stack: stack,
+                            yaw: _yaw,
+                            pitch: _pitch,
+                            scale: _scale,
+                            spacing: _spacing,
+                            pixelSnap: _pixelSnap,
+                          ),
+                        ),
                 ),
               ),
               Expanded(
@@ -154,6 +154,13 @@ class _DemoScreenState extends State<DemoScreen>
                         value: _spinning,
                         title: const Text('Auto spin'),
                         onChanged: (value) => setState(() => _spinning = value),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _pixelSnap,
+                        title: const Text('Pixel snap'),
+                        onChanged: (value) =>
+                            setState(() => _pixelSnap = value),
                       ),
                       const SizedBox(height: 16),
                       Text(

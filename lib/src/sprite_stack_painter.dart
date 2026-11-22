@@ -13,6 +13,7 @@ class SpriteStackPainter extends CustomPainter {
     this.scale = 1,
     this.spacing = 1,
     this.offset = Offset.zero,
+    this.pixelSnap = true,
     this.stackPaint,
   });
 
@@ -32,6 +33,9 @@ class SpriteStackPainter extends CustomPainter {
   /// Optional offset applied on top of the default bottom-center anchor.
   final Offset offset;
 
+  /// Rounds the ground point and every slice lift to whole pixels.
+  final bool pixelSnap;
+
   /// Optional paint, e.g. to apply a color filter.
   final Paint? stackPaint;
 
@@ -44,6 +48,7 @@ class SpriteStackPainter extends CustomPainter {
       pitch: pitch,
       scale: scale,
       spacing: spacing,
+      pixelSnap: pixelSnap,
       paint: stackPaint,
     );
   }
@@ -56,5 +61,6 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.scale != scale ||
       oldDelegate.spacing != spacing ||
       oldDelegate.offset != offset ||
+      oldDelegate.pixelSnap != pixelSnap ||
       oldDelegate.stackPaint != stackPaint;
 }
