@@ -78,6 +78,8 @@ class _DemoScreenState extends State<DemoScreen>
   bool _spinning = true;
   bool _outline = true;
   bool _shadow = true;
+  bool _sway = false;
+  double _time = 0;
 
   SpriteStack? get _stack => switch (_selected) {
         _SpriteKind.car => _carStack,
@@ -111,8 +113,11 @@ class _DemoScreenState extends State<DemoScreen>
   void _onTick(Duration elapsed) {
     final delta = (elapsed - _lastTick).inMicroseconds / 1000000;
     _lastTick = elapsed;
-    if (!_spinning) return;
-    setState(() => _yaw += delta * 1.4);
+    if (!_spinning && !_sway) return;
+    setState(() {
+      _time += delta;
+      if (_spinning) _yaw += delta * 1.4;
+    });
   }
 
   @override
@@ -172,6 +177,14 @@ class _DemoScreenState extends State<DemoScreen>
                           pitch: _pitch,
                           scale: _scale,
                           spacing: _spacing,
+                          motion: _sway
+                              ? const StackMotion(
+                                  sway: 1.6,
+                                  speed: 1.9,
+                                  wave: 0.65,
+                                )
+                              : null,
+                          time: _time,
                           outline: _outline,
                           shadow: _shadow,
                         ),
@@ -241,6 +254,12 @@ class _DemoScreenState extends State<DemoScreen>
                     value: _spinning,
                     title: const Text('Auto spin'),
                     onChanged: (value) => setState(() => _spinning = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _sway,
+                    title: const Text('Wind sway (StackMotion)'),
+                    onChanged: (value) => setState(() => _sway = value),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,

@@ -166,6 +166,65 @@ add(
 Animate transforms too when it fits better: a spinning coin, a bobbing item or a
 pulsing warning light does not need frames at all.
 
+## Motion (sway and lean)
+
+`StackMotion` offsets each slice with a quadratic falloff from the ground, so the
+base stays planted and the tip moves. It needs no extra frames — one strip is
+enough for a tree, banner, kelp, grass or cape.
+
+```dart
+final motion = StackMotion(
+  sway: 2.5,    // amplitude at the tip, in source pixels
+  speed: 1.8,   // radians per second
+  wave: 0.7,    // phase lag per slice: the motion travels up as a wave
+  phase: 0,     // desync props that share the same strip
+  lean: Offset.zero, // constant bend, e.g. prevailing wind (+y is down)
+);
+
+// Any Canvas:
+robot.render(canvas, position: ground, motion: motion, time: elapsed);
+
+// Flame/Bonfire: the component advances the clock for you.
+SpriteStackComponent(stack: tree, motion: motion);
+```
+
+The sway is `sin(time * speed - slice * wave + phase) * sway * (slice / (n-1))²`.
+The squared falloff is what pins slice `0` — it is the formula recommended by
+`danielwh2/sprite-stacking`, and it is why the base does not slide.
+
+The software rasterizer works at 1x art-pixel resolution, so motion shifts
+slices in whole art pixels. That is the native grid of pixel art; for sub-pixel
+smoothness at high display scales, animate the component position instead.
+
+## Cutaways (roof off)
+
+`SliceCut` hides slices above (or below) a continuous frontier. Hide a house's
+roof and what remains are the wall cross-sections — a dollhouse view with the
+player inside.
+
+```dart
+final roof = SliceCut(top: 19);       // slices 0..18, roof gone
+
+// Animate it: `top` is continuous, so the roof disappears slice by slice.
+final roof = SliceCut(top: sliceCount * (1 - progress));
+
+house.render(canvas, position: ground, cut: roof);
+```
+
+In Flame/Bonfire, set it on the component — `size` follows the cut, so culling
+and hit boxes shrink with the roof:
+
+```dart
+final house = SpriteStackComponent(stack: walls, position: Vector2(320, 200));
+add(house);
+
+// On enter:
+house.cut = const SliceCut(top: 19);
+```
+
+The slice sitting at the cut is dissolved with a 4×4 Bayer dither, so the pixel
+grid stays intact instead of blending the whole prop. Bounds follow the cut.
+
 ## Baking and spinning
 
 The software rasterizer is CPU-bound: it rebuilds a 1x art-pixel buffer on
@@ -306,6 +365,8 @@ produces.
 | `SpriteStackAnimation` | Timing, loop, ping-pong, `play`/`stop`/`reset` |
 | `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component with animation |
 | `render(..., frame:)` / `SpriteStackPainter.frame` | Draws a specific atlas frame |
+| `StackMotion(sway:, speed:, wave:, phase:, lean:)` | Per-slice sway/lean, no extra frames |
+| `SliceCut(top:, bottom:)` | Hides slices above/below a frontier (roof cutaway) |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |

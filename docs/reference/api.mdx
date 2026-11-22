@@ -46,6 +46,9 @@ collapses to nothing.
 | `paint` | `null` | Optional paint, e.g. a color filter for the body |
 | `pixelSnap` | `true` | Rounds the ground anchor (and fallback lifts) to whole pixels |
 | `frame` | `0` | Atlas row to draw (clamped to `frameCount - 1`) |
+| `motion` | `null` | `StackMotion` applied per slice |
+| `time` | `0` | Clock fed to `motion`, in seconds |
+| `cut` | `null` | `SliceCut` hiding slices above/below a frontier |
 
 ## Animation
 
@@ -60,6 +63,28 @@ collapses to nothing.
 | `play()` / `stop()` / `reset()` | Playback control; `reset()` rewinds and pauses |
 | `isPlaying` / `isFinished` | Playback state |
 | `onComplete` / `onFrame` | Callbacks for the end of a non-looping clip and frame changes |
+
+## Motion
+
+| Member | Meaning |
+| --- | --- |
+| `StackMotion(sway:, speed:, wave:, phase:, lean:)` | Per-slice deformation |
+| `sway` | Oscillation amplitude at the tip, source pixels |
+| `speed` / `wave` / `phase` | Angular speed, per-slice lag and initial phase (radians) |
+| `lean` | Constant tip offset, source pixels (`+y` down) |
+| `offsetAt(slice, sliceCount, time)` | Offset for one slice, using the `(z / (n-1))²` falloff |
+| `isEmpty` | Whether the motion leaves every slice in place |
+
+## Cutaways
+
+| Member | Meaning |
+| --- | --- |
+| `SliceCut(top:, bottom:)` | Visible slice range, both frontiers continuous |
+| `top` | First hidden slice counting from the ground (`19` keeps `0..18`) |
+| `bottom` | Slices hidden at the ground |
+| `isActive` / `isVisible(slice)` | Whether the cut hides anything / that slice |
+| `visibilityAt(slice)` | `0..1`, fractional at the frontier |
+| `visibleSliceCount(count)` | Surviving slices, used to shrink bounds |
 
 ## Baked frames
 

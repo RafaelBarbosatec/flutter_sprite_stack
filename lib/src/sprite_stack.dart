@@ -6,7 +6,9 @@ import 'dart:ui';
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'baked_sprite_stack.dart';
+import 'slice_cut.dart';
 import 'sprite_stack_bounds.dart';
+import 'sprite_stack_motion.dart';
 
 /// A sprite-stacked prop.
 ///
@@ -207,6 +209,10 @@ class SpriteStack {
   /// [outlineColor] and [shadowColor] control those two passes.
   /// [frame] selects the row of a frame atlas; it is clamped to the available
   /// frames and ignored when [frameCount] is `1`.
+  /// [motion] deforms each slice (sway, lean); [time] is the clock it reads, in
+  /// seconds. Motion shifts slices in whole art pixels in the software
+  /// rasterizer and continuously in the fallback path.
+  /// [cut] hides slices above (or below) a frontier, for roof-off cutaways.
   void render(
     Canvas canvas, {
     required Offset position,
@@ -215,6 +221,9 @@ class SpriteStack {
     double scale = 1,
     double spacing = 1,
     int frame = 0,
+    StackMotion? motion,
+    double time = 0,
+    SliceCut? cut,
     Paint? paint,
     bool outline = true,
     bool shadow = true,
@@ -224,6 +233,8 @@ class SpriteStack {
   }) {
     final squash = squashFor(pitch);
     final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
+    final activeMotion = (motion == null || motion.isEmpty) ? null : motion;
+    final activeCut = (cut == null || !cut.isActive) ? null : cut;
 
     if (_pixels != null && paint == null) {
       _renderSoftware(
@@ -234,6 +245,9 @@ class SpriteStack {
         scale: scale,
         spacing: spacing,
         frame: frameIndex,
+        motion: activeMotion,
+        time: time,
+        cut: activeCut,
         outline: outline,
         shadow: shadow,
         pixelSnap: pixelSnap,
@@ -251,6 +265,9 @@ class SpriteStack {
       scale: scale,
       spacing: spacing,
       frame: frameIndex,
+      motion: activeMotion,
+      time: time,
+      cut: activeCut,
       paint: paint,
       outline: outline,
       shadow: shadow,
@@ -280,6 +297,7 @@ class SpriteStack {
     double pitch = defaultPitch,
     double scale = 1,
     double spacing = 1,
+    SliceCut? cut,
     bool outline = true,
     bool shadow = true,
   }) {
@@ -294,7 +312,10 @@ class SpriteStack {
 
     final width = (w * ca + h * sa) + grow * 2;
     final projectedSliceHeight = (w * sa + h * ca) * squash;
-    final lift = (sliceCount - 1) * spacing;
+    final visibleSlices = cut == null || !cut.isActive
+        ? sliceCount.toDouble()
+        : cut.visibleSliceCount(sliceCount);
+    final lift = math.max(0.0, visibleSlices - 1) * spacing;
 
     // Distance from the top of the bounds down to the ground point.
     final above = lift + projectedSliceHeight + grow;
@@ -319,6 +340,9 @@ class SpriteStack {
     double scale = 1,
     double spacing = 1,
     int frame = 0,
+    StackMotion? motion,
+    double time = 0,
+    SliceCut? cut,
     bool outline = true,
     bool shadow = true,
     bool pixelSnap = true,
@@ -336,6 +360,9 @@ class SpriteStack {
       scale: scale,
       spacing: spacing,
       frame: frameIndex,
+      motion: motion,
+      time: time,
+      cut: cut,
       outline: outline,
       shadow: shadow,
       pixelSnap: pixelSnap,
@@ -349,6 +376,7 @@ class SpriteStack {
         pitch: pitch,
         scale: scale,
         spacing: spacing,
+        cut: cut,
         outline: outline,
         shadow: shadow,
       ),
@@ -369,6 +397,9 @@ class SpriteStack {
     required double scale,
     required double spacing,
     required int frame,
+    required StackMotion? motion,
+    required double time,
+    required SliceCut? cut,
     required bool outline,
     required bool shadow,
     required bool pixelSnap,
@@ -423,12 +454,18 @@ class SpriteStack {
     // 2. Body slices, bottom to top, overwriting.
     final invSquash = 1 / math.max(squash, 0.1);
     for (var z = 0; z < n; z++) {
+      final visibility = cut?.visibilityAt(z) ?? 1.0;
+      if (visibility <= 0) continue;
       final lift = (z * spacing).round();
-      final yCenter = baseY - lift;
+      // Motion is applied in whole art pixels: the buffer is 1x, so a fraction
+      // of a pixel cannot be represented without blurring the pixel grid.
+      final shift = motion?.offsetAt(z, n, time) ?? Offset.zero;
+      final sliceCx = cx + shift.dx.round();
+      final yCenter = baseY - lift + shift.dy.round();
       final halfW = (w * ca.abs() + h * sa.abs()) / 2;
       final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
-      final xMin = math.max(0, (cx - halfW).floor() - 1);
-      final xMax = math.min(cw - 1, (cx + halfW).ceil() + 1);
+      final xMin = math.max(0, (sliceCx - halfW).floor() - 1);
+      final xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
       final yMin = math.max(0, (yCenter - halfH).floor() - 1);
       final yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
       final stripWidth = n * w;
@@ -436,8 +473,8 @@ class SpriteStack {
 
       for (var y = yMin; y <= yMax; y++) {
         final dy = (y - yCenter) * invSquash;
-        var sx = (xMin - cx) * ca + dy * sa + w * 0.5;
-        var sy = -(xMin - cx) * sa + dy * ca + h * 0.5;
+        var sx = (xMin - sliceCx) * ca + dy * sa + w * 0.5;
+        var sy = -(xMin - sliceCx) * sa + dy * ca + h * 0.5;
         var idx = y * cw + xMin;
         for (var x = xMin; x <= xMax; x++, idx++, sx += ca, sy -= sa) {
           if (sx < 0 || sy < 0) continue;
@@ -446,6 +483,7 @@ class SpriteStack {
           if (ix >= w || iy >= h) continue;
           final sp = ((rowOffset + iy) * stripWidth + zBase + ix) * 4;
           if (pixels[sp + 3] == 0) continue;
+          if (visibility < 1 && !bayerAllows(x, y, visibility)) continue;
           final dp = idx * 4;
           out[dp] = pixels[sp];
           out[dp + 1] = pixels[sp + 1];
@@ -597,6 +635,9 @@ class SpriteStack {
     required double scale,
     required double spacing,
     required int frame,
+    required StackMotion? motion,
+    required double time,
+    required SliceCut? cut,
     Paint? paint,
     required bool outline,
     required bool shadow,
@@ -649,9 +690,15 @@ class SpriteStack {
         final ox = offset.dx * scale;
         final oy = offset.dy * scale;
         for (var slice = 0; slice < sliceCount; slice++) {
+          if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
+          final shift =
+              motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
           final center = Offset(
-            ground.dx + ox,
-            snapY(groundSliceCenterY - slice * spacing * scale + oy),
+            ground.dx + ox + shift.dx * scale,
+            snapY(groundSliceCenterY -
+                slice * spacing * scale +
+                oy +
+                shift.dy * scale),
           );
           _drawSliceAt(
             canvas,
@@ -669,9 +716,11 @@ class SpriteStack {
     }
 
     for (var slice = 0; slice < sliceCount; slice++) {
+      if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
+      final shift = motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
       final center = Offset(
-        ground.dx,
-        snapY(groundSliceCenterY - slice * spacing * scale),
+        ground.dx + shift.dx * scale,
+        snapY(groundSliceCenterY - slice * spacing * scale + shift.dy * scale),
       );
       _drawSliceAt(
         canvas,

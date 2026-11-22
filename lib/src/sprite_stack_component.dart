@@ -2,8 +2,10 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 
+import 'slice_cut.dart';
 import 'sprite_stack.dart';
 import 'sprite_stack_bounds.dart';
+import 'sprite_stack_motion.dart';
 
 /// Flame/Bonfire component that renders a [SpriteStack].
 ///
@@ -23,6 +25,8 @@ class SpriteStackComponent extends PositionComponent {
     double stackScale = 1,
     double spacing = 1,
     this.pixelSnap = true,
+    this.motion,
+    SliceCut? cut,
     bool outline = true,
     bool shadow = true,
     this.outlineColor = const Color(0xFF181C24),
@@ -33,6 +37,7 @@ class SpriteStackComponent extends PositionComponent {
         _pitch = pitch,
         _stackScale = stackScale,
         _spacing = spacing,
+        _cut = cut,
         _outline = outline,
         _shadow = shadow,
         super(
@@ -43,6 +48,7 @@ class SpriteStackComponent extends PositionComponent {
             pitch: pitch,
             stackScale: stackScale,
             spacing: spacing,
+            cut: cut,
             outline: outline,
             shadow: shadow,
           ),
@@ -53,6 +59,7 @@ class SpriteStackComponent extends PositionComponent {
       pitch: _pitch,
       stackScale: _stackScale,
       spacing: _spacing,
+      cut: _cut,
       outline: _outline,
       shadow: _shadow,
     );
@@ -127,6 +134,25 @@ class SpriteStackComponent extends PositionComponent {
   /// directly; geometry (and therefore [size]) does not change per frame.
   int frame = 0;
 
+  /// Optional per-slice deformation (sway, lean) applied every frame.
+  StackMotion? motion;
+
+  /// Clock fed to [motion], in seconds. Advanced by [update].
+  double motionTime = 0;
+
+  /// Which slices are drawn.
+  ///
+  /// Set `SliceCut(top: walls)` to drop a roof and reveal the interior. The
+  /// component's bounds follow the cut, so culling stays correct.
+  SliceCut? get cut => _cut;
+  set cut(SliceCut? value) {
+    if (identical(value, _cut)) return;
+    _cut = value;
+    _refreshBounds();
+  }
+
+  SliceCut? _cut;
+
   /// Outline color for the finished stack.
   Color outlineColor;
 
@@ -147,6 +173,7 @@ class SpriteStackComponent extends PositionComponent {
         pitch: _pitch,
         scale: _stackScale,
         spacing: _spacing,
+        cut: _cut,
         outline: _outline,
         shadow: _shadow,
       );
@@ -157,6 +184,7 @@ class SpriteStackComponent extends PositionComponent {
     required double pitch,
     required double stackScale,
     required double spacing,
+    required SliceCut? cut,
     required bool outline,
     required bool shadow,
   }) {
@@ -166,6 +194,7 @@ class SpriteStackComponent extends PositionComponent {
           pitch: pitch,
           scale: stackScale,
           spacing: spacing,
+          cut: cut,
           outline: outline,
           shadow: shadow,
         )
@@ -179,6 +208,7 @@ class SpriteStackComponent extends PositionComponent {
     required double pitch,
     required double stackScale,
     required double spacing,
+    required SliceCut? cut,
     required bool outline,
     required bool shadow,
   }) =>
@@ -188,10 +218,17 @@ class SpriteStackComponent extends PositionComponent {
             pitch: pitch,
             scale: stackScale,
             spacing: spacing,
+            cut: cut,
             outline: outline,
             shadow: shadow,
           )
           .ground;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    motionTime += dt;
+  }
 
   @override
   void render(Canvas canvas) {
@@ -203,6 +240,9 @@ class SpriteStackComponent extends PositionComponent {
       scale: _stackScale,
       spacing: _spacing,
       frame: frame,
+      motion: motion,
+      time: motionTime,
+      cut: _cut,
       pixelSnap: pixelSnap,
       outline: _outline,
       shadow: _shadow,
