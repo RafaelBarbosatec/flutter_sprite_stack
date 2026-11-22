@@ -187,6 +187,301 @@ void main() {
       stack.dispose();
     });
   });
+
+  group('software rasterizer', () {
+    test('decode() renders through the art-pixel buffer', () async {
+      final image = await _solidImage(width: 8, height: 4, color: 0xFF3366FF);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      final stack = await SpriteStack.decode(
+        png!.buffer.asUint8List(),
+        sliceCount: 2,
+      );
+
+      final pixels = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+
+      // Two 4x4 slices lifted 1 px: the top slice reaches row 15.
+      expect(_pixelAt(pixels, 24, 12, 18), 0xFF3366FF);
+      expect(_pixelAt(pixels, 24, 12, 15), 0xFF3366FF);
+      expect(_pixelAt(pixels, 24, 12, 14), 0x00000000);
+
+      image.dispose();
+      stack.dispose();
+    });
+  });
+
+  group('bounds', () {
+    test('follows yaw and the projected slice shape', () async {
+      // 2 slices of 2x4 source pixels.
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 2);
+
+      final front = stack.boundsFor(
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+      expect(front.size.width, closeTo(2, 1e-9));
+      expect(front.size.height, closeTo(5, 1e-9)); // 4 tall + 1 lift
+      expect(front.ground.dx, closeTo(1, 1e-9));
+      expect(front.ground.dy, closeTo(5, 1e-9));
+      expect(front.rectAt(const ui.Offset(10, 20)),
+          const ui.Rect.fromLTWH(9, 15, 2, 5));
+
+      final side = stack.boundsFor(
+        yaw: math.pi / 2,
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+      expect(side.size.width, closeTo(4, 1e-9)); // rotated footprint
+      expect(side.size.height, closeTo(3, 1e-9)); // 2 tall + 1 lift
+      expect(side.ground.dx, closeTo(2, 1e-9));
+      expect(side.ground.dy, closeTo(3, 1e-9));
+
+      stack.dispose();
+    });
+
+    test('adds the outline ring and the ground shadow', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 2);
+
+      final outline = stack.boundsFor(
+        pitch: math.pi / 2,
+        outline: true,
+        shadow: false,
+      );
+      expect(outline.size.width, closeTo(4, 1e-9)); // +1 px each side
+      expect(outline.size.height, closeTo(7, 1e-9)); // +1 px below
+      expect(outline.ground.dx, closeTo(2, 1e-9));
+      expect(outline.ground.dy, closeTo(6, 1e-9));
+
+      final withShadow = stack.boundsFor(
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: true,
+      );
+      // Shadow is dropped +3 px and extends half a slice below the feet.
+      expect(withShadow.size.width, closeTo(2, 1e-9));
+      expect(withShadow.size.height, closeTo(10, 1e-9));
+      expect(withShadow.ground.dx, closeTo(1, 1e-9));
+      expect(withShadow.ground.dy, closeTo(5, 1e-9));
+
+      stack.dispose();
+    });
+
+    test('scales with the destination scale', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 2);
+
+      final bounds = stack.boundsFor(
+        pitch: math.pi / 2,
+        scale: 4,
+        outline: false,
+        shadow: false,
+      );
+      expect(bounds.size, const ui.Size(8, 20));
+      expect(bounds.ground, const ui.Offset(4, 20));
+
+      stack.dispose();
+    });
+  });
+
+  group('pixel snapping', () {
+    test('rounds the ground anchor to whole pixels', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFF0000);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final snapped = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 21),
+        pitch: math.pi / 2,
+        pixelSnap: true,
+      );
+      final fractional = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12.4, 20.6),
+        pitch: math.pi / 2,
+        pixelSnap: true,
+      );
+
+      expect(fractional, snapped);
+
+      stack.dispose();
+    });
+  });
+
+  group('bake', () {
+    test('replays a frame with its ground point at the draw position',
+        () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFF0000);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final baked = stack.bake(
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      baked.draw(canvas, const ui.Offset(12, 20));
+      final picture = recorder.endRecording();
+      final rendered = await picture.toImage(24, 24);
+      final data =
+          await rendered.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final pixels = data!.buffer.asUint8List();
+
+      // 4x4 slice, ground at y=20: rows 16..20, columns 10..14.
+      expect(_pixelAt(pixels, 24, 12, 18), 0xFFFF0000);
+      expect(_pixelAt(pixels, 24, 12, 15), 0x00000000);
+
+      expect(
+        baked.bounds.size,
+        stack
+            .boundsFor(
+              pitch: math.pi / 2,
+              outline: false,
+              shadow: false,
+            )
+            .size,
+      );
+
+      rendered.dispose();
+      picture.dispose();
+      baked.dispose();
+      expect(baked.isDisposed, isTrue);
+      stack.dispose();
+    });
+  });
+
+  group('turntable', () {
+    test('bakes buckets lazily and reuses them', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFF00FF00);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      final turntable = SpriteStackTurntable(
+        stack,
+        buckets: 8,
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+
+      expect(turntable.bakedFrameCount, 0);
+
+      final first = turntable.frameFor(0);
+      final sameBucket = turntable.frameFor(0.01);
+      expect(identical(first, sameBucket), isTrue);
+      expect(turntable.bakedFrameCount, 1);
+
+      final quarter = turntable.frameFor(math.pi / 4);
+      expect(quarter.yaw, closeTo(math.pi / 4, 1e-9));
+      expect(turntable.bakedFrameCount, 2);
+
+      // Negative yaw and values past a full turn wrap around.
+      expect(turntable.bucketFor(-math.pi / 4), 7);
+      expect(turntable.bucketFor(math.pi / 4 + 2 * math.pi), 1);
+
+      turntable.warmUp();
+      expect(turntable.bakedFrameCount, 8);
+
+      turntable.dispose();
+      expect(turntable.bakedFrameCount, 0);
+      stack.dispose();
+    });
+  });
+
+  group('cache', () {
+    test('loads each asset once and evicts it', () async {
+      var loads = 0;
+      final cache = SpriteStackCache(
+        loader: (path, sliceCount) async {
+          loads++;
+          final image =
+              await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+          return SpriteStack.fromImage(image, sliceCount: 1);
+        },
+      );
+
+      final first = await cache.load('a.png', sliceCount: 1);
+      final second = await cache.load('a.png', sliceCount: 1);
+
+      expect(identical(first, second), isTrue);
+      expect(loads, 1);
+      expect(cache.contains('a.png'), isTrue);
+      expect(cache['a.png'], same(first));
+      expect(cache.length, 1);
+
+      cache.evict('a.png');
+      expect(cache.contains('a.png'), isFalse);
+      expect(cache.length, 0);
+    });
+
+    test('shares a single in-flight load', () async {
+      var loads = 0;
+      final cache = SpriteStackCache(
+        loader: (path, sliceCount) async {
+          loads++;
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+          final image =
+              await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+          return SpriteStack.fromImage(image, sliceCount: 1);
+        },
+      );
+
+      await Future.wait([
+        cache.load('b.png', sliceCount: 1),
+        cache.load('b.png', sliceCount: 1),
+      ]);
+
+      expect(loads, 1);
+      cache.clear();
+      expect(cache.length, 0);
+    });
+  });
+
+  group('component', () {
+    test('size and ground follow the projected bounds', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 2);
+
+      final component = SpriteStackComponent(
+        stack: stack,
+        yaw: math.pi / 2,
+        pitch: math.pi / 2,
+        outline: false,
+        shadow: false,
+      );
+
+      expect(component.size.x, closeTo(4, 1e-9));
+      expect(component.size.y, closeTo(3, 1e-9));
+      expect(component.groundLocal.dx, closeTo(2, 1e-9));
+      expect(component.groundLocal.dy, closeTo(3, 1e-9));
+
+      component.yaw = 0;
+      expect(component.size.x, 2);
+      expect(component.size.y, 5);
+      expect(component.groundLocal, const ui.Offset(1, 5));
+
+      component.stackScale = 2;
+      expect(component.size.x, 4);
+      expect(component.size.y, 10);
+
+      stack.dispose();
+    });
+  });
 }
 
 Future<ui.Image> _solidImage({
@@ -243,6 +538,7 @@ Future<Uint8List> _renderToPixels(
   double spacing = 1,
   bool outline = false,
   bool shadow = false,
+  bool pixelSnap = true,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -253,6 +549,7 @@ Future<Uint8List> _renderToPixels(
     spacing: spacing,
     outline: outline,
     shadow: shadow,
+    pixelSnap: pixelSnap,
   );
   final picture = recorder.endRecording();
   final image = await picture.toImage(width, height);

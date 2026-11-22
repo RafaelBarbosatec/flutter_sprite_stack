@@ -17,16 +17,43 @@ add(
 );
 ```
 
-The component keeps `size` in sync (slice width × rendered height) so hit boxes
-and `priority`-based sorting behave like any other `PositionComponent`.
+The component keeps `size` in sync with the **projected** bounds — rotated
+footprint, outline and ground shadow — so hit boxes, camera culling and
+`priority`-based sorting match what is actually drawn.
 
 `yaw` spins the prop in place; it does **not** touch the component's own
-`angle`.
+`angle`. Drawing stays anchored by the ground point (`groundLocal`), so the
+prop does not slide while the bounds change.
 
-Use `updateBounds()` after changing `pitch`, `spacing` or `stackScale` so the
-component size stays correct:
+The `yaw`, `pitch`, `stackScale`, `spacing`, `outline` and `shadow` setters
+refresh the bounds for you. `updateBounds()` only exists for bulk changes:
 
 ```dart
-component.pitch = 0.8;
-component.updateBounds();
+component.pitch = 0.8; // size updated here
+```
+
+For scenery that does not spin every frame, skip the CPU rasterizer and draw a
+baked frame:
+
+```dart
+class BakedProp extends PositionComponent {
+  BakedProp(this.baked, {super.position})
+      : super(
+          size: Vector2(
+            baked.bounds.size.width,
+            baked.bounds.size.height,
+          ),
+        );
+
+  final BakedSpriteStack baked;
+
+  @override
+  void render(Canvas canvas) => baked.draw(canvas, baked.bounds.ground);
+
+  @override
+  void onRemove() {
+    baked.dispose();
+    super.onRemove();
+  }
+}
 ```

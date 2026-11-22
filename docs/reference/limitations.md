@@ -14,3 +14,6 @@ description: What flutter_sprite_stack does not do.
   exactly.
 - A very large `scale` plus many slices costs fill rate; cache or pre-bake if it
   shows up in a profile.
+- **No animation yet.** A stack is a still prop. Bake several stacks and swap
+  them, or animate the transform (spin, bob, scale) — per-slice deformation and
+  frame atlases are not part of the API.

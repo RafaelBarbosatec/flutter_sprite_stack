@@ -13,6 +13,7 @@ class SpriteStackPainter extends CustomPainter {
     this.scale = 1,
     this.spacing = 1,
     this.offset = Offset.zero,
+    this.pixelSnap = true,
     this.outline = true,
     this.shadow = true,
     this.outlineColor = const Color(0xFF181C24),
@@ -35,6 +36,9 @@ class SpriteStackPainter extends CustomPainter {
 
   /// Optional offset applied on top of the default bottom-center anchor.
   final Offset offset;
+
+  /// Rounds the ground anchor to whole pixels.
+  final bool pixelSnap;
 
   /// Whether to draw the crisp 1 px outer outline.
   final bool outline;
@@ -60,6 +64,7 @@ class SpriteStackPainter extends CustomPainter {
       pitch: pitch,
       scale: scale,
       spacing: spacing,
+      pixelSnap: pixelSnap,
       paint: stackPaint,
       outline: outline,
       shadow: shadow,
@@ -76,6 +81,7 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.scale != scale ||
       oldDelegate.spacing != spacing ||
       oldDelegate.offset != offset ||
+      oldDelegate.pixelSnap != pixelSnap ||
       oldDelegate.outline != outline ||
       oldDelegate.shadow != shadow ||
       oldDelegate.outlineColor != outlineColor ||
