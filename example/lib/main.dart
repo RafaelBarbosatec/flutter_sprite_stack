@@ -24,7 +24,7 @@ extension on _SpriteKind {
       };
 
   int get sliceCount => switch (this) {
-        _SpriteKind.car => 16,
+        _SpriteKind.car => 15,
         _SpriteKind.house => 29,
         _SpriteKind.tree => 43,
         _SpriteKind.robot => 24,

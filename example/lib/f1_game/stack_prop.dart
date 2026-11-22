@@ -11,6 +11,7 @@ class StackProp extends GameComponent {
     required Vector2 center,
     required this.visual,
     this.yaw = 0,
+    this.trunkRadius,
   }) {
     final fp = visual.footprint;
     size = Vector2(fp.width, fp.height);
@@ -19,6 +20,25 @@ class StackProp extends GameComponent {
 
   final CachedStack visual;
   final double yaw;
+
+  /// When set, a small solid circle at the ground point blocks vehicles.
+  final double? trunkRadius;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    final radius = trunkRadius;
+    if (radius != null) {
+      add(
+        CircleHitbox(
+          radius: radius,
+          position: size / 2,
+          anchor: Anchor.center,
+          collisionType: CollisionType.passive,
+        ),
+      );
+    }
+  }
 
   @override
   void render(Canvas canvas) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the carved F1 car stack at several angles and print ASCII previews."""
+"""Render the F1 car stack at several angles and print ASCII previews."""
 from __future__ import annotations
 
 import sys
@@ -11,7 +11,7 @@ from PIL import Image
 SLICER = Path("/home/rafael/.pi/agent/git/github.com/danielwh2/sprite-stacking/skills/sprite-stacking/scripts")
 sys.path.insert(0, str(SLICER))
 
-from views_to_slices import views_to_slices, render_stack_image  # noqa: E402
+from views_to_slices import render_stack_image  # noqa: E402
 
 PALETTE = {
     (14, 16, 22): "#", (208, 32, 40): "R", (140, 20, 28): "r",
@@ -49,14 +49,15 @@ def to_ascii(img: Image.Image, max_w: int = 76) -> str:
         out.append("".join(row))
     return "\n".join(out)
 
+def load_volume(path="slices.png", slices=15):
+    strip = np.array(Image.open(path).convert("RGBA"))
+    w = strip.shape[1] // slices
+    return np.stack([strip[:, i * w:(i + 1) * w] for i in range(slices)])
+
 
 def main():
-    sheet = np.array(Image.open("views.png").convert("RGBA"))
-    vol, views = views_to_slices(sheet, slices=16, top_nose="down", side_nose="left", order="reading")
+    vol = load_volume()
     print("vol shape (slices, H, W):", vol.shape[:3])
-    for name, v in zip(["TOP", "SIDE", "FRONT", "BACK"], views):
-        print(f"\n== {name} ==")
-        print("\n".join("".join(classify(p) for p in row) for row in v))
     for angle in (0, 45, 90, 135, 180, 225, 270, 315):
         frame = render_stack_image(vol, angle, squash=0.75, spacing=1.0, shadow=True, outline=True)
         print(f"\n===== angle {angle} =====")

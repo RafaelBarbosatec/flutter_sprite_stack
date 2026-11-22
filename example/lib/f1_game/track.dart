@@ -87,6 +87,35 @@ class Track {
     return _cells[r][c];
   }
 
+  late final List<Vector2> _wallCenters = [
+    for (var r = 0; r < rows; r++)
+      for (var c = 0; c < cols; c++)
+        if (_cells[r][c] == TrackCell.wall)
+          Vector2((c + 0.5) * tileSize, (r + 0.5) * tileSize),
+  ];
+
+  /// Distance from [p] to the nearest barrier cell centre, in pixels.
+  double distanceToWall(Vector2 p) {
+    var best = double.infinity;
+    for (final w in _wallCenters) {
+      final d = w.distanceToSquared(p);
+      if (d < best) best = d;
+    }
+    return math.sqrt(best);
+  }
+
+  /// Whether a [halfW] x [halfH] box centred on [p] only covers [cell]s.
+  bool areaIs(Vector2 p, double halfW, double halfH, TrackCell cell) {
+    for (final dx in const [-1.0, 0.0, 1.0]) {
+      for (final dy in const [-1.0, 0.0, 1.0]) {
+        if (cellAt(Vector2(p.x + dx * halfW, p.y + dy * halfH)) != cell) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   static const _asphaltA = Color(0xFF3A3F4B);
   static const _asphaltB = Color(0xFF353A46);
   static const _grassA = Color(0xFF4C9A4A);

@@ -44,7 +44,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
     try {
       final car = await SpriteStack.load(
         'sprites/car/slices.png',
-        sliceCount: 16,
+        sliceCount: 15,
       );
       final tree = await SpriteStack.load(
         'sprites/tree/slices.png',
@@ -85,55 +85,71 @@ class _F1GameScreenState extends State<F1GameScreen> {
   List<GameComponent> _buildProps() {
     final rnd = math.Random(7);
     final props = <GameComponent>[];
-    // Prop coordinates are expressed in 64 px units.
-    const ts = 64.0;
-    const cols = Track.cols / 2;
-    const rows = Track.rows / 2;
+    final placed = <(Vector2, double)>[]; // centre + clearance radius
 
-    void tree(double col, double row) {
+    bool free(Vector2 p, double radius) => placed.every(
+          (o) => o.$1.distanceTo(p) >= o.$2 + radius,
+        );
+
+    void house(Vector2 p, double yaw) {
+      placed.add((p, 90));
+      props.add(StackProp(center: p, visual: _house!, yaw: yaw));
+    }
+
+    void tree(Vector2 p, {bool solid = false}) {
+      placed.add((p, 38));
       props.add(
         StackProp(
-          center: Vector2(col * ts, row * ts),
+          center: p,
           visual: _tree!,
           yaw: rnd.nextDouble() * 2 * math.pi,
+          trunkRadius: solid ? 9 : null,
         ),
       );
     }
 
-    void house(double col, double row, double yaw) {
-      props.add(
-        StackProp(
-          center: Vector2(col * ts, row * ts),
-          visual: _house!,
-          yaw: yaw,
-        ),
-      );
+    // Candidate points over the whole map, visited in random order.
+    final candidates = <Vector2>[
+      for (var y = 40.0; y < _track.mapSize.y; y += 48)
+        for (var x = 40.0; x < _track.mapSize.x; x += 48)
+          Vector2(x + rnd.nextDouble() * 24, y + rnd.nextDouble() * 24),
+    ]..shuffle(rnd);
+
+    // A house in the middle of the infield.
+    house(Vector2(27 * 64, 20 * 64), 0);
+
+    // Houses on the scenery just behind the barriers.
+    var houses = 0;
+    for (final p in candidates) {
+      if (houses >= 7) break;
+      if (!_track.areaIs(p, 56, 44, TrackCell.scenery)) continue;
+      final d = _track.distanceToWall(p);
+      if (d < 110 || d > 330 || !free(p, 90)) continue;
+      house(p, rnd.nextInt(4) * math.pi / 2);
+      houses++;
     }
 
-    // Infield.
-    house(27, 20, 0);
-    for (final p in const [
-      (19.0, 18.0),
-      (35.0, 18.5),
-      (21.0, 22.0),
-      (33.0, 22.0),
-      (25.0, 17.0),
-      (30.0, 17.5),
-    ]) {
-      tree(p.$1, p.$2);
+    // Trees on the grass strip beside the track (solid trunks), spaced out so
+    // the strip stays drivable.
+    var solid = 0;
+    for (final p in candidates) {
+      if (solid >= 26) break;
+      if (_track.cellAt(p) != TrackCell.grass) continue;
+      if (_track.distanceToWall(p) > 48 || !free(p, 70)) continue;
+      tree(p, solid: true);
+      solid++;
     }
 
-    // Outside the barriers.
-    for (var c = 4.0; c < cols - 3; c += 4.5) {
-      tree(c, 1.2 + rnd.nextDouble());
-      tree(c + 2, rows - 1.2 - rnd.nextDouble());
+    // Trees on the scenery close to the barriers, both inside and outside.
+    var scenery = 0;
+    for (final p in candidates) {
+      if (scenery >= 90) break;
+      if (!_track.areaIs(p, 28, 20, TrackCell.scenery)) continue;
+      final d = _track.distanceToWall(p);
+      if (d > 260 || !free(p, 38)) continue;
+      tree(p);
+      scenery++;
     }
-    for (var r = 5.0; r < rows - 3; r += 4.5) {
-      tree(0.8 + rnd.nextDouble(), r);
-      tree(cols - 0.8 - rnd.nextDouble(), r + 2);
-    }
-    house(10, 1.4, math.pi / 2);
-    house(44, rows - 1.4, math.pi);
 
     return props;
   }
