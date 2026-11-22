@@ -52,7 +52,7 @@ Or add it manually:
 
 ```yaml
 dependencies:
-  flutter_sprite_stack: ^0.2.0
+  flutter_sprite_stack: ^0.3.0
 ```
 
 Requires Flutter 3.22+ and Dart 3.5+. Works on every platform Flutter supports,
@@ -117,6 +117,54 @@ footprint, outline and ground shadow — so hit boxes, camera culling and
 `priority`-based sorting match what is actually drawn. `yaw` spins the prop; it
 does **not** touch the component's own `angle`, and the drawing stays anchored
 by its feet while the bounds change.
+
+## Animation
+
+Animation is a **frame atlas**: the same horizontal strips stacked vertically,
+frame `0` on top. Nothing else changes — the slice format, bounds and outline
+are per row.
+
+```
+frame 0  [z0][z1][z2] … [zN]   ← sliceCount per row
+frame 1  [z0][z1][z2] … [zN]
+…
+frame 4  [z0][z1][z2] … [zN]
+```
+
+```dart
+final torch = await SpriteStackAnimation.load(
+  'sprites/torch.png',
+  sliceCount: 14,
+  frameCount: 5,
+  frameDuration: 0.13,
+  loop: true,
+);
+
+// In a Ticker / Flame update:
+torch.update(dt);
+stackPainter.frame = torch.frame; // or render(..., frame: torch.frame)
+```
+
+`SpriteStackAnimation` handles timing, looping, ping-pong, `play`/`stop`/`reset`
+and `onComplete`. The rendering cost does not change: a 5-frame torch still
+draws `sliceCount` slices per frame.
+
+In Flame/Bonfire, use the animated component — same bounds, culling and Y
+sorting as the static one:
+
+```dart
+add(
+  AnimatedSpriteStackComponent(
+    animation: torch,
+    position: Vector2(120, 200),
+    stackScale: 4,
+    priority: 10,
+  ),
+);
+```
+
+Animate transforms too when it fits better: a spinning coin, a bobbing item or a
+pulsing warning light does not need frames at all.
 
 ## Baking and spinning
 
@@ -254,6 +302,10 @@ produces.
 | `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
+| `SpriteStackAnimation.load(path, sliceCount:, frameCount:, ...)` | Loads and plays a frame atlas |
+| `SpriteStackAnimation` | Timing, loop, ping-pong, `play`/`stop`/`reset` |
+| `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component with animation |
+| `render(..., frame:)` / `SpriteStackPainter.frame` | Draws a specific atlas frame |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |

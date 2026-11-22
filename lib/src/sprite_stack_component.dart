@@ -123,6 +123,10 @@ class SpriteStackComponent extends PositionComponent {
   /// Rounds the ground anchor to whole pixels.
   bool pixelSnap;
 
+  /// Atlas frame to draw. Drive it with [SpriteStackAnimation] or set it
+  /// directly; geometry (and therefore [size]) does not change per frame.
+  int frame = 0;
+
   /// Outline color for the finished stack.
   Color outlineColor;
 
@@ -198,6 +202,7 @@ class SpriteStackComponent extends PositionComponent {
       pitch: _pitch,
       scale: _stackScale,
       spacing: _spacing,
+      frame: frame,
       pixelSnap: pixelSnap,
       outline: _outline,
       shadow: _shadow,

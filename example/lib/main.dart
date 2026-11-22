@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'f1_game/f1_game_screen.dart';
+import 'torch_screen.dart';
 
 enum _SpriteKind { car, house, tree, robot }
 
@@ -131,6 +132,13 @@ class _DemoScreenState extends State<DemoScreen>
       appBar: AppBar(
         title: const Text('flutter_sprite_stack — turntable'),
         actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.local_fire_department),
+            label: const Text('Animated torch'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const TorchScreen()),
+            ),
+          ),
           TextButton.icon(
             icon: const Icon(Icons.sports_score),
             label: const Text('Play F1 game'),

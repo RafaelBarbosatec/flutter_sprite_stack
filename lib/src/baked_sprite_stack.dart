@@ -18,8 +18,12 @@ class BakedSpriteStack {
   ///
   /// [picture] must be recorded with the ground contact point at the origin,
   /// which is what [SpriteStack.bake] does.
-  BakedSpriteStack.fromPicture(this.picture, this.bounds, this.yaw)
-      : _disposed = false;
+  BakedSpriteStack.fromPicture(
+    this.picture,
+    this.bounds,
+    this.yaw, {
+    this.frame = 0,
+  }) : _disposed = false;
 
   /// The recorded render, with its ground point at the origin.
   final Picture picture;
@@ -29,6 +33,9 @@ class BakedSpriteStack {
 
   /// Yaw this frame was baked at, in radians.
   final double yaw;
+
+  /// Atlas frame this picture was baked from.
+  final int frame;
 
   bool _disposed;
 

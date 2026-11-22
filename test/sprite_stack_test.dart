@@ -482,6 +482,197 @@ void main() {
       stack.dispose();
     });
   });
+
+  group('frames', () {
+    test('decode() splits the atlas into vertical frames', () async {
+      final image = await _twoFrameImage();
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      final stack = await SpriteStack.decode(
+        png!.buffer.asUint8List(),
+        sliceCount: 2,
+        frameCount: 2,
+      );
+
+      expect(stack.frameCount, 2);
+      expect(stack.sliceWidth, 4);
+      expect(stack.sliceHeight, 4);
+
+      final first = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        frame: 0,
+      );
+      final second = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        frame: 1,
+      );
+
+      expect(_pixelAt(first, 24, 12, 18), 0xFFFF0000);
+      expect(_pixelAt(second, 24, 12, 18), 0xFF00FF00);
+
+      image.dispose();
+      stack.dispose();
+    });
+
+    test('frame is clamped to the atlas range', () async {
+      final image = await _twoFrameImage();
+      final stack = SpriteStack.fromImage(image, sliceCount: 2, frameCount: 2);
+
+      final last = await _renderToPixels(
+        stack,
+        width: 24,
+        height: 24,
+        position: const ui.Offset(12, 20),
+        pitch: math.pi / 2,
+        frame: 99,
+      );
+
+      expect(_pixelAt(last, 24, 12, 18), 0xFF00FF00);
+
+      stack.dispose();
+    });
+
+    test('rejects atlases that do not split into frames', () async {
+      final image = await _solidImage(width: 8, height: 5, color: 0xFFFFFFFF);
+
+      expect(
+        () => SpriteStack.fromImage(image, sliceCount: 2, frameCount: 2),
+        throwsArgumentError,
+      );
+      expect(
+        () => SpriteStack.fromImage(image, sliceCount: 2, frameCount: 0),
+        throwsArgumentError,
+      );
+
+      image.dispose();
+    });
+  });
+
+  group('animation', () {
+    test('advances one frame per frameDuration and loops', () async {
+      final stack = await _fourFrameStack();
+      final animation = SpriteStackAnimation(stack, frameDuration: 0.1);
+
+      expect(animation.frame, 0);
+      expect(animation.isPlaying, isTrue);
+
+      animation.update(0.1);
+      expect(animation.frame, 1);
+
+      // 0.25s = two whole frames plus a 0.05 remainder.
+      animation.update(0.25);
+      expect(animation.frame, 3);
+
+      animation.update(0.1); // wraps back to the first frame
+      expect(animation.frame, 0);
+
+      stack.dispose();
+    });
+
+    test('stops on the last frame and notifies once', () async {
+      final stack = await _fourFrameStack();
+      var completions = 0;
+      final animation = SpriteStackAnimation(
+        stack,
+        frameDuration: 0.1,
+        loop: false,
+        onComplete: () => completions++,
+      );
+
+      animation.update(1);
+      expect(animation.frame, 3);
+      expect(animation.isFinished, isTrue);
+      expect(animation.isPlaying, isFalse);
+      expect(completions, 1);
+
+      animation.update(1);
+      expect(completions, 1);
+
+      stack.dispose();
+    });
+
+    test('pingPong bounces between the ends', () async {
+      final stack = await _fourFrameStack();
+      final animation = SpriteStackAnimation(
+        stack,
+        frameDuration: 0.1,
+        pingPong: true,
+      );
+
+      // Ticks: 0,1,2,3,2,1,0...
+      final seen = <int>[];
+      for (var i = 0; i < 7; i++) {
+        seen.add(animation.frame);
+        animation.update(0.1);
+      }
+
+      expect(seen, [0, 1, 2, 3, 2, 1, 0]);
+
+      stack.dispose();
+    });
+
+    test('play, stop and reset control playback', () async {
+      final stack = await _fourFrameStack();
+      final animation = SpriteStackAnimation(stack, frameDuration: 0.1);
+
+      animation.update(0.1);
+      animation.stop();
+      animation.update(0.5);
+      expect(animation.frame, 1);
+
+      animation.play();
+      animation.update(0.1);
+      expect(animation.frame, 2);
+
+      animation.reset();
+      expect(animation.frame, 0);
+      expect(animation.isPlaying, isFalse);
+      expect(animation.isFinished, isFalse);
+
+      stack.dispose();
+    });
+
+    test('onFrame fires only when the visible frame changes', () async {
+      final stack = await _fourFrameStack();
+      final frames = <int>[];
+      final animation = SpriteStackAnimation(
+        stack,
+        frameDuration: 0.1,
+        onFrame: frames.add,
+      );
+
+      animation.update(0.05); // no change
+      animation.update(0.05); // frame 1
+      animation.update(0.2); // frames 2 and 3
+
+      expect(frames, [1, 2, 3]);
+
+      stack.dispose();
+    });
+
+    test('component drives its frame from the animation', () async {
+      final stack = await _fourFrameStack();
+      final animation = SpriteStackAnimation(stack, frameDuration: 0.1);
+      final component = AnimatedSpriteStackComponent(
+        animation: animation,
+        yaw: 0.4,
+        stackScale: 2,
+      );
+
+      expect(component.frame, 0);
+      component.update(0.1);
+      expect(component.frame, 1);
+
+      stack.dispose();
+    });
+  });
 }
 
 Future<ui.Image> _solidImage({
@@ -508,6 +699,26 @@ Future<ui.Image> _twoToneImage() async {
     }
   }
   return _decode(pixels, width, height);
+}
+
+/// 8x8 atlas: two 4x4 slices per row, frame 0 red and frame 1 green.
+Future<ui.Image> _twoFrameImage() async {
+  const width = 8;
+  const height = 8;
+  final pixels = Uint8List(width * height * 4);
+  for (var y = 0; y < height; y++) {
+    final color = y < height ~/ 2 ? 0xFFFF0000 : 0xFF00FF00;
+    for (var x = 0; x < width; x++) {
+      _writeColor(pixels, (y * width + x) * 4, color);
+    }
+  }
+  return _decode(pixels, width, height);
+}
+
+/// Four stacked frames, enough to exercise playback without rendering.
+Future<SpriteStack> _fourFrameStack() async {
+  final image = await _solidImage(width: 4, height: 8, color: 0xFFFFFFFF);
+  return SpriteStack.fromImage(image, sliceCount: 1, frameCount: 4);
 }
 
 void _writeColor(Uint8List pixels, int offset, int argb) {
@@ -539,6 +750,7 @@ Future<Uint8List> _renderToPixels(
   bool outline = false,
   bool shadow = false,
   bool pixelSnap = true,
+  int frame = 0,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -547,6 +759,7 @@ Future<Uint8List> _renderToPixels(
     position: position,
     pitch: pitch,
     spacing: spacing,
+    frame: frame,
     outline: outline,
     shadow: shadow,
     pixelSnap: pixelSnap,
