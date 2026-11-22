@@ -16,3 +16,4 @@ example/pubspec.lock
 # part of the package, so the pub "doc" naming convention does not apply.
 docs/
 docs.json
+example
