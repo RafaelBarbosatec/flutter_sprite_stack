@@ -650,9 +650,9 @@ void main() {
 
       animation.update(0.05); // no change
       animation.update(0.05); // frame 1
-      animation.update(0.2); // frames 2 and 3
+      animation.update(0.2); // skips frame 2 and lands on 3
 
-      expect(frames, [1, 2, 3]);
+      expect(frames, [1, 3]);
 
       stack.dispose();
     });

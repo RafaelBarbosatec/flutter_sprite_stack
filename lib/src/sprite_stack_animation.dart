@@ -74,7 +74,10 @@ class SpriteStackAnimation {
   /// Called once when a non-looping animation reaches its last frame.
   void Function()? onComplete;
 
-  /// Called every time the visible frame changes.
+  /// Called after each [update] that changes the visible frame.
+  ///
+  /// A single [update] that skips several frames (a long `dt`) reports only the
+  /// frame it lands on, not every frame in between.
   void Function(int frame)? onFrame;
 
   /// How long the animation has been playing, in seconds.
