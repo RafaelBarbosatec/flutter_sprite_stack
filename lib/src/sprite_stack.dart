@@ -687,7 +687,7 @@ class BakedSpriteStack {
 
   /// Draws the baked prop with its ground contact at [position].
   void draw(Canvas canvas, Offset position, {Paint? paint}) {
-    canvas.drawImage(image, position - groundOffset, paint);
+    canvas.drawImage(image, position - groundOffset, paint ?? Paint());
   }
 
   /// Releases the baked image.
