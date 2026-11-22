@@ -4,7 +4,7 @@ import 'package:bonfire/bonfire.dart';
 import 'package:bonfire/map/base/layer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sprite_stack/sprite_stack.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'cached_stack.dart';
 import 'f1_car.dart';
@@ -52,13 +52,13 @@ class _F1GameScreenState extends State<F1GameScreen> {
       );
       final house = await SpriteStack.load(
         'sprites/house/slices.png',
-        sliceCount: 28,
+        sliceCount: 29,
       );
       _stacks.addAll([car, tree, house]);
 
       final carVisual = CachedStack(car, buckets: 90)..warmUp();
       final treeVisual = CachedStack(tree, scale: 2, buckets: 8);
-      final houseVisual = CachedStack(house, scale: 3, buckets: 4);
+      final houseVisual = CachedStack(house, scale: 2, buckets: 4);
       if (!mounted) return;
       setState(() {
         _car = carVisual;

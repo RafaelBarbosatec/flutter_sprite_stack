@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a turntable GIF of the carved cottage stack."""
+"""Render a turntable GIF of the cottage stack (porch, fence and lawn)."""
 from __future__ import annotations
 
 import sys
@@ -10,12 +10,16 @@ from PIL import Image
 
 SLICER = Path("/home/rafael/.pi/agent/git/github.com/danielwh2/sprite-stacking/skills/sprite-stacking/scripts")
 sys.path.insert(0, str(SLICER))
-from views_to_slices import views_to_slices, render_stack_image  # noqa: E402
+from views_to_slices import render_stack_image  # noqa: E402
+
+def load_volume(path="slices.png", slices=29):
+    strip = np.array(Image.open(path).convert("RGBA"))
+    w = strip.shape[1] // slices
+    return np.stack([strip[:, i * w:(i + 1) * w] for i in range(slices)])
 
 
 def main() -> None:
-    sheet = np.array(Image.open("views.png").convert("RGBA"))
-    vol, _ = views_to_slices(sheet, slices=28, top_nose="down", side_nose="left", order="reading")
+    vol = load_volume()
 
     scale = 6
     frames = []

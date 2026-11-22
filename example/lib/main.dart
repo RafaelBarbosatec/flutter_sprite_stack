@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_sprite_stack/sprite_stack.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'f1_game/f1_game_screen.dart';
 
@@ -25,7 +25,7 @@ extension on _SpriteKind {
 
   int get sliceCount => switch (this) {
         _SpriteKind.car => 16,
-        _SpriteKind.house => 28,
+        _SpriteKind.house => 29,
         _SpriteKind.tree => 43,
         _SpriteKind.robot => 24,
       };

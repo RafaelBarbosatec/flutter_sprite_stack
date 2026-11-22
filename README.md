@@ -56,7 +56,7 @@ including web.
 ## Quick start
 
 ```dart
-import 'package:flutter_sprite_stack/sprite_stack.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 final robot = await SpriteStack.load(
   'assets/robot_stack.png',

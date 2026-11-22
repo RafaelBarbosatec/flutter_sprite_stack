@@ -1,0 +1,18 @@
+# Used instead of .gitignore when publishing (pub ignores .gitignore when this
+# file exists), so keep the entries from .gitignore here.
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+example/pubspec.lock
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# docs.page site (requires the top-level `docs/` folder + docs.json); it is not
+# part of the package, so the pub "doc" naming convention does not apply.
+docs/
+docs.json

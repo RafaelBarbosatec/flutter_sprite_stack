@@ -6,7 +6,7 @@ description: Load a strip and render your first sprite stack.
 # Quick Start
 
 ```dart
-import 'package:flutter_sprite_stack/sprite_stack.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 final tree = await SpriteStack.load(
   'assets/tree_stack.png',

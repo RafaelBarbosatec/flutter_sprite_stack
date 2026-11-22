@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter_sprite_stack/sprite_stack.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 /// Pre-renders a [SpriteStack] into [Picture]s, one per yaw bucket.
 ///
