@@ -24,20 +24,20 @@ class SpriteStackComponent extends PositionComponent {
     this.shadowColor = const Color(0xFFBAC6D4),
     super.position,
     super.priority,
-  }) : _yaw = yaw,
-       _pitch = pitch,
-       _stackScale = stackScale,
-       _spacing = spacing,
-       super(
-         anchor: Anchor.topLeft,
-         size: _boundsSize(
-           stack: stack,
-           yaw: yaw,
-           pitch: pitch,
-           stackScale: stackScale,
-           spacing: spacing,
-         ),
-       );
+  })  : _yaw = yaw,
+        _pitch = pitch,
+        _stackScale = stackScale,
+        _spacing = spacing,
+        super(
+          anchor: Anchor.topLeft,
+          size: _boundsSize(
+            stack: stack,
+            yaw: yaw,
+            pitch: pitch,
+            stackScale: stackScale,
+            spacing: spacing,
+          ),
+        );
 
   static Vector2 _boundsSize({
     required SpriteStack stack,
@@ -121,9 +121,9 @@ class SpriteStackComponent extends PositionComponent {
   /// `position + (layoutWidth / 2, layoutHeight)` and growing bounds never
   /// shift the prop.
   Offset get groundLocal => Offset(
-    stack.sliceWidth * _stackScale / 2,
-    stack.heightFor(pitch: _pitch, spacing: _spacing) * _stackScale,
-  );
+        stack.sliceWidth * _stackScale / 2,
+        stack.heightFor(pitch: _pitch, spacing: _spacing) * _stackScale,
+      );
 
   @override
   void render(Canvas canvas) {

@@ -32,9 +32,9 @@ class CachedStack {
 
   /// Size of the ground-slice footprint on screen.
   Size get footprint => Size(
-    stack.sliceWidth * scale,
-    stack.sliceHeight * SpriteStack.squashFor(pitch) * scale,
-  );
+        stack.sliceWidth * scale,
+        stack.sliceHeight * SpriteStack.squashFor(pitch) * scale,
+      );
 
   int _bucketFor(double yaw) {
     final turn = (yaw / (2 * math.pi)) % 1.0;

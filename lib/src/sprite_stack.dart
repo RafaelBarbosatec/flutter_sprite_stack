@@ -19,8 +19,8 @@ import 'package:flutter/services.dart' show rootBundle;
 /// seam-free pixel-art silhouette as the HTML preview.
 class SpriteStack {
   SpriteStack._(this.image, this.sliceCount, this._pixels, this._footprintMask)
-    : sliceWidth = image.width ~/ sliceCount,
-      sliceHeight = image.height;
+      : sliceWidth = image.width ~/ sliceCount,
+        sliceHeight = image.height;
 
   /// Builds a stack from an already decoded strip image.
   ///
@@ -258,8 +258,7 @@ class SpriteStack {
     final ch =
         (diag * squash).ceil() + liftMax + 20 + (shadowPad * squash).ceil();
     final cx = cw >> 1;
-    final baseY =
-        ch -
+    final baseY = ch -
         ((diag * squash) / 2).ceil() -
         8 -
         (shadowPad * squash * 0.45).ceil();
@@ -430,8 +429,7 @@ class SpriteStack {
       var idx = y * cw * 4;
       for (var x = 0; x < cw; x++, idx += 4) {
         if (out[idx + 3] == 0) continue;
-        final color =
-            (out[idx + 3] << 24) |
+        final color = (out[idx + 3] << 24) |
             (out[idx] << 16) |
             (out[idx + 1] << 8) |
             out[idx + 2];
@@ -470,8 +468,7 @@ class SpriteStack {
     required Color outlineColor,
     required Color shadowColor,
   }) {
-    final effectivePaint =
-        paint ??
+    final effectivePaint = paint ??
         (Paint()
           ..filterQuality = FilterQuality.none
           ..isAntiAlias = false);

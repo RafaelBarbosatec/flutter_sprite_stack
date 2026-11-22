@@ -48,14 +48,12 @@ class SpriteStackCache {
     _entries[key] = future;
     // Remove failed entries; also consumes the error so it is not reported as
     // unhandled when the caller attaches their own handler later.
-    future
-        .then<void>(
-          (_) {},
-          onError: (Object error, StackTrace stack) {
-            _entries.remove(key);
-          },
-        )
-        .ignore();
+    future.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        _entries.remove(key);
+      },
+    ).ignore();
     return future;
   }
 

@@ -158,12 +158,13 @@ class Track {
   /// the full map bounds for the camera.
   List<Tile> buildTiles() {
     Tile tile(int c, int r, {bool wall = false}) => Tile(
-      x: c.toDouble(),
-      y: r.toDouble(),
-      width: tileSize,
-      height: tileSize,
-      collisions: wall ? [RectangleHitbox(size: Vector2.all(tileSize))] : null,
-    );
+          x: c.toDouble(),
+          y: r.toDouble(),
+          width: tileSize,
+          height: tileSize,
+          collisions:
+              wall ? [RectangleHitbox(size: Vector2.all(tileSize))] : null,
+        );
 
     final tiles = <Tile>[tile(0, 0), tile(cols - 1, rows - 1)];
     for (var r = 0; r < rows; r++) {
