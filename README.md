@@ -15,6 +15,11 @@ billboard you can spin in any direction. It is the same trick pixel-art games
 have used since the 90s, with a **1x art-pixel software rasterizer** and no 3D
 pipeline.
 
+![Turntable of the example F1 car](doc/turntable.gif)
+
+*The example F1 car spinning at runtime — four arbitrary angles of a 15-slice
+strip, not 8 pre-baked directions.*
+
 ```
 slices (ground slice on the left)
 ┌────┬────┬────┬────┬────┐
@@ -47,7 +52,7 @@ Or add it manually:
 
 ```yaml
 dependencies:
-  flutter_sprite_stack: ^0.1.0
+  flutter_sprite_stack: ^0.2.0
 ```
 
 Requires Flutter 3.22+ and Dart 3.5+. Works on every platform Flutter supports,
@@ -107,9 +112,56 @@ add(
 );
 ```
 
-The component keeps `size` in sync (slice width × rendered height) so hit
-boxes and `priority`-based sorting behave like any other `PositionComponent`.
-`yaw` spins the prop; it does **not** touch the component's own `angle`.
+The component keeps `size` in sync with the **projected** bounds — rotated
+footprint, outline and ground shadow — so hit boxes, camera culling and
+`priority`-based sorting match what is actually drawn. `yaw` spins the prop; it
+does **not** touch the component's own `angle`, and the drawing stays anchored
+by its feet while the bounds change.
+
+## Baking and spinning
+
+The software rasterizer is CPU-bound: it rebuilds a 1x art-pixel buffer on
+every call. For scenery that does not change every frame, bake it once and
+replay a `Picture`:
+
+```dart
+final baked = robot.bake(scale: 4, yaw: 0.6);
+baked.draw(canvas, groundPosition); // one drawPicture
+// ...
+baked.dispose();
+```
+
+A prop that spins should use `SpriteStackTurntable`: it bakes one frame per yaw
+bucket, lazily, and quantises the angle for you. Pixel art hides the stepping,
+so 48–72 buckets read as continuous rotation:
+
+```dart
+final turntable = SpriteStackTurntable(tree, buckets: 72, scale: 4);
+turntable.warmUp(); // pay the cost up front
+
+// Per frame:
+turntable.draw(canvas, groundPosition, yaw);
+```
+
+Loading the same asset once per prop is wasted work too — `SpriteStackCache`
+shares the decoded strip (image, RGBA read-back and footprint mask):
+
+```dart
+final stacks = SpriteStackCache();
+final tree = await stacks.load('sprites/tree.png', sliceCount: 43);
+final house = await stacks.load('sprites/house.png', sliceCount: 29);
+```
+
+## Projected bounds
+
+`size` used to ignore yaw, so a 45° prop drew ~40% wider than its hit box.
+`boundsFor` returns the real projected `size` plus the `ground` point, which is
+what the component uses for culling and hit testing:
+
+```dart
+final bounds = stack.boundsFor(yaw: yaw, scale: 4);
+final rect = bounds.rectAt(groundPosition); // ready for Rect.contains
+```
 
 ## Asset format
 
@@ -197,7 +249,11 @@ produces.
 | `SpriteStack.load(path, sliceCount:)` | Loads a strip from a Flutter asset |
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
-| `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
+| `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
+| `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
+| `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
+| `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |
+| `SpriteStackCache()` | Shares decoded stacks by asset path |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
@@ -216,10 +272,12 @@ collapses to nothing.
   count, so 16-slice and 43-slice props cost about the same.
 - The `fromImage` fallback keeps the old per-slice `drawImageRect` path (one
   draw per slice, plus four outline passes when enabled).
-- If a scene gets heavy, disable outlines or bake 16 directions ahead of time
-  and use a normal sprite sheet instead.
-- Cache the `SpriteStack` (and therefore the `ui.Image`) per asset, not per
-  instance.
+- If a scene gets heavy, bake it: `stack.bake(...)` replays a `Picture` with a
+  single draw call, and `SpriteStackTurntable` bakes a whole rotation lazily.
+- Cache the `SpriteStack` (and therefore the `ui.Image` and the RGBA buffer)
+  per asset with `SpriteStackCache`, not per instance.
+- `pixelSnap` (on by default) rounds the ground anchor to whole pixels, so a
+  moving prop does not shimmer between pixel rows.
 - Keep `scale` at an integer value and filtering at nearest for crisp pixels.
 - Y-sort whole stacks by their ground point; never interleave slices of two
   props.

@@ -12,6 +12,8 @@ bottom-up — each one rotated and vertically squashed — produces a fake-3D
 billboard you can spin in any direction. It is the same trick pixel-art games
 have used since the 90s.
 
+![Turntable of the example F1 car](/assets/turntable.gif)
+
 ```
 slices (ground slice on the left)
 ┌────┬────┬────┬────┬────┐

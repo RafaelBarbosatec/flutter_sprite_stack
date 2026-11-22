@@ -13,10 +13,15 @@ description: SpriteStack, SpriteStackPainter and SpriteStackComponent reference.
 | `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
+| `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected bounds: `size` + `ground` point |
+| `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
 | `SpriteStackPainter(...)` | `CustomPainter` for plain Flutter |
 | `SpriteStackComponent(...)` | Flame/Bonfire `PositionComponent` |
+| `BakedSpriteStack` | A recorded frame; `draw(canvas, ground)` + `dispose()` |
+| `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked frames per yaw bucket |
+| `SpriteStackCache()` | Shares decoded stacks by asset path |
 
 `pitch` is clamped to `0..π/2` and its squash to `0.08..1`, so the stack never
 collapses to nothing.
@@ -35,3 +40,18 @@ collapses to nothing.
 | `outlineColor` | `0xFF181C24` | Outline ink color |
 | `shadowColor` | `0xFFBAC6D4` | Ground shadow color |
 | `paint` | `null` | Optional paint, e.g. a color filter for the body |
+| `pixelSnap` | `true` | Rounds the ground anchor (and fallback lifts) to whole pixels |
+
+## Baked frames
+
+| Member | Meaning |
+| --- | --- |
+| `BakedSpriteStack.draw(canvas, groundPosition)` | Replays the frame with a single `drawPicture` |
+| `BakedSpriteStack.bounds` | Projected bounds of that frame |
+| `BakedSpriteStack.dispose()` | Releases the picture |
+| `SpriteStackTurntable.buckets` | Number of baked yaw angles |
+| `SpriteStackTurntable.frameFor(yaw)` | Frame closest to `yaw`, baked on first use |
+| `SpriteStackTurntable.warmUp()` | Bakes every bucket up front |
+| `SpriteStackTurntable.draw(canvas, ground, yaw)` | Draws the closest bucket |
+| `SpriteStackCache.load(path, sliceCount:)` | Loads once, reuses afterwards |
+| `SpriteStackCache.evict(path)` / `clear()` | Drops and disposes cached stacks |

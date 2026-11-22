@@ -5,6 +5,9 @@ import 'dart:ui';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'baked_sprite_stack.dart';
+import 'sprite_stack_bounds.dart';
+
 /// A sprite-stacked prop.
 ///
 /// The asset is a **horizontal strip of cross-sections**, ground slice first
@@ -142,6 +145,9 @@ class SpriteStack {
   /// same way the reference viewer does.
   /// [shadow] draws the projected ground shadow (the union of all slices)
   /// before the stack.
+  /// [pixelSnap] rounds the ground anchor (and the per-slice lifts of the
+  /// fallback path) to whole pixels, so an integer [scale] lands exactly on the
+  /// device pixel grid instead of blurring every edge.
   /// [outlineColor] and [shadowColor] control those two passes.
   void render(
     Canvas canvas, {
@@ -153,6 +159,7 @@ class SpriteStack {
     Paint? paint,
     bool outline = true,
     bool shadow = true,
+    bool pixelSnap = true,
     Color outlineColor = const Color(0xFF181C24),
     Color shadowColor = const Color(0xFFBAC6D4),
   }) {
@@ -168,6 +175,7 @@ class SpriteStack {
         spacing: spacing,
         outline: outline,
         shadow: shadow,
+        pixelSnap: pixelSnap,
         outlineColor: outlineColor,
         shadowColor: shadowColor,
       );
@@ -184,8 +192,102 @@ class SpriteStack {
       paint: paint,
       outline: outline,
       shadow: shadow,
+      pixelSnap: pixelSnap,
       outlineColor: outlineColor,
       shadowColor: shadowColor,
+    );
+  }
+
+  /// Projected bounds of the stack for a given camera and scale.
+  ///
+  /// The stack is anchored by its ground contact point, so [position] is not a
+  /// corner. Feed this into culling and hit testing instead of
+  /// `sliceWidth × heightFor`, which ignores both yaw and the ground shadow:
+  ///
+  /// ```dart
+  /// final bounds = stack.boundsFor(yaw: yaw, scale: 4);
+  /// final rect = bounds.rectAt(groundPosition);
+  /// ```
+  ///
+  /// The ground shadow is included vertically (but not its 2 px sideways
+  /// offset) when [shadow] is `true`, so culling never clips the drop shadow.
+  /// The software rasterizer rounds the lift per slice, so allow one pixel of
+  /// slack.
+  SpriteStackBounds boundsFor({
+    double yaw = 0,
+    double pitch = defaultPitch,
+    double scale = 1,
+    double spacing = 1,
+    bool outline = true,
+    bool shadow = true,
+  }) {
+    final ca = math.cos(yaw).abs();
+    final sa = math.sin(yaw).abs();
+    final squash = squashFor(pitch);
+    final w = sliceWidth.toDouble();
+    final h = sliceHeight.toDouble();
+
+    // The 1 px outline is a 4-connected ring around the finished stack.
+    final grow = outline ? 1.0 : 0.0;
+
+    final width = (w * ca + h * sa) + grow * 2;
+    final projectedSliceHeight = (w * sa + h * ca) * squash;
+    final lift = (sliceCount - 1) * spacing;
+
+    // Distance from the top of the bounds down to the ground point.
+    final above = lift + projectedSliceHeight + grow;
+    // Outline below the feet plus the projected ground shadow (+3 source px).
+    final below = grow + (shadow ? 3 + projectedSliceHeight / 2 : 0.0);
+
+    final size = Size(width * scale, (above + below) * scale);
+    return SpriteStackBounds(
+      size: size,
+      ground: Offset(size.width / 2, above * scale),
+    );
+  }
+
+  /// Renders this stack once into a [BakedSpriteStack].
+  ///
+  /// Replaying the result costs a single `drawPicture`, which makes this the
+  /// cheap path for scenery drawn every frame. See also [SpriteStackTurntable]
+  /// for a lazily baked set of yaw angles.
+  BakedSpriteStack bake({
+    double yaw = 0,
+    double pitch = defaultPitch,
+    double scale = 1,
+    double spacing = 1,
+    bool outline = true,
+    bool shadow = true,
+    bool pixelSnap = true,
+    Color outlineColor = const Color(0xFF181C24),
+    Color shadowColor = const Color(0xFFBAC6D4),
+  }) {
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    render(
+      canvas,
+      position: Offset.zero,
+      yaw: yaw,
+      pitch: pitch,
+      scale: scale,
+      spacing: spacing,
+      outline: outline,
+      shadow: shadow,
+      pixelSnap: pixelSnap,
+      outlineColor: outlineColor,
+      shadowColor: shadowColor,
+    );
+    return BakedSpriteStack.fromPicture(
+      recorder.endRecording(),
+      boundsFor(
+        yaw: yaw,
+        pitch: pitch,
+        scale: scale,
+        spacing: spacing,
+        outline: outline,
+        shadow: shadow,
+      ),
+      yaw,
     );
   }
 
@@ -202,6 +304,7 @@ class SpriteStack {
     required double spacing,
     required bool outline,
     required bool shadow,
+    required bool pixelSnap,
     required Color outlineColor,
     required Color shadowColor,
   }) {
@@ -311,8 +414,11 @@ class SpriteStack {
 
     // The ground slice centre is a fixed anchor, exactly like the reference
     // viewer's `baseY`. Anchoring to a fixed point keeps the prop from bobbing
-    // while it spins.
-    final anchorY = position.dy - h * squash * scale / 2;
+    // while it spins. Snapping it to whole pixels keeps the upscaled grid
+    // aligned when the prop moves by fractions of a pixel.
+    final rawAnchorY = position.dy - h * squash * scale / 2;
+    final anchorX = pixelSnap ? position.dx.roundToDouble() : position.dx;
+    final anchorY = pixelSnap ? rawAnchorY.roundToDouble() : rawAnchorY;
     _drawBuffer(
       canvas,
       out,
@@ -320,7 +426,7 @@ class SpriteStack {
       ch,
       cx,
       baseY,
-      anchorX: position.dx,
+      anchorX: anchorX,
       anchorY: anchorY,
       scale: scale,
     );
@@ -423,6 +529,7 @@ class SpriteStack {
     Paint? paint,
     required bool outline,
     required bool shadow,
+    required bool pixelSnap,
     required Color outlineColor,
     required Color shadowColor,
   }) {
@@ -431,9 +538,14 @@ class SpriteStack {
           ..filterQuality = FilterQuality.none
           ..isAntiAlias = false);
 
+    final ground = pixelSnap
+        ? Offset(position.dx.roundToDouble(), position.dy.roundToDouble())
+        : position;
+    double snapY(double value) => pixelSnap ? value.roundToDouble() : value;
+
     final sourceWidth = sliceWidth.toDouble();
     final sourceHeight = sliceHeight.toDouble();
-    final groundSliceCenterY = position.dy - sourceHeight * squash * scale / 2;
+    final groundSliceCenterY = ground.dy - sourceHeight * squash * scale / 2;
 
     if (shadow && sliceCount > 0) {
       final shadowPaint = Paint()
@@ -441,8 +553,8 @@ class SpriteStack {
         ..isAntiAlias = false
         ..colorFilter = ColorFilter.mode(shadowColor, BlendMode.srcIn);
       final shadowCenter = Offset(
-        position.dx + 2 * scale,
-        position.dy + 3 * scale - sourceHeight * squash * scale / 2,
+        ground.dx + 2 * scale,
+        ground.dy + 3 * scale - sourceHeight * squash * scale / 2,
       );
       _drawSliceAt(
         canvas,
@@ -466,14 +578,13 @@ class SpriteStack {
         final oy = offset.dy * scale;
         for (var slice = 0; slice < sliceCount; slice++) {
           final center = Offset(
-            position.dx + ox,
-            groundSliceCenterY - slice * spacing * scale + oy,
+            ground.dx + ox,
+            snapY(groundSliceCenterY - slice * spacing * scale + oy),
           );
           _drawSliceAt(
             canvas,
             image,
-            Rect.fromLTWH(
-                slice * sourceWidth, 0, sourceWidth, sourceHeight),
+            Rect.fromLTWH(slice * sourceWidth, 0, sourceWidth, sourceHeight),
             center,
             yaw,
             squash,
@@ -486,8 +597,8 @@ class SpriteStack {
 
     for (var slice = 0; slice < sliceCount; slice++) {
       final center = Offset(
-        position.dx,
-        groundSliceCenterY - slice * spacing * scale,
+        ground.dx,
+        snapY(groundSliceCenterY - slice * spacing * scale),
       );
       _drawSliceAt(
         canvas,
