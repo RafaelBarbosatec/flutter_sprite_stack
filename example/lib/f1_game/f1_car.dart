@@ -20,7 +20,6 @@ class F1Car extends Player with WithCollision {
     required this.race,
     required this.touch,
     this.onError,
-    this.onLoaded,
     double heading = 0,
   })  : _heading = heading,
         super(
@@ -48,9 +47,6 @@ class F1Car extends Player with WithCollision {
   /// Called if the car's sprite stack fails to load, instead of rethrowing.
   final void Function(Object error)? onError;
 
-  /// Called once the car's sprite stack is loaded and pre-rendered.
-  final void Function()? onLoaded;
-
   CachedStack? _visual;
   SpriteStack? _stack;
 
@@ -68,18 +64,16 @@ class F1Car extends Player with WithCollision {
 
   @override
   Future<void> onLoad() async {
-    await super.onLoad();
-
     try {
       _stack = await SpriteStack.load(
         'sprites/car/slices.png',
         sliceCount: 15,
       );
       _visual = CachedStack(_stack!, buckets: 90);
-      onLoaded?.call();
     } catch (e) {
       onError?.call(e);
     }
+    return super.onLoad();
   }
 
   @override

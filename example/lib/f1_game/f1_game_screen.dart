@@ -33,7 +33,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
     if (mounted) setState(() => _error = error);
   }
 
-  void _onCarLoaded() {
+  void _oLoaded() {
     if (mounted) setState(() => _ready = true);
   }
 
@@ -72,7 +72,6 @@ class _F1GameScreenState extends State<F1GameScreen> {
       race: _race,
       touch: _input,
       onError: _onLoadError,
-      onLoaded: _onCarLoaded,
     );
 
     return BonfireWidget(
@@ -97,6 +96,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
         speed: 8,
         moveOnlyMapArea: true,
       ),
+      onReady: (_) => _oLoaded(),
       backgroundColor: const Color(0xFF3F8A41),
       overlayBuilderMap: {
         'topbar': (context, game) => Positioned(
