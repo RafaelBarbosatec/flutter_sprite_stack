@@ -1,5 +1,4 @@
 import 'package:bonfire/bonfire.dart';
-import 'package:bonfire/map/base/layer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -8,6 +7,7 @@ import 'race_state.dart';
 import 'scenery.dart';
 import 'touch_controls.dart';
 import 'track.dart';
+import 'track_tileset.dart';
 
 /// A small Bonfire game: drive the sprite-stacked F1 car around a circuit.
 class F1GameScreen extends StatefulWidget {
@@ -75,10 +75,9 @@ class _F1GameScreenState extends State<F1GameScreen> {
     );
 
     return BonfireWidget(
-      map: WorldMap([Layer(id: 0, tiles: _track.buildTiles())]),
+      map: TrackTileset(_track).buildWorldMap(),
       player: car,
       components: [
-        TrackRenderer(_track),
         Scenery(track: _track, onError: _onLoadError),
       ],
       playerControllers: [

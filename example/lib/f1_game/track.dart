@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:bonfire/bonfire.dart';
 
@@ -87,6 +86,9 @@ class Track {
     return _cells[r][c];
   }
 
+  /// Direct cell lookup by column/row, used by [TrackTileset].
+  TrackCell cellAtCell(int c, int r) => _cells[r][c];
+
   late final List<Vector2> _wallCenters = [
     for (var r = 0; r < rows; r++)
       for (var c = 0; c < cols; c++)
@@ -115,113 +117,5 @@ class Track {
     }
     return true;
   }
-
-  static const _asphaltA = Color(0xFF3A3F4B);
-  static const _asphaltB = Color(0xFF353A46);
-  static const _grassA = Color(0xFF4C9A4A);
-  static const _grassB = Color(0xFF479245);
-  static const _sceneryA = Color(0xFF3F8A41);
-  static const _sceneryB = Color(0xFF3B843D);
-  static const _kerbRed = Color(0xFFD02028);
-  static const _kerbWhite = Color(0xFFF2F4F8);
-  static const _wallA = Color(0xFFB9C0CC);
-  static const _wallB = Color(0xFF8892A4);
-
-  Color _colorFor(TrackCell cell, int c, int r) {
-    final odd = (c + r).isOdd;
-    switch (cell) {
-      case TrackCell.asphalt:
-        if (c == startColumn) return odd ? _kerbWhite : const Color(0xFF14161C);
-        return odd ? _asphaltA : _asphaltB;
-      case TrackCell.kerb:
-        return odd ? _kerbRed : _kerbWhite;
-      case TrackCell.grass:
-        return odd ? _grassA : _grassB;
-      case TrackCell.wall:
-        return odd ? _wallA : _wallB;
-      case TrackCell.scenery:
-        return odd ? _sceneryA : _sceneryB;
-    }
-  }
-
-  /// Invisible tiles: only the barrier walls collide. Two corner tiles define
-  /// the full map bounds for the camera.
-  List<Tile> buildTiles() {
-    Tile tile(int c, int r, {bool wall = false}) => Tile(
-          x: c.toDouble(),
-          y: r.toDouble(),
-          width: tileSize,
-          height: tileSize,
-          collisions:
-              wall ? [RectangleHitbox(size: Vector2.all(tileSize))] : null,
-        );
-
-    final tiles = <Tile>[tile(0, 0), tile(cols - 1, rows - 1)];
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        if (_cells[r][c] == TrackCell.wall) tiles.add(tile(c, r, wall: true));
-      }
-    }
-    return tiles;
-  }
-
-  /// Draws the whole circuit once; replaying a [Picture] is much cheaper than
-  /// thousands of tile components.
-  Picture buildPicture() {
-    final recorder = PictureRecorder();
-    final canvas = Canvas(recorder);
-    final paint = Paint()..isAntiAlias = false;
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        final cell = _cells[r][c];
-        if (cell == TrackCell.kerb || cell == TrackCell.wall) {
-          // Finer 16 px checker so kerbs and barriers read as stripes.
-          const half = tileSize / 2;
-          for (var sr = 0; sr < 2; sr++) {
-            for (var sc = 0; sc < 2; sc++) {
-              paint.color = _colorFor(cell, c * 2 + sc, r * 2 + sr);
-              canvas.drawRect(
-                Rect.fromLTWH(c * tileSize + sc * half,
-                    r * tileSize + sr * half, half, half),
-                paint,
-              );
-            }
-          }
-          continue;
-        }
-        paint.color = _colorFor(cell, c, r);
-        canvas.drawRect(
-          Rect.fromLTWH(c * tileSize, r * tileSize, tileSize, tileSize),
-          paint,
-        );
-      }
-    }
-    return recorder.endRecording();
-  }
 }
 
-/// Renders the [Track] picture just above the (empty) Bonfire map layer and
-/// below every other component.
-class TrackRenderer extends GameComponent {
-  TrackRenderer(this.track) {
-    size = track.mapSize;
-    _picture = track.buildPicture();
-  }
-
-  final Track track;
-  late final Picture _picture;
-
-  @override
-  int get priority => LayerPriority.MAP + 1;
-
-  @override
-  void render(Canvas canvas) {
-    canvas.drawPicture(_picture);
-  }
-
-  @override
-  void onRemove() {
-    _picture.dispose();
-    super.onRemove();
-  }
-}
