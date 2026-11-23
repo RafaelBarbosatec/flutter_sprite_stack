@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
-/// Animated sprite stack demo: a torch whose flame flickers across 5 frames.
+/// Animated sprite stack demo: a torch whose flame flickers across 8 frames.
 ///
 /// The atlas (`sprites/torch/frames.png`) stores the frames vertically, each one
 /// a normal horizontal slice strip. `SpriteStackAnimation` only decides which
@@ -23,7 +25,8 @@ class _TorchScreenState extends State<TorchScreen>
   Duration _last = Duration.zero;
   double _yaw = 0.5;
   double _speed = 1;
-  final double _scale = 9;
+  static const int _sliceCount = 32;
+  static const double _scale = 8;
   bool _spinning = true;
 
   @override
@@ -31,9 +34,9 @@ class _TorchScreenState extends State<TorchScreen>
     super.initState();
     SpriteStackAnimation.load(
       'sprites/torch/frames.png',
-      sliceCount: 14,
-      frameCount: 5,
-      frameDuration: 0.13,
+      sliceCount: _sliceCount,
+      frameCount: 8,
+      frameDuration: 0.08,
     ).then((animation) {
       if (!mounted) {
         animation.stack.dispose();
@@ -69,8 +72,10 @@ class _TorchScreenState extends State<TorchScreen>
   Widget build(BuildContext context) {
     final animation = _animation;
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F4F8),
+      backgroundColor: const Color(0xFF0F1220),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF0F1220),
+        foregroundColor: Colors.white,
         title: const Text('Animated sprite stack'),
         actions: [
           IconButton(
@@ -92,11 +97,18 @@ class _TorchScreenState extends State<TorchScreen>
                       child: Center(
                         child: CustomPaint(
                           size: const Size(420, 420),
-                          painter: SpriteStackPainter(
+                          painter: _FirelightPainter(
+                            stack: animation.stack,
+                            time: animation.elapsed,
+                            scale: _scale,
+                          ),
+                          foregroundPainter: SpriteStackPainter(
                             stack: animation.stack,
                             frame: animation.frame,
                             yaw: _yaw,
                             scale: _scale,
+                            shadowColor: const Color(0xFF05060C),
+                            outlineColor: const Color(0xFF0A0B14),
                           ),
                         ),
                       ),
@@ -111,6 +123,75 @@ class _TorchScreenState extends State<TorchScreen>
                 ),
     );
   }
+}
+
+/// Flickering light cast by the flame: a soft halo in the air and a warm pool
+/// on the ground. Drawn behind the stack, so it never touches the pixel art.
+class _FirelightPainter extends CustomPainter {
+  _FirelightPainter({
+    required this.stack,
+    required this.time,
+    required this.scale,
+  });
+
+  final SpriteStack stack;
+  final double time;
+  final double scale;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Same anchor as SpriteStackPainter: ground slice centre, bottom-centre.
+    final squash = SpriteStack.squashFor(SpriteStack.defaultPitch);
+    final groundY = size.height - stack.sliceHeight * squash * scale / 2;
+    final centerX = size.width / 2;
+
+    // Layered sines keep the flicker irregular without a random source.
+    final flicker = 0.86 +
+        0.07 * math.sin(time * 11.0) +
+        0.05 * math.sin(time * 17.3 + 1.2) +
+        0.03 * math.sin(time * 5.1 + 2.0);
+
+    final flameY = groundY - 24 * scale;
+    final haloRadius = 190 * flicker;
+    canvas.drawCircle(
+      Offset(centerX, flameY),
+      haloRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFF9A3C).withValues(alpha: 0.42 * flicker),
+            const Color(0xFFE2501E).withValues(alpha: 0.16 * flicker),
+            const Color(0x00E2501E),
+          ],
+          stops: const [0, 0.45, 1],
+        ).createShader(
+          Rect.fromCircle(center: Offset(centerX, flameY), radius: haloRadius),
+        ),
+    );
+
+    final poolWidth = 150 * flicker;
+    final pool = Rect.fromCenter(
+      center: Offset(centerX, groundY + 4),
+      width: poolWidth * 2,
+      height: poolWidth * 2 * squash,
+    );
+    canvas.drawOval(
+      pool,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFFB04A).withValues(alpha: 0.30 * flicker),
+            const Color(0x00FFB04A),
+          ],
+        ).createShader(pool),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FirelightPainter oldDelegate) =>
+      oldDelegate.time != time ||
+      oldDelegate.stack != stack ||
+      oldDelegate.scale != scale;
 }
 
 class _Controls extends StatelessWidget {
@@ -128,7 +209,10 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final textTheme = Theme.of(context).textTheme.apply(
+          bodyColor: Colors.white70,
+          displayColor: Colors.white70,
+        );
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Column(
@@ -192,7 +276,7 @@ class _Controls extends StatelessWidget {
             ],
           ),
           Text(
-            'A 14-slice strip repeated 5 times vertically. The engine draws the '
+            'A 32-slice strip repeated 8 times vertically. The engine draws the '
             'same number of slices every frame — only the atlas row changes.',
             style: textTheme.bodySmall,
             textAlign: TextAlign.center,

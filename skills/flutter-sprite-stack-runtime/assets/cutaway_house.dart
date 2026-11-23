@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flame/components.dart';
 import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 

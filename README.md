@@ -146,7 +146,7 @@ stackPainter.frame = torch.frame; // or render(..., frame: torch.frame)
 ```
 
 `SpriteStackAnimation` handles timing, looping, ping-pong, `play`/`stop`/`reset`
-and `onComplete`. The rendering cost does not change: a 5-frame torch still
+and `onComplete`. The rendering cost does not change: an 8-frame torch still
 draws `sliceCount` slices per frame.
 
 In Flame/Bonfire, use the animated component — same bounds, culling and Y

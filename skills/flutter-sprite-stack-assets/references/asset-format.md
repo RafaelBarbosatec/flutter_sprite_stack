@@ -36,7 +36,7 @@ Decoded RGBA is `width × height × 4` bytes, held once per `SpriteStack`:
 | Asset | Decoded | Notes |
 | --- | --- | --- |
 | 24 slices × 32×32, 1 frame | 96 KB | demo robot |
-| 14 slices × 16×16, 5 frames | 70 KB | demo torch |
+| 32 slices × 20×20, 8 frames | 400 KB | demo torch |
 | 15 slices × 38×72, 1 frame | 160 KB | demo car (non-square cells) |
 | 48 slices × 29×48, 1 frame | 261 KB | demo cottage |
 | 24 slices × 64×64, 8 frames | 3.0 MB | the point where you want `SpriteStackCache` or `bake()` |
@@ -100,7 +100,7 @@ class Props {
 ## Generating frames
 
 `example/sprites/torch/make_frames.py` is a working example: it models the
-torch procedurally and writes five 224×16 strips with identical canvases, then
+torch procedurally and writes eight 640×20 strips with identical canvases, then
 `make_atlas.py` packs them. Copy that shape for any procedural prop:
 
 1. one function `frame(t) -> RGBA buffer` of the same size
