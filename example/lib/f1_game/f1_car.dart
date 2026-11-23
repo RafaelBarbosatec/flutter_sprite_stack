@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:bonfire/bonfire.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'cached_stack.dart';
 import 'race_state.dart';
@@ -15,10 +16,11 @@ import 'track.dart';
 class F1Car extends Player with WithCollision {
   F1Car({
     required Vector2 center,
-    required this.visual,
     required this.track,
     required this.race,
     required this.touch,
+    this.onError,
+    this.onLoaded,
     double heading = 0,
   })  : _heading = heading,
         super(
@@ -37,15 +39,26 @@ class F1Car extends Player with WithCollision {
   static const double _brake = 650;
   static const double _turnRate = 2.8;
 
-  final CachedStack visual;
   final Track track;
   final RaceState race;
 
   /// On-screen controls (steering buttons and pedals).
   final DriveInput touch;
 
+  /// Called if the car's sprite stack fails to load, instead of rethrowing.
+  final void Function(Object error)? onError;
+
+  /// Called once the car's sprite stack is loaded and pre-rendered.
+  final void Function()? onLoaded;
+
+  CachedStack? _visual;
+  SpriteStack? _stack;
+
   double _heading;
   double _speed = 0;
+
+  JoystickMoveDirectional _keyDirectional = JoystickMoveDirectional.IDLE;
+  bool _handbrake = false;
 
   final math.Random _random = math.Random();
   double _smokeClock = 0;
@@ -56,9 +69,32 @@ class F1Car extends Player with WithCollision {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+
+    try {
+      _stack = await SpriteStack.load(
+        'sprites/car/slices.png',
+        sliceCount: 15,
+      );
+      _visual = CachedStack(_stack!, buckets: 90);
+      onLoaded?.call();
+    } catch (e) {
+      onError?.call(e);
+    }
+  }
+
+  @override
+  void onMount() {
     add(CircleHitbox(radius: _bodySize / 2, position: Vector2.zero()));
     // Hitting a barrier scrubs speed.
     collision.onMovementBlockedListener((other, data) => _speed *= 0.6);
+    super.onMount();
+  }
+
+  @override
+  void onRemove() {
+    _visual?.dispose();
+    _stack?.dispose();
+    super.onRemove();
   }
 
   @override
@@ -100,28 +136,59 @@ class F1Car extends Player with WithCollision {
       ),
     );
   }
-  
+
+  @override
+  void onJoystickChangeDirectional(JoystickDirectionalEvent event) {
+    _keyDirectional = event.directional;
+    super.onJoystickChangeDirectional(event);
+  }
+
+  @override
+  void onJoystickAction(JoystickActionEvent event) {
+    if (event.id == LogicalKeyboardKey.space) {
+      _handbrake = event.event == ActionEvent.DOWN;
+    }
+    super.onJoystickAction(event);
+  }
 
   void _drive(double dt) {
-    final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    bool down(LogicalKeyboardKey a, LogicalKeyboardKey b) =>
-        keys.contains(a) || keys.contains(b);
-
     var throttle = 0.0;
     var steer = 0.0;
-    if (down(LogicalKeyboardKey.arrowUp, LogicalKeyboardKey.keyW)) {
-      throttle += 1;
+
+    switch (_keyDirectional) {
+      case JoystickMoveDirectional.MOVE_UP:
+        throttle += 1;
+        break;
+      case JoystickMoveDirectional.MOVE_UP_LEFT:
+        throttle += 1;
+        steer -= 1;
+        break;
+      case JoystickMoveDirectional.MOVE_UP_RIGHT:
+        throttle += 1;
+        steer += 1;
+        break;
+      case JoystickMoveDirectional.MOVE_DOWN:
+        throttle -= 1;
+        break;
+      case JoystickMoveDirectional.MOVE_DOWN_LEFT:
+        throttle -= 1;
+        steer -= 1;
+        break;
+      case JoystickMoveDirectional.MOVE_DOWN_RIGHT:
+        throttle -= 1;
+        steer += 1;
+        break;
+      case JoystickMoveDirectional.MOVE_LEFT:
+        steer -= 1;
+        break;
+      case JoystickMoveDirectional.MOVE_RIGHT:
+        steer += 1;
+        break;
+      case JoystickMoveDirectional.IDLE:
+        break;
     }
-    if (down(LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.keyS)) {
-      throttle -= 1;
-    }
-    if (down(LogicalKeyboardKey.arrowLeft, LogicalKeyboardKey.keyA)) {
-      steer -= 1;
-    }
-    if (down(LogicalKeyboardKey.arrowRight, LogicalKeyboardKey.keyD)) {
-      steer += 1;
-    }
-    final handbrake = keys.contains(LogicalKeyboardKey.space);
+
+    final handbrake = _handbrake;
 
     // On-screen controls add to the keyboard input.
     if (touch.gas) throttle += 1;
@@ -191,6 +258,8 @@ class F1Car extends Player with WithCollision {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final visual = _visual;
+    if (visual == null) return;
     canvas.save();
     canvas.translate(size.x / 2, size.y / 2);
     visual.paint(canvas, _heading - math.pi / 2);

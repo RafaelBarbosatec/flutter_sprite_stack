@@ -1,15 +1,11 @@
-import 'dart:math' as math;
-
 import 'package:bonfire/bonfire.dart';
 import 'package:bonfire/map/base/layer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
-import 'cached_stack.dart';
 import 'f1_car.dart';
 import 'race_state.dart';
-import 'stack_prop.dart';
+import 'scenery.dart';
 import 'touch_controls.dart';
 import 'track.dart';
 
@@ -26,164 +22,76 @@ class _F1GameScreenState extends State<F1GameScreen> {
   final RaceState _race = RaceState();
   final DriveInput _input = DriveInput();
   Widget? _game;
-
-  final List<SpriteStack> _stacks = [];
-  CachedStack? _car;
-  CachedStack? _tree;
-  CachedStack? _house;
+  bool _ready = false;
   Object? _error;
 
   bool get _isTouch =>
       defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
+  void _onLoadError(Object error) {
+    if (mounted) setState(() => _error = error);
   }
 
-  Future<void> _load() async {
-    try {
-      final car = await SpriteStack.load(
-        'sprites/car/slices.png',
-        sliceCount: 15,
-      );
-      final tree = await SpriteStack.load(
-        'sprites/tree/slices.png',
-        sliceCount: 43,
-      );
-      final house = await SpriteStack.load(
-        'sprites/house/slices.png',
-        sliceCount: 29,
-      );
-      _stacks.addAll([car, tree, house]);
-
-      final carVisual = CachedStack(car, buckets: 90)..warmUp();
-      final treeVisual = CachedStack(tree, scale: 2, buckets: 8);
-      final houseVisual = CachedStack(house, scale: 2, buckets: 4);
-      if (!mounted) return;
-      setState(() {
-        _car = carVisual;
-        _tree = treeVisual;
-        _house = houseVisual;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = e);
-    }
+  void _onCarLoaded() {
+    if (mounted) setState(() => _ready = true);
   }
 
   @override
   void dispose() {
-    _car?.dispose();
-    _tree?.dispose();
-    _house?.dispose();
-    for (final stack in _stacks) {
-      stack.dispose();
-    }
     _race.dispose();
     super.dispose();
   }
 
-  List<GameComponent> _buildProps() {
-    final rnd = math.Random(7);
-    final props = <GameComponent>[];
-    final placed = <(Vector2, double)>[]; // centre + clearance radius
-
-    bool free(Vector2 p, double radius) => placed.every(
-          (o) => o.$1.distanceTo(p) >= o.$2 + radius,
-        );
-
-    void house(Vector2 p, double yaw) {
-      placed.add((p, 90));
-      props.add(StackProp(center: p, visual: _house!, yaw: yaw));
-    }
-
-    void tree(Vector2 p, {bool solid = false}) {
-      placed.add((p, 38));
-      props.add(
-        StackProp(
-          center: p,
-          visual: _tree!,
-          yaw: rnd.nextDouble() * 2 * math.pi,
-          trunkRadius: solid ? 9 : null,
-        ),
-      );
-    }
-
-    // Candidate points over the whole map, visited in random order.
-    final candidates = <Vector2>[
-      for (var y = 40.0; y < _track.mapSize.y; y += 48)
-        for (var x = 40.0; x < _track.mapSize.x; x += 48)
-          Vector2(x + rnd.nextDouble() * 24, y + rnd.nextDouble() * 24),
-    ]..shuffle(rnd);
-
-    // A house in the middle of the infield.
-    house(Vector2(27 * 64, 20 * 64), 0);
-
-    // Houses on the scenery just behind the barriers.
-    var houses = 0;
-    for (final p in candidates) {
-      if (houses >= 7) break;
-      if (!_track.areaIs(p, 56, 44, TrackCell.scenery)) continue;
-      final d = _track.distanceToWall(p);
-      if (d < 110 || d > 330 || !free(p, 90)) continue;
-      house(p, rnd.nextInt(4) * math.pi / 2);
-      houses++;
-    }
-
-    // Trees on the grass strip beside the track (solid trunks), spaced out so
-    // the strip stays drivable.
-    var solid = 0;
-    for (final p in candidates) {
-      if (solid >= 26) break;
-      if (_track.cellAt(p) != TrackCell.grass) continue;
-      if (_track.distanceToWall(p) > 48 || !free(p, 70)) continue;
-      tree(p, solid: true);
-      solid++;
-    }
-
-    // Trees on the scenery close to the barriers, both inside and outside.
-    var scenery = 0;
-    for (final p in candidates) {
-      if (scenery >= 90) break;
-      if (!_track.areaIs(p, 28, 20, TrackCell.scenery)) continue;
-      final d = _track.distanceToWall(p);
-      if (d > 260 || !free(p, 38)) continue;
-      tree(p);
-      scenery++;
-    }
-
-    return props;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final body = _error != null
-        ? Center(child: Text('Failed to load assets: $_error'))
-        : _car == null
-            ? const Center(child: CircularProgressIndicator())
-            : (_game ??= _buildGame());
+    final game = _game ??= _buildGame();
 
     return Scaffold(
       backgroundColor: const Color(0xFF3F8A41),
-      body: body,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(child: game),
+          if (_error != null)
+            Center(child: Text('Failed to load assets: $_error')),
+          if (_error == null && !_ready)
+            Container(
+              color: const Color(0xFF3F8A41),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildGame() {
     final car = F1Car(
       center: _track.startPosition,
-      visual: _car!,
       track: _track,
       race: _race,
       touch: _input,
+      onError: _onLoadError,
+      onLoaded: _onCarLoaded,
     );
 
     return BonfireWidget(
       map: WorldMap([Layer(id: 0, tiles: _track.buildTiles())]),
       player: car,
-      components: [TrackRenderer(_track), ..._buildProps()],
+      components: [
+        TrackRenderer(_track),
+        Scenery(track: _track, onError: _onLoadError),
+      ],
+      playerControllers: [
+        Keyboard(
+          config: KeyboardConfig(
+            directionalKeys: [
+              KeyboardDirectionalKeys.arrows(),
+              KeyboardDirectionalKeys.wasd(),
+            ],
+          ),
+        ),
+      ],
       cameraConfig: CameraConfig(
         zoom: 2,
         speed: 8,
