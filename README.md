@@ -344,6 +344,28 @@ recipes), `scripts/views_to_slices.py` and `scripts/viewer.html`. Agents that
 support MCP can expose that workflow as tools by wrapping the script; the
 output format is exactly what `SpriteStack.load` consumes.
 
+### Skills that ship with this package
+
+This package also ships its own agent skills in `skills/`, following the
+[Dart package skills](https://dart.dev/ai/package-skills) convention, so an app
+that depends on `flutter_sprite_stack` can install authoritative instructions
+for its AI agent:
+
+```bash
+dart run skills@ get -p flutter_sprite_stack
+```
+
+| Skill | Covers |
+| --- | --- |
+| `flutter-sprite-stack-assets` | authoring strips and frame atlases, the validator and the atlas packer |
+| `flutter-sprite-stack-runtime` | `render`, components, animation, `StackMotion`, `SliceCut`, bake/turntable/cache |
+
+The asset skill bundles two dependency-free Python scripts —
+`validate_atlas.py` (dimensions, gaps, pivot drift, alpha hygiene) and
+`make_atlas.py` (packs frames into the vertical atlas) — because nothing in the
+ecosystem generates or checks animated frames for this format. The skills are
+validated with [`skills_lint`](https://pub.dev/packages/skills_lint) in CI.
+
 **Credit:** the four-view carving pipeline, the skill and the viewer are by
 Daniel White ([danielwh2/sprite-stacking](https://github.com/danielwh2/sprite-stacking),
 MIT). This package is the Flutter runtime for the strips that pipeline

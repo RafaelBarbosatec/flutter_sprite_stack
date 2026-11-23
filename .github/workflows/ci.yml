@@ -28,6 +28,9 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Lint agent skills
+        run: dart run skills_lint
+
   example:
     runs-on: ubuntu-latest
     defaults:

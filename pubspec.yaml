@@ -33,3 +33,5 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: '>=4.0.0 <7.0.0'
+  # Validates the agent skills shipped in skills/ (see skills_lint.yaml).
+  skills_lint: ^0.5.2
