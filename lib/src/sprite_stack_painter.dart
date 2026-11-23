@@ -1,6 +1,8 @@
 import 'package:flutter/rendering.dart';
 
+import 'slice_cut.dart';
 import 'sprite_stack.dart';
+import 'sprite_stack_motion.dart';
 
 /// Paints a [SpriteStack] centered horizontally at the bottom of the canvas.
 ///
@@ -13,6 +15,10 @@ class SpriteStackPainter extends CustomPainter {
     this.scale = 1,
     this.spacing = 1,
     this.offset = Offset.zero,
+    this.frame = 0,
+    this.motion,
+    this.time = 0,
+    this.cut,
     this.pixelSnap = true,
     this.outline = true,
     this.shadow = true,
@@ -36,6 +42,18 @@ class SpriteStackPainter extends CustomPainter {
 
   /// Optional offset applied on top of the default bottom-center anchor.
   final Offset offset;
+
+  /// Atlas frame to draw.
+  final int frame;
+
+  /// Optional per-slice deformation (sway, lean).
+  final StackMotion? motion;
+
+  /// Clock for [motion], in seconds.
+  final double time;
+
+  /// Optional slice cutaway (hide the roof of a house, open a crate).
+  final SliceCut? cut;
 
   /// Rounds the ground anchor to whole pixels.
   final bool pixelSnap;
@@ -64,6 +82,10 @@ class SpriteStackPainter extends CustomPainter {
       pitch: pitch,
       scale: scale,
       spacing: spacing,
+      frame: frame,
+      motion: motion,
+      time: time,
+      cut: cut,
       pixelSnap: pixelSnap,
       paint: stackPaint,
       outline: outline,
@@ -81,6 +103,10 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.scale != scale ||
       oldDelegate.spacing != spacing ||
       oldDelegate.offset != offset ||
+      oldDelegate.frame != frame ||
+      oldDelegate.motion != motion ||
+      oldDelegate.time != time ||
+      oldDelegate.cut != cut ||
       oldDelegate.pixelSnap != pixelSnap ||
       oldDelegate.outline != outline ||
       oldDelegate.shadow != shadow ||

@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'f1_game/f1_game_screen.dart';
+import 'torch_screen.dart';
 
 enum _SpriteKind { car, house, tree, robot }
 
@@ -77,6 +78,8 @@ class _DemoScreenState extends State<DemoScreen>
   bool _spinning = true;
   bool _outline = true;
   bool _shadow = true;
+  bool _sway = false;
+  double _time = 0;
 
   SpriteStack? get _stack => switch (_selected) {
         _SpriteKind.car => _carStack,
@@ -110,8 +113,11 @@ class _DemoScreenState extends State<DemoScreen>
   void _onTick(Duration elapsed) {
     final delta = (elapsed - _lastTick).inMicroseconds / 1000000;
     _lastTick = elapsed;
-    if (!_spinning) return;
-    setState(() => _yaw += delta * 1.4);
+    if (!_spinning && !_sway) return;
+    setState(() {
+      _time += delta;
+      if (_spinning) _yaw += delta * 1.4;
+    });
   }
 
   @override
@@ -131,6 +137,13 @@ class _DemoScreenState extends State<DemoScreen>
       appBar: AppBar(
         title: const Text('flutter_sprite_stack — turntable'),
         actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.local_fire_department),
+            label: const Text('Animated torch'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const TorchScreen()),
+            ),
+          ),
           TextButton.icon(
             icon: const Icon(Icons.sports_score),
             label: const Text('Play F1 game'),
@@ -164,6 +177,14 @@ class _DemoScreenState extends State<DemoScreen>
                           pitch: _pitch,
                           scale: _scale,
                           spacing: _spacing,
+                          motion: _sway
+                              ? const StackMotion(
+                                  sway: 1.6,
+                                  speed: 1.9,
+                                  wave: 0.65,
+                                )
+                              : null,
+                          time: _time,
                           outline: _outline,
                           shadow: _shadow,
                         ),
@@ -233,6 +254,12 @@ class _DemoScreenState extends State<DemoScreen>
                     value: _spinning,
                     title: const Text('Auto spin'),
                     onChanged: (value) => setState(() => _spinning = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _sway,
+                    title: const Text('Wind sway (StackMotion)'),
+                    onChanged: (value) => setState(() => _sway = value),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,

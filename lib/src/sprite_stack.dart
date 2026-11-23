@@ -6,7 +6,9 @@ import 'dart:ui';
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'baked_sprite_stack.dart';
+import 'slice_cut.dart';
 import 'sprite_stack_bounds.dart';
+import 'sprite_stack_motion.dart';
 
 /// A sprite-stacked prop.
 ///
@@ -15,84 +17,137 @@ import 'sprite_stack_bounds.dart';
 /// Each slice has the same size, so a strip of `N` slices is
 /// `(N * sliceWidth) x sliceHeight` pixels.
 ///
+/// A stack can also hold several **frames**: stack the strips vertically and
+/// the atlas becomes `(N * sliceWidth) x (frameCount * sliceHeight)`, frame `0`
+/// on top. All frames share the slice geometry; only the frame index changes
+/// what is drawn. Use [SpriteStackAnimation] to drive that index over time.
+///
 /// Rendering is done at runtime in a 1x art-pixel buffer exactly like the
 /// reference `viewer.html`: every slice is inverse-mapped per screen pixel with
 /// nearest sampling, the finished stack is outlined once and the whole buffer
 /// is then scaled up with integer pixels. That gives the same uniform,
 /// seam-free pixel-art silhouette as the HTML preview.
 class SpriteStack {
-  SpriteStack._(this.image, this.sliceCount, this._pixels, this._footprintMask)
-      : sliceWidth = image.width ~/ sliceCount,
-        sliceHeight = image.height;
+  SpriteStack._(
+    this.image,
+    this.sliceCount,
+    this.frameCount,
+    this._pixels,
+    this._footprintMasks,
+  )   : sliceWidth = image.width ~/ sliceCount,
+        sliceHeight = image.height ~/ frameCount;
 
-  /// Builds a stack from an already decoded strip image.
+  /// Builds a stack from an already decoded strip (or frame atlas) image.
   ///
-  /// Throws [ArgumentError] when [sliceCount] is not positive or when the image
-  /// width is not divisible by it.
+  /// Throws [ArgumentError] when [sliceCount] or [frameCount] is not positive,
+  /// when the image width is not divisible by [sliceCount], or when its height
+  /// is not divisible by [frameCount].
   ///
   /// Stacks created this way do not have pre-extracted pixels, so [render]
   /// falls back to the older per-slice `drawImageRect` path (and the ground
   /// slice is used for [shadow]).
-  factory SpriteStack.fromImage(Image image, {required int sliceCount}) {
-    if (sliceCount <= 0) {
-      throw ArgumentError.value(
-          sliceCount, 'sliceCount', 'must be greater than 0');
-    }
-    if (image.width % sliceCount != 0) {
-      throw ArgumentError(
-        'Image width ${image.width} is not divisible by sliceCount $sliceCount',
-      );
-    }
-    return SpriteStack._(image, sliceCount, null, null);
+  factory SpriteStack.fromImage(
+    Image image, {
+    required int sliceCount,
+    int frameCount = 1,
+  }) {
+    _validate(
+      sliceCount: sliceCount,
+      frameCount: frameCount,
+      width: image.width,
+      height: image.height,
+    );
+    return SpriteStack._(image, sliceCount, frameCount, null, null);
   }
 
   /// Loads and decodes a strip from a Flutter asset.
   static Future<SpriteStack> load(
     String assetPath, {
     required int sliceCount,
+    int frameCount = 1,
   }) async {
     final data = await rootBundle.load(assetPath);
     return decode(
       data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
       sliceCount: sliceCount,
+      frameCount: frameCount,
     );
   }
 
-  /// Decodes a strip from raw PNG/WebP/GIF bytes.
+  /// Decodes a strip (or a vertical atlas of frames) from raw image bytes.
   static Future<SpriteStack> decode(
     Uint8List bytes, {
     required int sliceCount,
+    int frameCount = 1,
   }) async {
     if (sliceCount <= 0) {
       throw ArgumentError.value(
           sliceCount, 'sliceCount', 'must be greater than 0');
     }
+    if (frameCount <= 0) {
+      throw ArgumentError.value(
+          frameCount, 'frameCount', 'must be greater than 0');
+    }
 
     final codec = await instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     final image = frame.image;
-    if (image.width % sliceCount != 0) {
+    if (image.width % sliceCount != 0 || image.height % frameCount != 0) {
       image.dispose();
       codec.dispose();
       throw ArgumentError(
-        'Image width ${image.width} is not divisible by sliceCount $sliceCount',
+        'Image ${image.width}x${image.height} does not split into '
+        '$sliceCount slices x $frameCount frames',
       );
     }
     final byteData = await image.toByteData(format: ImageByteFormat.rawRgba);
     final pixels = byteData?.buffer.asUint8List();
     final sliceWidth = image.width ~/ sliceCount;
-    final sliceHeight = image.height;
+    final sliceHeight = image.height ~/ frameCount;
 
-    final footprintMask = pixels == null
+    final footprintMasks = pixels == null
         ? null
-        : _buildFootprintMask(
+        : _buildFootprintMasks(
             pixels,
             sliceCount: sliceCount,
             sliceWidth: sliceWidth,
             sliceHeight: sliceHeight,
+            frameCount: frameCount,
           );
 
-    return SpriteStack._(image, sliceCount, pixels, footprintMask);
+    return SpriteStack._(
+      image,
+      sliceCount,
+      frameCount,
+      pixels,
+      footprintMasks,
+    );
+  }
+
+  static void _validate({
+    required int sliceCount,
+    required int frameCount,
+    required int width,
+    required int height,
+  }) {
+    if (sliceCount <= 0) {
+      throw ArgumentError.value(
+          sliceCount, 'sliceCount', 'must be greater than 0');
+    }
+    if (frameCount <= 0) {
+      throw ArgumentError.value(
+          frameCount, 'frameCount', 'must be greater than 0');
+    }
+    if (width % sliceCount != 0) {
+      throw ArgumentError(
+        'Image width $width is not divisible by sliceCount $sliceCount',
+      );
+    }
+    if (height % frameCount != 0) {
+      throw ArgumentError(
+        'Image height $height is not divisible by frameCount $frameCount',
+      );
+    }
   }
 
   /// The strip: slices side by side, ground slice on the left.
@@ -101,19 +156,22 @@ class SpriteStack {
   /// How many cross-sections the strip contains.
   final int sliceCount;
 
+  /// How many animation frames the asset holds, stacked vertically.
+  final int frameCount;
+
   /// Width of a single slice, in source pixels.
   final int sliceWidth;
 
-  /// Height of a single slice, in source pixels.
+  /// Height of a single slice (one frame row), in source pixels.
   final int sliceHeight;
 
-  /// Raw RGBA pixels of the strip, when the stack was built with [load] or
-  /// [decode]. Used by the software rasterizer.
+  /// Raw RGBA pixels of the whole atlas, when the stack was built with [load]
+  /// or [decode]. Used by the software rasterizer.
   final Uint8List? _pixels;
 
-  /// Union of every slice's alpha (one byte per art pixel), used as the
-  /// projected ground shadow by the software rasterizer.
-  final Uint8List? _footprintMask;
+  /// Union of every slice's alpha (one byte per art pixel) for each frame, used
+  /// as the projected ground shadow by the software rasterizer.
+  final Uint8List? _footprintMasks;
 
   /// Default pitch: `asin(0.75)`, the same 0.75 vertical squash the reference
   /// viewer uses for its angled top-down camera.
@@ -149,6 +207,12 @@ class SpriteStack {
   /// fallback path) to whole pixels, so an integer [scale] lands exactly on the
   /// device pixel grid instead of blurring every edge.
   /// [outlineColor] and [shadowColor] control those two passes.
+  /// [frame] selects the row of a frame atlas; it is clamped to the available
+  /// frames and ignored when [frameCount] is `1`.
+  /// [motion] deforms each slice (sway, lean); [time] is the clock it reads, in
+  /// seconds. Motion shifts slices in whole art pixels in the software
+  /// rasterizer and continuously in the fallback path.
+  /// [cut] hides slices above (or below) a frontier, for roof-off cutaways.
   void render(
     Canvas canvas, {
     required Offset position,
@@ -156,6 +220,10 @@ class SpriteStack {
     double pitch = defaultPitch,
     double scale = 1,
     double spacing = 1,
+    int frame = 0,
+    StackMotion? motion,
+    double time = 0,
+    SliceCut? cut,
     Paint? paint,
     bool outline = true,
     bool shadow = true,
@@ -164,6 +232,9 @@ class SpriteStack {
     Color shadowColor = const Color(0xFFBAC6D4),
   }) {
     final squash = squashFor(pitch);
+    final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
+    final activeMotion = (motion == null || motion.isEmpty) ? null : motion;
+    final activeCut = (cut == null || !cut.isActive) ? null : cut;
 
     if (_pixels != null && paint == null) {
       _renderSoftware(
@@ -173,6 +244,10 @@ class SpriteStack {
         squash: squash,
         scale: scale,
         spacing: spacing,
+        frame: frameIndex,
+        motion: activeMotion,
+        time: time,
+        cut: activeCut,
         outline: outline,
         shadow: shadow,
         pixelSnap: pixelSnap,
@@ -189,6 +264,10 @@ class SpriteStack {
       squash: squash,
       scale: scale,
       spacing: spacing,
+      frame: frameIndex,
+      motion: activeMotion,
+      time: time,
+      cut: activeCut,
       paint: paint,
       outline: outline,
       shadow: shadow,
@@ -218,6 +297,7 @@ class SpriteStack {
     double pitch = defaultPitch,
     double scale = 1,
     double spacing = 1,
+    SliceCut? cut,
     bool outline = true,
     bool shadow = true,
   }) {
@@ -232,7 +312,10 @@ class SpriteStack {
 
     final width = (w * ca + h * sa) + grow * 2;
     final projectedSliceHeight = (w * sa + h * ca) * squash;
-    final lift = (sliceCount - 1) * spacing;
+    final visibleSlices = cut == null || !cut.isActive
+        ? sliceCount.toDouble()
+        : cut.visibleSliceCount(sliceCount);
+    final lift = math.max(0.0, visibleSlices - 1) * spacing;
 
     // Distance from the top of the bounds down to the ground point.
     final above = lift + projectedSliceHeight + grow;
@@ -256,12 +339,17 @@ class SpriteStack {
     double pitch = defaultPitch,
     double scale = 1,
     double spacing = 1,
+    int frame = 0,
+    StackMotion? motion,
+    double time = 0,
+    SliceCut? cut,
     bool outline = true,
     bool shadow = true,
     bool pixelSnap = true,
     Color outlineColor = const Color(0xFF181C24),
     Color shadowColor = const Color(0xFFBAC6D4),
   }) {
+    final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
     render(
@@ -271,6 +359,10 @@ class SpriteStack {
       pitch: pitch,
       scale: scale,
       spacing: spacing,
+      frame: frameIndex,
+      motion: motion,
+      time: time,
+      cut: cut,
       outline: outline,
       shadow: shadow,
       pixelSnap: pixelSnap,
@@ -284,10 +376,12 @@ class SpriteStack {
         pitch: pitch,
         scale: scale,
         spacing: spacing,
+        cut: cut,
         outline: outline,
         shadow: shadow,
       ),
       yaw,
+      frame: frameIndex,
     );
   }
 
@@ -302,6 +396,10 @@ class SpriteStack {
     required double squash,
     required double scale,
     required double spacing,
+    required int frame,
+    required StackMotion? motion,
+    required double time,
+    required SliceCut? cut,
     required bool outline,
     required bool shadow,
     required bool pixelSnap,
@@ -312,6 +410,7 @@ class SpriteStack {
     final w = sliceWidth;
     final h = sliceHeight;
     final n = sliceCount;
+    final rowOffset = frame * h;
 
     final ca = math.cos(yaw);
     final sa = math.sin(yaw);
@@ -333,7 +432,7 @@ class SpriteStack {
 
     // 1. Projected ground shadow: the union footprint rendered like one slice,
     // offset +2,+3 art px from the ground slice centre.
-    if (shadow && _footprintMask != null) {
+    if (shadow && _footprintMasks != null) {
       final shadowArgb = shadowColor.toARGB32();
       _rasterFootprint(
         out,
@@ -344,6 +443,7 @@ class SpriteStack {
         ca,
         sa,
         squash,
+        rowOffset,
         (shadowArgb >> 16) & 0xFF,
         (shadowArgb >> 8) & 0xFF,
         shadowArgb & 0xFF,
@@ -354,12 +454,18 @@ class SpriteStack {
     // 2. Body slices, bottom to top, overwriting.
     final invSquash = 1 / math.max(squash, 0.1);
     for (var z = 0; z < n; z++) {
+      final visibility = cut?.visibilityAt(z) ?? 1.0;
+      if (visibility <= 0) continue;
       final lift = (z * spacing).round();
-      final yCenter = baseY - lift;
+      // Motion is applied in whole art pixels: the buffer is 1x, so a fraction
+      // of a pixel cannot be represented without blurring the pixel grid.
+      final shift = motion?.offsetAt(z, n, time) ?? Offset.zero;
+      final sliceCx = cx + shift.dx.round();
+      final yCenter = baseY - lift + shift.dy.round();
       final halfW = (w * ca.abs() + h * sa.abs()) / 2;
       final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
-      final xMin = math.max(0, (cx - halfW).floor() - 1);
-      final xMax = math.min(cw - 1, (cx + halfW).ceil() + 1);
+      final xMin = math.max(0, (sliceCx - halfW).floor() - 1);
+      final xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
       final yMin = math.max(0, (yCenter - halfH).floor() - 1);
       final yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
       final stripWidth = n * w;
@@ -367,16 +473,17 @@ class SpriteStack {
 
       for (var y = yMin; y <= yMax; y++) {
         final dy = (y - yCenter) * invSquash;
-        var sx = (xMin - cx) * ca + dy * sa + w * 0.5;
-        var sy = -(xMin - cx) * sa + dy * ca + h * 0.5;
+        var sx = (xMin - sliceCx) * ca + dy * sa + w * 0.5;
+        var sy = -(xMin - sliceCx) * sa + dy * ca + h * 0.5;
         var idx = y * cw + xMin;
         for (var x = xMin; x <= xMax; x++, idx++, sx += ca, sy -= sa) {
           if (sx < 0 || sy < 0) continue;
           final ix = sx.floor();
           final iy = sy.floor();
           if (ix >= w || iy >= h) continue;
-          final sp = (iy * stripWidth + zBase + ix) * 4;
+          final sp = ((rowOffset + iy) * stripWidth + zBase + ix) * 4;
           if (pixels[sp + 3] == 0) continue;
+          if (visibility < 1 && !bayerAllows(x, y, visibility)) continue;
           final dp = idx * 4;
           out[dp] = pixels[sp];
           out[dp + 1] = pixels[sp + 1];
@@ -441,6 +548,7 @@ class SpriteStack {
     double ca,
     double sa,
     double squash,
+    int rowOffset,
     int r,
     int g,
     int b,
@@ -448,7 +556,7 @@ class SpriteStack {
   ) {
     final w = sliceWidth;
     final h = sliceHeight;
-    final mask = _footprintMask!;
+    final mask = _footprintMasks!;
     final invSquash = 1 / math.max(squash, 0.1);
     final halfW = (w * ca.abs() + h * sa.abs()) / 2;
     final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
@@ -467,7 +575,7 @@ class SpriteStack {
         final ix = sx.floor();
         final iy = sy.floor();
         if (ix >= w || iy >= h) continue;
-        if (mask[iy * w + ix] == 0) continue;
+        if (mask[(rowOffset + iy) * w + ix] == 0) continue;
         final dp = idx * 4;
         out[dp] = r;
         out[dp + 1] = g;
@@ -526,6 +634,10 @@ class SpriteStack {
     required double squash,
     required double scale,
     required double spacing,
+    required int frame,
+    required StackMotion? motion,
+    required double time,
+    required SliceCut? cut,
     Paint? paint,
     required bool outline,
     required bool shadow,
@@ -545,6 +657,7 @@ class SpriteStack {
 
     final sourceWidth = sliceWidth.toDouble();
     final sourceHeight = sliceHeight.toDouble();
+    final sourceTop = frame * sourceHeight;
     final groundSliceCenterY = ground.dy - sourceHeight * squash * scale / 2;
 
     if (shadow && sliceCount > 0) {
@@ -559,7 +672,7 @@ class SpriteStack {
       _drawSliceAt(
         canvas,
         image,
-        Rect.fromLTWH(0, 0, sourceWidth, sourceHeight),
+        Rect.fromLTWH(0, sourceTop, sourceWidth, sourceHeight),
         shadowCenter,
         yaw,
         squash,
@@ -577,14 +690,21 @@ class SpriteStack {
         final ox = offset.dx * scale;
         final oy = offset.dy * scale;
         for (var slice = 0; slice < sliceCount; slice++) {
+          if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
+          final shift =
+              motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
           final center = Offset(
-            ground.dx + ox,
-            snapY(groundSliceCenterY - slice * spacing * scale + oy),
+            ground.dx + ox + shift.dx * scale,
+            snapY(groundSliceCenterY -
+                slice * spacing * scale +
+                oy +
+                shift.dy * scale),
           );
           _drawSliceAt(
             canvas,
             image,
-            Rect.fromLTWH(slice * sourceWidth, 0, sourceWidth, sourceHeight),
+            Rect.fromLTWH(
+                slice * sourceWidth, sourceTop, sourceWidth, sourceHeight),
             center,
             yaw,
             squash,
@@ -596,14 +716,17 @@ class SpriteStack {
     }
 
     for (var slice = 0; slice < sliceCount; slice++) {
+      if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
+      final shift = motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
       final center = Offset(
-        ground.dx,
-        snapY(groundSliceCenterY - slice * spacing * scale),
+        ground.dx + shift.dx * scale,
+        snapY(groundSliceCenterY - slice * spacing * scale + shift.dy * scale),
       );
       _drawSliceAt(
         canvas,
         image,
-        Rect.fromLTWH(slice * sourceWidth, 0, sourceWidth, sourceHeight),
+        Rect.fromLTWH(
+            slice * sourceWidth, sourceTop, sourceWidth, sourceHeight),
         center,
         yaw,
         squash,
@@ -651,27 +774,33 @@ class SpriteStack {
   void dispose() => image.dispose();
 }
 
-/// Builds a 1x art-pixel mask of the union of every slice's alpha.
-Uint8List _buildFootprintMask(
+/// Builds a 1x art-pixel mask per frame: the union of every slice's alpha.
+Uint8List _buildFootprintMasks(
   Uint8List pixels, {
   required int sliceCount,
   required int sliceWidth,
   required int sliceHeight,
+  required int frameCount,
 }) {
   final stripWidth = sliceCount * sliceWidth;
-  final mask = Uint8List(sliceWidth * sliceHeight);
-  for (var y = 0; y < sliceHeight; y++) {
-    final rowBase = y * stripWidth;
-    for (var x = 0; x < sliceWidth; x++) {
-      var opaque = false;
-      for (var slice = 0; slice < sliceCount; slice++) {
-        final alphaOffset = ((rowBase + slice * sliceWidth + x) * 4) + 3;
-        if (pixels[alphaOffset] > 0) {
-          opaque = true;
-          break;
+  final framePixels = sliceWidth * sliceHeight;
+  final mask = Uint8List(framePixels * frameCount);
+  for (var frame = 0; frame < frameCount; frame++) {
+    final frameBase = frame * framePixels;
+    final firstRow = frame * sliceHeight;
+    for (var y = 0; y < sliceHeight; y++) {
+      final rowBase = (firstRow + y) * stripWidth;
+      for (var x = 0; x < sliceWidth; x++) {
+        var opaque = false;
+        for (var slice = 0; slice < sliceCount; slice++) {
+          final alphaOffset = ((rowBase + slice * sliceWidth + x) * 4) + 3;
+          if (pixels[alphaOffset] > 0) {
+            opaque = true;
+            break;
+          }
         }
+        if (opaque) mask[frameBase + y * sliceWidth + x] = 255;
       }
-      if (opaque) mask[y * sliceWidth + x] = 255;
     }
   }
   return mask;

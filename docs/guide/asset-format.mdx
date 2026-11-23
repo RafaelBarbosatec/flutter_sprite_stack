@@ -15,3 +15,31 @@ description: The horizontal strip format SpriteStack.load consumes.
 
 The strip can come from any voxel editor (MagicaVoxel layer export works) or
 from four orthographic views.
+
+## Frame atlas
+
+To animate, stack strips **vertically** and pass `frameCount`. Frame `0` is the
+**top** row:
+
+```
++-----------+-----------+-----+-----------+
+| frame 0   | slice 0   | ... | slice N-1 |
++-----------+-----------+-----+-----------+
+| frame 1   | slice 0   | ... | slice N-1 |
++-----------+-----------+-----+-----------+
+| ...       |           |     |           |
++-----------+-----------+-----+-----------+
+```
+
+- `sliceWidth = imageWidth / sliceCount`
+- `sliceHeight = imageHeight / frameCount`
+- Every frame must use the same slice count and the same canvas size; the prop
+  is not allowed to shift between frames, otherwise it will jitter.
+
+```dart
+final torch = await SpriteStack.load(
+  'sprites/torch/frames.png',
+  sliceCount: 14,
+  frameCount: 5,
+);
+```

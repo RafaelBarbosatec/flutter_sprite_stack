@@ -14,7 +14,8 @@ description: SpriteStack, SpriteStackPainter and SpriteStackComponent reference.
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected bounds: `size` + `ground` point |
-| `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
+| `bake(yaw:, pitch:, scale:, spacing:, frame:, ...)` | Renders once into a `BakedSpriteStack` |
+| `frameCount` | Frames stored in the atlas (vertical rows) |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
 | `SpriteStackPainter(...)` | `CustomPainter` for plain Flutter |
@@ -22,6 +23,9 @@ description: SpriteStack, SpriteStackPainter and SpriteStackComponent reference.
 | `BakedSpriteStack` | A recorded frame; `draw(canvas, ground)` + `dispose()` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked frames per yaw bucket |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
+| `SpriteStackAnimation(stack, frameDuration:, loop:, pingPong:, ...)` | Plays the atlas frames |
+| `SpriteStackAnimation.load(path, sliceCount:, frameCount:, ...)` | Loads an atlas and plays it |
+| `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component driven by an animation |
 
 `pitch` is clamped to `0..π/2` and its squash to `0.08..1`, so the stack never
 collapses to nothing.
@@ -41,6 +45,46 @@ collapses to nothing.
 | `shadowColor` | `0xFFBAC6D4` | Ground shadow color |
 | `paint` | `null` | Optional paint, e.g. a color filter for the body |
 | `pixelSnap` | `true` | Rounds the ground anchor (and fallback lifts) to whole pixels |
+| `frame` | `0` | Atlas row to draw (clamped to `frameCount - 1`) |
+| `motion` | `null` | `StackMotion` applied per slice |
+| `time` | `0` | Clock fed to `motion`, in seconds |
+| `cut` | `null` | `SliceCut` hiding slices above/below a frontier |
+
+## Animation
+
+| Member | Meaning |
+| --- | --- |
+| `update(dt)` | Advances playback by `dt` seconds |
+| `frame` | Visible frame index |
+| `frameCount` | Number of frames in the atlas |
+| `frameDuration` | Seconds each frame stays on screen |
+| `loop` | Restart at the end (`true`) or stop on the last frame |
+| `pingPong` | Bounce `0 → n-1 → 0` instead of wrapping |
+| `play()` / `stop()` / `reset()` | Playback control; `reset()` rewinds and pauses |
+| `isPlaying` / `isFinished` | Playback state |
+| `onComplete` / `onFrame` | Callbacks for the end of a non-looping clip and frame changes |
+
+## Motion
+
+| Member | Meaning |
+| --- | --- |
+| `StackMotion(sway:, speed:, wave:, phase:, lean:)` | Per-slice deformation |
+| `sway` | Oscillation amplitude at the tip, source pixels |
+| `speed` / `wave` / `phase` | Angular speed, per-slice lag and initial phase (radians) |
+| `lean` | Constant tip offset, source pixels (`+y` down) |
+| `offsetAt(slice, sliceCount, time)` | Offset for one slice, using the `(z / (n-1))²` falloff |
+| `isEmpty` | Whether the motion leaves every slice in place |
+
+## Cutaways
+
+| Member | Meaning |
+| --- | --- |
+| `SliceCut(top:, bottom:)` | Visible slice range, both frontiers continuous |
+| `top` | First hidden slice counting from the ground (`19` keeps `0..18`) |
+| `bottom` | Slices hidden at the ground |
+| `isActive` / `isVisible(slice)` | Whether the cut hides anything / that slice |
+| `visibilityAt(slice)` | `0..1`, fractional at the frontier |
+| `visibleSliceCount(count)` | Surviving slices, used to shrink bounds |
 
 ## Baked frames
 

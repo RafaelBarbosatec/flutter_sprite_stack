@@ -14,6 +14,13 @@ description: What flutter_sprite_stack does not do.
   exactly.
 - A very large `scale` plus many slices costs fill rate; cache or pre-bake if it
   shows up in a profile.
-- **No animation yet.** A stack is a still prop. Bake several stacks and swap
-  them, or animate the transform (spin, bob, scale) — per-slice deformation and
-  frame atlases are not part of the API.
+- **Animation is frame based.** `SpriteStackAnimation` swaps whole atlas rows.
+  `StackMotion` adds per-slice sway and lean, but there is no cloth simulation,
+  no per-slice twist and no crossfade between clips. Blending two animations
+  means drawing both with an opacity.
+- **Motion quantises to art pixels in the software rasterizer**, because the
+  buffer is 1x. That matches the pixel grid; if you need sub-pixel motion at a
+  high display scale, move the component instead of the slices.
+- **Slice cuts hide whole slices.** There is no per-slice opacity: the slice at
+  the frontier is dissolved with a 4×4 Bayer dither. Cutaways are per stack, so
+  the interior has to exist in the strip — the engine cannot invent a room.

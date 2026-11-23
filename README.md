@@ -52,7 +52,7 @@ Or add it manually:
 
 ```yaml
 dependencies:
-  flutter_sprite_stack: ^0.2.0
+  flutter_sprite_stack: ^0.3.0
 ```
 
 Requires Flutter 3.22+ and Dart 3.5+. Works on every platform Flutter supports,
@@ -117,6 +117,113 @@ footprint, outline and ground shadow — so hit boxes, camera culling and
 `priority`-based sorting match what is actually drawn. `yaw` spins the prop; it
 does **not** touch the component's own `angle`, and the drawing stays anchored
 by its feet while the bounds change.
+
+## Animation
+
+Animation is a **frame atlas**: the same horizontal strips stacked vertically,
+frame `0` on top. Nothing else changes — the slice format, bounds and outline
+are per row.
+
+```
+frame 0  [z0][z1][z2] … [zN]   ← sliceCount per row
+frame 1  [z0][z1][z2] … [zN]
+…
+frame 4  [z0][z1][z2] … [zN]
+```
+
+```dart
+final torch = await SpriteStackAnimation.load(
+  'sprites/torch.png',
+  sliceCount: 14,
+  frameCount: 5,
+  frameDuration: 0.13,
+  loop: true,
+);
+
+// In a Ticker / Flame update:
+torch.update(dt);
+stackPainter.frame = torch.frame; // or render(..., frame: torch.frame)
+```
+
+`SpriteStackAnimation` handles timing, looping, ping-pong, `play`/`stop`/`reset`
+and `onComplete`. The rendering cost does not change: an 8-frame torch still
+draws `sliceCount` slices per frame.
+
+In Flame/Bonfire, use the animated component — same bounds, culling and Y
+sorting as the static one:
+
+```dart
+add(
+  AnimatedSpriteStackComponent(
+    animation: torch,
+    position: Vector2(120, 200),
+    stackScale: 4,
+    priority: 10,
+  ),
+);
+```
+
+Animate transforms too when it fits better: a spinning coin, a bobbing item or a
+pulsing warning light does not need frames at all.
+
+## Motion (sway and lean)
+
+`StackMotion` offsets each slice with a quadratic falloff from the ground, so the
+base stays planted and the tip moves. It needs no extra frames — one strip is
+enough for a tree, banner, kelp, grass or cape.
+
+```dart
+final motion = StackMotion(
+  sway: 2.5,    // amplitude at the tip, in source pixels
+  speed: 1.8,   // radians per second
+  wave: 0.7,    // phase lag per slice: the motion travels up as a wave
+  phase: 0,     // desync props that share the same strip
+  lean: Offset.zero, // constant bend, e.g. prevailing wind (+y is down)
+);
+
+// Any Canvas:
+robot.render(canvas, position: ground, motion: motion, time: elapsed);
+
+// Flame/Bonfire: the component advances the clock for you.
+SpriteStackComponent(stack: tree, motion: motion);
+```
+
+The sway is `sin(time * speed - slice * wave + phase) * sway * (slice / (n-1))²`.
+The squared falloff is what pins slice `0` — it is the formula recommended by
+`danielwh2/sprite-stacking`, and it is why the base does not slide.
+
+The software rasterizer works at 1x art-pixel resolution, so motion shifts
+slices in whole art pixels. That is the native grid of pixel art; for sub-pixel
+smoothness at high display scales, animate the component position instead.
+
+## Cutaways (roof off)
+
+`SliceCut` hides slices above (or below) a continuous frontier. Hide a house's
+roof and what remains are the wall cross-sections — a dollhouse view with the
+player inside.
+
+```dart
+final roof = SliceCut(top: 19);       // slices 0..18, roof gone
+
+// Animate it: `top` is continuous, so the roof disappears slice by slice.
+final roof = SliceCut(top: sliceCount * (1 - progress));
+
+house.render(canvas, position: ground, cut: roof);
+```
+
+In Flame/Bonfire, set it on the component — `size` follows the cut, so culling
+and hit boxes shrink with the roof:
+
+```dart
+final house = SpriteStackComponent(stack: walls, position: Vector2(320, 200));
+add(house);
+
+// On enter:
+house.cut = const SliceCut(top: 19);
+```
+
+The slice sitting at the cut is dissolved with a 4×4 Bayer dither, so the pixel
+grid stays intact instead of blending the whole prop. Bounds follow the cut.
 
 ## Baking and spinning
 
@@ -237,6 +344,106 @@ recipes), `scripts/views_to_slices.py` and `scripts/viewer.html`. Agents that
 support MCP can expose that workflow as tools by wrapping the script; the
 output format is exactly what `SpriteStack.load` consumes.
 
+### Agent skills (AI coding assistants)
+
+Two skills ship inside the package, following the
+[Dart package skills](https://dart.dev/ai/package-skills) convention. They give
+your coding agent the real API, the asset math and the failure modes of this
+package instead of a plausible guess.
+
+| Skill | What it teaches |
+| --- | --- |
+| `flutter-sprite-stack-assets` | turning four views into a strip, building frame atlases, and the `validate_atlas.py` / `make_atlas.py` scripts |
+| `flutter-sprite-stack-runtime` | `render`, `boundsFor`, components, animation, `StackMotion`, `SliceCut`, bake/turntable/cache |
+
+#### 1. Install them in your app
+
+```bash
+# run inside your Flutter project, with flutter_sprite_stack as a dependency
+dart run skills@ get -p flutter_sprite_stack
+```
+
+An interactive picker lists both skills; press <kbd>Enter</kbd> to install them
+into your agent's skills directory. Non-interactive variants:
+
+```bash
+dart run skills@ get -p flutter_sprite_stack --all
+dart run skills@ get -p flutter_sprite_stack -s flutter-sprite-stack-runtime
+```
+
+> `skills@` is resolved by `dart run` on first use, so there is nothing to
+> install globally. Requires the Dart SDK that ships with Flutter.
+
+#### 2. Where they land
+
+```text
+your_app/
+├── .agents/skills/
+│   ├── flutter-sprite-stack-assets/
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   └── scripts/
+│   └── flutter-sprite-stack-runtime/
+│       ├── SKILL.md
+│       ├── references/
+│       └── assets/
+└── .config/dart_skills/      # install/update tracking
+```
+
+Commit both, or ignore both. If you ignore `.agents/skills/`, add
+`.config/dart_skills/` to `.gitignore` too — the CLI needs it to detect local
+edits on the next `get`.
+
+#### 3. Ask your agent
+
+With the skills installed, prompts like these produce code that compiles:
+
+```text
+Slice this four-view sheet into a 24-slice stack and validate it.
+Add a 5-frame walk atlas to my Flame game and drive it from the player speed.
+Make this tree sway in the wind without adding frames.
+Drop the cottage roof when the player walks in, and keep the bounds correct.
+Why does my prop wobble while it rotates?
+```
+
+#### 4. Update and remove
+
+```bash
+dart run skills@ get -p flutter_sprite_stack   # update after a package bump
+dart run skills@ list                          # what is installed
+dart run skills@ remove -p flutter_sprite_stack
+dart run skills@ prune                         # drop skills of removed deps
+```
+
+The CLI tracks the installed files: if you edited a skill locally, `get` asks
+whether to keep your version or take the upstream one.
+
+#### What you actually gain
+
+| Task | Without the skill | With the skill |
+| --- | --- | --- |
+| Loading an asset | agent guesses `sliceCount`, invents parameters | knows `load(path, sliceCount:, frameCount:)` and that the numbers are not stored in the PNG |
+| Sizing / hit box | `sliceWidth * sliceCount` | `boundsFor(yaw:, scale:)` with the projected rect |
+| Animation | invents a sprite-sheet API | `SpriteStackAnimation` + `AnimatedSpriteStackComponent`, frame atlas layout |
+| Sway | authors 6 extra frames | `StackMotion(sway:, speed:, wave:)` |
+| Roof cutaway | hides the whole sprite | `SliceCut(top:)`, dither at the frontier, bounds follow the cut |
+| Broken asset | trial and error in game | `validate_atlas.py` reports the gap, pivot drift or opaque background |
+| Performance | one `load` per entity | `SpriteStackCache`, `bake`, `SpriteStackTurntable` |
+
+#### Before 0.3.0 is published
+
+The skills travel with the package version, so this path needs a published
+`0.3.0`. Until then, install them straight from the repository:
+
+```bash
+dart run skills@ add https://github.com/RafaelBarbosatec/flutter_sprite_stack
+```
+
+The skills are linted in CI with
+[`skills_lint`](https://pub.dev/packages/skills_lint), so a malformed
+`SKILL.md` fails the build. Full walkthrough: **Agent Skills** in the
+[docs](https://docs.page/RafaelBarbosatec/flutter_sprite_stack/guide/agent-skills).
+
 **Credit:** the four-view carving pipeline, the skill and the viewer are by
 Daniel White ([danielwh2/sprite-stacking](https://github.com/danielwh2/sprite-stacking),
 MIT). This package is the Flutter runtime for the strips that pipeline
@@ -254,6 +461,12 @@ produces.
 | `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
+| `SpriteStackAnimation.load(path, sliceCount:, frameCount:, ...)` | Loads and plays a frame atlas |
+| `SpriteStackAnimation` | Timing, loop, ping-pong, `play`/`stop`/`reset` |
+| `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component with animation |
+| `render(..., frame:)` / `SpriteStackPainter.frame` | Draws a specific atlas frame |
+| `StackMotion(sway:, speed:, wave:, phase:, lean:)` | Per-slice sway/lean, no extra frames |
+| `SliceCut(top:, bottom:)` | Hides slices above/below a frontier (roof cutaway) |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |

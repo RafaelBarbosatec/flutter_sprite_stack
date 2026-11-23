@@ -26,3 +26,4 @@ flutter:
     - sprites/car/slices.png
     - sprites/house/slices.png
     - sprites/tree/slices.png
+    - sprites/torch/frames.png

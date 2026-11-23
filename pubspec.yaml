@@ -2,7 +2,7 @@ name: flutter_sprite_stack
 description: >-
   Render sprite-stacking props in Flutter with free turntable rotation from a
   horizontal strip of top-down cross-sections. One draw per slice.
-version: 0.2.0
+version: 0.3.0
 
 homepage: https://github.com/RafaelBarbosatec/flutter_sprite_stack
 repository: https://github.com/RafaelBarbosatec/flutter_sprite_stack
@@ -33,3 +33,5 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: '>=4.0.0 <7.0.0'
+  # Validates the agent skills shipped in skills/ (see skills_lint.yaml).
+  skills_lint: ^0.5.2

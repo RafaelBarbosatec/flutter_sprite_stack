@@ -1,0 +1,12 @@
+# Validates the agent skills that ship inside this package's `skills/` folder.
+# Run with `dart run skills_lint` (also enforced by test/skills_test.dart).
+skills_lint:
+  rules:
+    check-relative-paths: error
+    check-absolute-paths: error
+  directories:
+    - path: "skills/"
+      rules:
+        # Published skills must be prefixed with the package name so two
+        # dependencies cannot install the same directory name.
+        published-skill-name: error
