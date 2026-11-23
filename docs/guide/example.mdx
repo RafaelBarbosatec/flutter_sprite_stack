@@ -42,3 +42,10 @@ Formula 1 car around a circuit.
   frame; Bonfire Y-sorts them like any other `GameComponent`.
 - Exhaust smoke is a Flame `ParticleSystemComponent` emitted while the car moves.
 - Barriers collide, grass slows you down, and the HUD tracks speed and lap times.
+- The circuit is generated at runtime by `TrackTileset`: every tile is a
+  `PixelArt` string packed into a `PixelTileset` atlas, so the map needs no
+  image asset. Cells crossed by the kerb boundary are rasterised pixel by pixel
+  from the track geometry, so the red/white band follows the curve instead of
+  stepping in 32 px squares.
+
+![Rounded kerbs](/assets/f1-kerbs-after.png)

@@ -89,6 +89,14 @@ class Track {
   /// Direct cell lookup by column/row, used by [TrackTileset].
   TrackCell cellAtCell(int c, int r) => _cells[r][c];
 
+  /// Classifies an arbitrary point, given in tiles, without snapping it to a
+  /// cell centre.
+  ///
+  /// `TrackTileset` uses this to rasterise the kerb boundary at pixel
+  /// precision, which is what rounds the corners instead of leaving a
+  /// 32 px staircase.
+  TrackCell cellAtPoint(double x, double y) => _classify(x, y);
+
   late final List<Vector2> _wallCenters = [
     for (var r = 0; r < rows; r++)
       for (var c = 0; c < cols; c++)
@@ -118,4 +126,3 @@ class Track {
     return true;
   }
 }
-
