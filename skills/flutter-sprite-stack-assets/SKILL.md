@@ -109,8 +109,8 @@ Load it with the matching numbers:
 ```dart
 final torch = await SpriteStack.load(
   'assets/torch.png',
-  sliceCount: 14,
-  frameCount: 4,
+  sliceCount: 32,
+  frameCount: 8,
 );
 ```
 

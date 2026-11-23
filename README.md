@@ -128,14 +128,14 @@ are per row.
 frame 0  [z0][z1][z2] … [zN]   ← sliceCount per row
 frame 1  [z0][z1][z2] … [zN]
 …
-frame 4  [z0][z1][z2] … [zN]
+frame 7  [z0][z1][z2] … [zN]
 ```
 
 ```dart
 final torch = await SpriteStackAnimation.load(
   'sprites/torch.png',
-  sliceCount: 14,
-  frameCount: 5,
+  sliceCount: 32,
+  frameCount: 8,
   frameDuration: 0.13,
   loop: true,
 );

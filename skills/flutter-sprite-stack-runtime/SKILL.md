@@ -81,8 +81,8 @@ A frame atlas is several strips stacked vertically; `frameCount` says how many.
 ```dart
 final torch = await SpriteStackAnimation.load(
   'assets/torch.png',
-  sliceCount: 14,
-  frameCount: 5,
+  sliceCount: 32,
+  frameCount: 8,
   frameDuration: 0.12,
   loop: true,
 );

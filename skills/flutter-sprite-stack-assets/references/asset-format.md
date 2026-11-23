@@ -62,7 +62,7 @@ assets/
   props/
     crate.png            # 20 slices
     cottage.png          # 48 slices
-    torch.png            # 14 slices × 5 frames
+    torch.png            # 32 slices × 8 frames
 ```
 
 ```yaml
