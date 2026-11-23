@@ -1,0 +1,168 @@
+---
+title: Agent Skills
+description: Install the package's AI agent skills and let your coding assistant write correct flutter_sprite_stack code on the first try.
+---
+
+# Agent Skills
+
+This package ships two [Dart package skills](https://dart.dev/ai/package-skills).
+They are instructions written for AI coding agents — Cursor, Claude Code, Codex,
+Gemini CLI, Copilot, Cline and anything else that reads a `SKILL.md` — so the
+assistant knows the real APIs, the asset math and the failure modes of this
+package instead of inventing a plausible-looking `drawStack(...)`.
+
+## What ships
+
+| Skill | What it teaches |
+| --- | --- |
+| `flutter-sprite-stack-assets` | turning four orthographic views into a strip, building vertical frame atlases, and the `validate_atlas.py` / `make_atlas.py` scripts |
+| `flutter-sprite-stack-runtime` | `render`, `boundsFor`, components, animation, `StackMotion`, `SliceCut`, bake / turntable / cache, and a cutaway-house component |
+
+Each skill is a directory under `skills/` in the package:
+
+```text
+skills/
+├── flutter-sprite-stack-assets/
+│   ├── SKILL.md
+│   ├── references/asset-format.md
+│   ├── references/authoring-rules.md
+│   └── scripts/{validate_atlas.py,make_atlas.py,png_rw.py}
+└── flutter-sprite-stack-runtime/
+    ├── SKILL.md
+    ├── references/api.md
+    ├── references/performance.md
+    └── assets/cutaway_house.dart
+```
+
+The directory names are prefixed with the package name on purpose: the installer
+skips any skill that does not match its package, so two dependencies can never
+overwrite each other's skills.
+
+## Requirements
+
+- a Flutter project with `flutter_sprite_stack` in `pubspec.yaml`
+- the Dart SDK that ships with Flutter (`dart --version`)
+- Python 3 **only** for the two asset scripts; they use the standard library, so
+  there is nothing to `pip install`
+
+## Step 1 — install the skills
+
+Run this inside your app, next to your `pubspec.yaml`:
+
+```bash
+dart run skills@ get -p flutter_sprite_stack
+```
+
+`skills@` is resolved by `dart run` on first use; nothing is installed globally.
+An interactive picker lists the skills — use `Space` to toggle and `Enter` to
+install.
+
+Non-interactive variants:
+
+```bash
+# everything the package ships
+dart run skills@ get -p flutter_sprite_stack --all
+
+# just one of them
+dart run skills@ get -p flutter_sprite_stack -s flutter-sprite-stack-runtime
+```
+
+> **Version note.** The skills are versioned with the package, so
+> `-p flutter_sprite_stack` needs a published `0.3.0` or newer. Before that (or
+> to track the repository's `main`), install straight from Git:
+>
+> ```bash
+> dart run skills@ add https://github.com/RafaelBarbosatec/flutter_sprite_stack
+> ```
+
+## Step 2 — check what landed
+
+```text
+your_app/
+├── .agents/skills/
+│   ├── flutter-sprite-stack-assets/
+│   └── flutter-sprite-stack-runtime/
+└── .config/dart_skills/          # install/update tracking
+```
+
+`dart run skills@ list` prints what is installed.
+
+## Step 3 — commit or ignore
+
+Both choices work, but they must be paired:
+
+- **commit** `.agents/skills/` **and** `.config/dart_skills/` so the team shares
+  the same instructions and update tracking;
+- **ignore** `.agents/skills/` **and** add `.config/dart_skills/` to
+  `.gitignore`, with every developer running `dart run skills@ get` locally.
+
+## Step 4 — use them
+
+Once installed, the agent picks the skill up from its normal prompt. Questions
+that used to produce guesses now produce code that compiles:
+
+```text
+Slice this four-view sheet into a 24-slice stack and validate it.
+Add a 5-frame atlas to my Flame game and drive it from the player speed.
+Make this tree sway in the wind without adding frames.
+Drop the cottage roof when the player walks in, and keep culling correct.
+Why does my prop wobble while it rotates?
+```
+
+What that looks like in practice:
+
+| Task | Without the skill | With the skill |
+| --- | --- | --- |
+| Load an asset | guesses `sliceCount`, invents parameters | `SpriteStack.load(path, sliceCount:, frameCount:)`, and knows the numbers are not stored in the PNG |
+| Size / hit box | `sliceWidth * sliceCount` | `boundsFor(yaw:, scale:)` and `rectAt(groundPoint)` |
+| Animation | invents a sprite-sheet API | `SpriteStackAnimation` + `AnimatedSpriteStackComponent` and the atlas layout |
+| Wind / sway | authors extra frames | `StackMotion(sway:, speed:, wave:)` |
+| Roof cutaway | hides the whole sprite | `SliceCut(top:)`, dither at the frontier, bounds follow the cut |
+| Broken asset | trial and error in game | `validate_atlas.py` names the gap, pivot drift or opaque background |
+| Performance | one `load` per entity | `SpriteStackCache`, `bake()`, `SpriteStackTurntable` |
+
+## Step 5 — keep them updated
+
+```bash
+dart run skills@ get -p flutter_sprite_stack   # update after upgrading the package
+dart run skills@ list                          # installed skills
+dart run skills@ remove -p flutter_sprite_stack
+dart run skills@ prune                         # drop skills of removed dependencies
+```
+
+Update after every `flutter_sprite_stack` upgrade: the skills document the API of
+the version they shipped with, and an old skill describing an old API is worse
+than no skill at all.
+
+## Local customization
+
+You can edit an installed skill to match your architecture. The CLI records what
+it installed, so the next `get` detects your changes and asks whether to keep
+them or take the upstream version.
+
+If you maintain custom skills in `.agents/skills/`, validate them with
+[`skills_lint`](https://pub.dev/packages/skills_lint) — the same linter this
+package runs in CI:
+
+```bash
+dart pub add dev:skills_lint
+dart run skills_lint --skills-directory .agents/skills
+```
+
+## How these skills are maintained
+
+- They live next to the code they document, so an API change and its skill edit
+  land in the same pull request.
+- `test/skills_test.dart` fails the build when a `SKILL.md` is malformed, a
+  relative path is broken, or a directory is missing the package prefix.
+- The asset scripts are exercised against the demo assets during development.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `flutter_sprite_stack` does not appear in the picker | check the dependency and version in `pubspec.yaml`, then run `flutter pub get` |
+| Skill installed but the agent ignores it | make sure the agent reads `.agents/skills/`; some tools need the folder copied to their own skills directory |
+| Agent still suggests an old API | rerun `dart run skills@ get -p flutter_sprite_stack` |
+| `validate_atlas.py` reports an empty slice | the carving pipeline dropped that cross-section; fill it or raise the slice count |
+| Python not found | the scripts need Python 3; they use no third-party packages |

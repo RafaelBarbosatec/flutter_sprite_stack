@@ -30,6 +30,7 @@
         { "title": "Flame / Bonfire", "href": "/guide/flame" },
         { "title": "Asset Format", "href": "/guide/asset-format" },
         { "title": "Creating Assets", "href": "/guide/creating-assets" },
+        { "title": "Agent Skills", "href": "/guide/agent-skills" },
         { "title": "Example", "href": "/guide/example" }
       ]
     },

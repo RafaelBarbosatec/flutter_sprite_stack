@@ -344,27 +344,105 @@ recipes), `scripts/views_to_slices.py` and `scripts/viewer.html`. Agents that
 support MCP can expose that workflow as tools by wrapping the script; the
 output format is exactly what `SpriteStack.load` consumes.
 
-### Skills that ship with this package
+### Agent skills (AI coding assistants)
 
-This package also ships its own agent skills in `skills/`, following the
-[Dart package skills](https://dart.dev/ai/package-skills) convention, so an app
-that depends on `flutter_sprite_stack` can install authoritative instructions
-for its AI agent:
+Two skills ship inside the package, following the
+[Dart package skills](https://dart.dev/ai/package-skills) convention. They give
+your coding agent the real API, the asset math and the failure modes of this
+package instead of a plausible guess.
+
+| Skill | What it teaches |
+| --- | --- |
+| `flutter-sprite-stack-assets` | turning four views into a strip, building frame atlases, and the `validate_atlas.py` / `make_atlas.py` scripts |
+| `flutter-sprite-stack-runtime` | `render`, `boundsFor`, components, animation, `StackMotion`, `SliceCut`, bake/turntable/cache |
+
+#### 1. Install them in your app
 
 ```bash
+# run inside your Flutter project, with flutter_sprite_stack as a dependency
 dart run skills@ get -p flutter_sprite_stack
 ```
 
-| Skill | Covers |
-| --- | --- |
-| `flutter-sprite-stack-assets` | authoring strips and frame atlases, the validator and the atlas packer |
-| `flutter-sprite-stack-runtime` | `render`, components, animation, `StackMotion`, `SliceCut`, bake/turntable/cache |
+An interactive picker lists both skills; press <kbd>Enter</kbd> to install them
+into your agent's skills directory. Non-interactive variants:
 
-The asset skill bundles two dependency-free Python scripts —
-`validate_atlas.py` (dimensions, gaps, pivot drift, alpha hygiene) and
-`make_atlas.py` (packs frames into the vertical atlas) — because nothing in the
-ecosystem generates or checks animated frames for this format. The skills are
-validated with [`skills_lint`](https://pub.dev/packages/skills_lint) in CI.
+```bash
+dart run skills@ get -p flutter_sprite_stack --all
+dart run skills@ get -p flutter_sprite_stack -s flutter-sprite-stack-runtime
+```
+
+> `skills@` is resolved by `dart run` on first use, so there is nothing to
+> install globally. Requires the Dart SDK that ships with Flutter.
+
+#### 2. Where they land
+
+```text
+your_app/
+├── .agents/skills/
+│   ├── flutter-sprite-stack-assets/
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   └── scripts/
+│   └── flutter-sprite-stack-runtime/
+│       ├── SKILL.md
+│       ├── references/
+│       └── assets/
+└── .config/dart_skills/      # install/update tracking
+```
+
+Commit both, or ignore both. If you ignore `.agents/skills/`, add
+`.config/dart_skills/` to `.gitignore` too — the CLI needs it to detect local
+edits on the next `get`.
+
+#### 3. Ask your agent
+
+With the skills installed, prompts like these produce code that compiles:
+
+```text
+Slice this four-view sheet into a 24-slice stack and validate it.
+Add a 5-frame walk atlas to my Flame game and drive it from the player speed.
+Make this tree sway in the wind without adding frames.
+Drop the cottage roof when the player walks in, and keep the bounds correct.
+Why does my prop wobble while it rotates?
+```
+
+#### 4. Update and remove
+
+```bash
+dart run skills@ get -p flutter_sprite_stack   # update after a package bump
+dart run skills@ list                          # what is installed
+dart run skills@ remove -p flutter_sprite_stack
+dart run skills@ prune                         # drop skills of removed deps
+```
+
+The CLI tracks the installed files: if you edited a skill locally, `get` asks
+whether to keep your version or take the upstream one.
+
+#### What you actually gain
+
+| Task | Without the skill | With the skill |
+| --- | --- | --- |
+| Loading an asset | agent guesses `sliceCount`, invents parameters | knows `load(path, sliceCount:, frameCount:)` and that the numbers are not stored in the PNG |
+| Sizing / hit box | `sliceWidth * sliceCount` | `boundsFor(yaw:, scale:)` with the projected rect |
+| Animation | invents a sprite-sheet API | `SpriteStackAnimation` + `AnimatedSpriteStackComponent`, frame atlas layout |
+| Sway | authors 6 extra frames | `StackMotion(sway:, speed:, wave:)` |
+| Roof cutaway | hides the whole sprite | `SliceCut(top:)`, dither at the frontier, bounds follow the cut |
+| Broken asset | trial and error in game | `validate_atlas.py` reports the gap, pivot drift or opaque background |
+| Performance | one `load` per entity | `SpriteStackCache`, `bake`, `SpriteStackTurntable` |
+
+#### Before 0.3.0 is published
+
+The skills travel with the package version, so this path needs a published
+`0.3.0`. Until then, install them straight from the repository:
+
+```bash
+dart run skills@ add https://github.com/RafaelBarbosatec/flutter_sprite_stack
+```
+
+The skills are linted in CI with
+[`skills_lint`](https://pub.dev/packages/skills_lint), so a malformed
+`SKILL.md` fails the build. Full walkthrough: **Agent Skills** in the
+[docs](https://docs.page/RafaelBarbosatec/flutter_sprite_stack/guide/agent-skills).
 
 **Credit:** the four-view carving pipeline, the skill and the viewer are by
 Daniel White ([danielwh2/sprite-stacking](https://github.com/danielwh2/sprite-stacking),
