@@ -31,8 +31,8 @@ class TrackLines extends GameComponent {
       ..strokeWidth = lineWidth
       ..isAntiAlias = false;
 
-    final outer = track.outerBounds;
-    final inner = track.innerBounds;
+    final outer = Track.outerBounds;
+    final inner = Track.innerBounds;
 
     // The asphalt is inside the outer rounded rectangle: pull the stroke in by
     // half its width so the whole line stays on the tarmac.
