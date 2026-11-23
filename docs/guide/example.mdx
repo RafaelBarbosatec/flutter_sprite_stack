@@ -44,8 +44,11 @@ Formula 1 car around a circuit.
 - Barriers collide, grass slows you down, and the HUD tracks speed and lap times.
 - The circuit is generated at runtime by `TrackTileset`: every tile is a
   `PixelArt` string packed into a `PixelTileset` atlas, so the map needs no
-  image asset. Cells crossed by the kerb boundary are rasterised pixel by pixel
+  image asset. Kerbs are painted only at the inside of the four corners, in a
+  48 px band (three 16 px checker blocks) instead of a ribbon around the whole
+  circuit. Cells crossed by the kerb boundary are rasterised pixel by pixel
   from the track geometry, so the red/white band follows the curve instead of
-  stepping in 32 px squares.
+  stepping in 32 px squares. `TrackLines` draws the white track-limit lines
+  along both asphalt edges.
 
-![Rounded kerbs](/assets/f1-kerbs-after.png)
+![Corner kerbs and white track-limit lines](/assets/f1-corner-kerbs.png)

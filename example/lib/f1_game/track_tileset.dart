@@ -8,24 +8,25 @@ import 'track.dart';
 /// Every tile is drawn from code-generated [PixelArt] strings and packed into
 /// a runtime atlas, so the whole track needs no image asset. Two variants of
 /// the asphalt/grass/scenery tiles keep the original alternating-cell look,
-/// while kerbs, walls and the animated start/finish line use checkered art.
+/// while walls and the animated start/finish line use checkered art. The
+/// white track-limit lines are drawn by `TrackLines`, not by tiles.
 ///
-/// ## Rounded kerbs
+/// ## Rounded corner kerbs
 ///
-/// A kerb is not one tile: it is a band two tiles wide that follows the
-/// rounded-rectangle edge of the asphalt. Painting every kerb cell as a full
-/// checkered square makes the band's border a 32 px staircase, which is
-/// exactly what a large-radius corner should not look like.
+/// A kerb is not one tile: it is a 48 px band (three 16 px checker blocks)
+/// that sits on the infield side of the asphalt, at the inside of the four
+/// corners. Painting every kerb cell as a full checkered square makes the
+/// band's border a 32 px staircase, which is exactly what a large-radius
+/// corner should not look like.
 ///
 /// Cells crossed by the asphalt/kerb or kerb/grass boundary are therefore
 /// rasterised pixel by pixel from [Track.cellAtPoint] instead of using a
 /// single tile: each pixel asks the track which region it belongs to and gets
 /// the asphalt, kerb or grass pattern for that region. The band's border then
 /// follows the real curve at one-pixel precision, while the red/white checker
-/// keeps the same 16 px block grid as before. Straight sections never leave the
-/// cell grid, so only the 392 cells the curve crosses get their own art; tiles
-/// with identical pixels are deduplicated, which trims a handful of the
-/// repeated shapes at the entry and exit of each corner.
+/// keeps the same 16 px block grid as before. Straights have no kerb at all,
+/// so only the cells around the four corners need their own art; tiles with
+/// identical pixels are deduplicated.
 class TrackTileset {
   TrackTileset(this.track) {
     _customTiles = _buildCustomTiles();

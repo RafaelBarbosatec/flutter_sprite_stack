@@ -1,11 +1,14 @@
-"""Render before/after previews of the F1 kerb rasterisation.
+"""Render a preview of the F1 corner kerbs and white track-limit lines.
 
-Replicates Track._classify (rounded-rect ring) and TrackTileset's palette so the
-PNG shows what the Dart tileset will generate:
+Replicates ``Track._classify`` (rounded-rect ring, kerbs only inside the four
+corners) and ``TrackTileset``'s palette so the PNG shows what the Dart tileset
+generates:
 
-* "before": every cell painted with the classification of its centre
-  (kerb cells = full 32 px checker squares, which is the staircase).
-* "after": cells crossed by the kerb boundary are rasterised per pixel.
+* kerbs are a 48 px band (three 16 px checker blocks) on the infield side of
+  the four corners; the straights have none;
+* the white lines mark both asphalt edges, two pixels wide;
+* cells crossed by the kerb boundary are rasterised per pixel, so the band's
+  border follows the real curve instead of stepping in 32 px squares.
 
 Usage: python3 tool/preview_kerb.py out.png
 """
@@ -24,6 +27,14 @@ TILE = 32
 COLS, ROWS = 108, 80
 OUTER = dict(left=14.0, top=14.0, right=94.0, bottom=66.0, r=18.0)
 INNER = dict(left=24.0, top=24.0, right=84.0, bottom=56.0, r=8.0)
+KERB_WIDTH = 1.5
+LINE = 2 / TILE
+CORNERS = [
+    (32.0, 32.0, -1.0, -1.0),  # top-left
+    (76.0, 32.0, 1.0, -1.0),  # top-right
+    (32.0, 48.0, -1.0, 1.0),  # bottom-left
+    (76.0, 48.0, 1.0, 1.0),  # bottom-right
+]
 
 PALETTE = {
     'a': (0x3A, 0x3F, 0x4B),
@@ -59,21 +70,34 @@ def in_rrect(s, x, y, grow=0.0):
     return dx * dx + dy * dy <= r * r
 
 
+def in_kerb_zone(x, y):
+    if not in_rrect(INNER, x, y):
+        return False
+    if in_rrect(INNER, x, y, -KERB_WIDTH):
+        return False
+    for cx, cy, sx, sy in CORNERS:
+        u = (x - cx) * sx
+        v = (y - cy) * sy
+        if u < 0 or v < 0:
+            continue
+        if u * u + v * v <= INNER['r'] ** 2:
+            return True
+    return False
+
+
 def classify(x, y):
     o0 = in_rrect(OUTER, x, y, 0)
     i0 = in_rrect(INNER, x, y, 0)
     if o0 and not i0:
         return 'asphalt'
     if i0:
-        if not in_rrect(INNER, x, y, -2):
+        if in_kerb_zone(x, y):
             return 'kerb'
         if not in_rrect(INNER, x, y, -6):
             return 'grass'
         if not in_rrect(INNER, x, y, -8):
             return 'wall'
         return 'scenery'
-    if in_rrect(OUTER, x, y, 2):
-        return 'kerb'
     if in_rrect(OUTER, x, y, 6):
         return 'grass'
     if in_rrect(OUTER, x, y, 8):
@@ -102,6 +126,15 @@ def code(cell, px, py, phase):
     return 'W' if ((px // 16) + (py // 16)) % 2 == 0 else 'D'
 
 
+def is_line(x, y):
+    """True for the 2 px white line just inside each asphalt edge."""
+    if in_rrect(OUTER, x, y, 0) and not in_rrect(OUTER, x, y, -LINE):
+        return True
+    if in_rrect(INNER, x, y, LINE) and not in_rrect(INNER, x, y, 0):
+        return True
+    return False
+
+
 def is_kerb_edge(c, r):
     edge = 0.001
     samples = {
@@ -115,59 +148,38 @@ def is_kerb_edge(c, r):
     return 'kerb' in samples and ('asphalt' in samples or 'grass' in samples)
 
 
-def render(cols, rows, per_pixel, scale=1):
+def render(cols, rows):
     w, h = cols[1] - cols[0], rows[1] - rows[0]
-    width, height = w * TILE * scale, h * TILE * scale
+    width, height = w * TILE, h * TILE
     out = bytearray(width * height * 4)
 
     for ty in range(rows[0], rows[1]):
         for tx in range(cols[0], cols[1]):
             phase = 1 if (tx + ty) % 2 else 0
-            custom = per_pixel and is_kerb_edge(tx, ty)
+            custom = is_kerb_edge(tx, ty)
             center = classify(tx + 0.5, ty + 0.5)
             for py in range(TILE):
                 for px in range(TILE):
-                    if custom:
-                        cell = classify(
-                            tx + (px + 0.5) / TILE,
-                            ty + (py + 0.5) / TILE,
-                        )
-                        ch = code(cell, px, py, phase)
-                    else:
-                        ch = code(center, px, py, phase)
+                    wx = tx + (px + 0.5) / TILE
+                    wy = ty + (py + 0.5) / TILE
+                    cell = classify(wx, wy) if custom else center
+                    ch = 'w' if is_line(wx, wy) else code(cell, px, py, phase)
                     r_, g_, b_ = PALETTE[ch]
                     ix = (ty - rows[0]) * TILE + py
                     iy = (tx - cols[0]) * TILE + px
-                    for sy in range(scale):
-                        for sx in range(scale):
-                            o = ((ix * scale + sy) * width + iy * scale + sx) * 4
-                            out[o:o + 4] = bytes((r_, g_, b_, 255))
+                    o = (ix * width + iy) * 4
+                    out[o:o + 4] = bytes((r_, g_, b_, 255))
     return width, height, out
 
 
 def main():
-    out_path = sys.argv[1] if len(sys.argv) > 1 else 'kerb_preview.png'
-    cols = (14, 56)
-    rows = (10, 44)
-
-    w1, h1, before = render(cols, rows, per_pixel=False)
-    w2, h2, after = render(cols, rows, per_pixel=True)
-    assert (w1, h1) == (w2, h2)
-
-    gap = 6
-    width = w1
-    height = h1 + gap + h2
-    canvas = bytearray([24, 26, 32, 255] * (width * height))
-
-    for y in range(h1):
-        start = y * w1 * 4
-        canvas[start:start + w1 * 4] = before[start:start + w1 * 4]
-
-    offset = (h1 + gap) * width * 4
-    canvas[offset:offset + len(after)] = after
-
-    write_png(out_path, width, height, canvas)
-    print(f'wrote {out_path} ({width}x{height}) — top: before, bottom: after')
+    out_path = sys.argv[1] if len(sys.argv) > 1 else 'f1-corner-kerbs.png'
+    # Top-left corner: outer arc plus the inner apex kerb.
+    cols = (10, 46)
+    rows = (10, 46)
+    width, height, pixels = render(cols, rows)
+    write_png(out_path, width, height, pixels)
+    print(f'wrote {out_path} ({width}x{height})')
 
 
 if __name__ == '__main__':
