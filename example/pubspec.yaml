@@ -8,7 +8,7 @@ environment:
   flutter: '>=3.22.0'
 
 dependencies:
-  bonfire: ^4.1.3
+  bonfire: ^4.2.0
   flutter:
     sdk: flutter
   flutter_sprite_stack:
