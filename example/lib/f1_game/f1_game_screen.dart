@@ -26,7 +26,6 @@ class _F1GameScreenState extends State<F1GameScreen> {
   final RaceState _race = RaceState();
   final DriveInput _input = DriveInput();
   Widget? _game;
-  late bool _showTouch = _isTouch;
 
   final List<SpriteStack> _stacks = [];
   CachedStack? _car;
@@ -168,58 +167,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF3F8A41),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(child: body),
-          Positioned(
-            top: 0,
-            left: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton.filledTonal(
-                      tooltip: 'Back',
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      tooltip: _showTouch
-                          ? 'Hide touch controls'
-                          : 'Show touch controls',
-                      isSelected: _showTouch,
-                      icon: const Icon(Icons.touch_app_outlined),
-                      selectedIcon: const Icon(Icons.touch_app),
-                      onPressed: () => setState(() {
-                        _showTouch = !_showTouch;
-                        _input.reset();
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(child: _Hud(race: _race)),
-          ),
-          if (_showTouch)
-            Positioned.fill(child: TouchControls(input: _input))
-          else
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 12,
-              child: IgnorePointer(child: _Controls()),
-            ),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -242,6 +190,61 @@ class _F1GameScreenState extends State<F1GameScreen> {
         moveOnlyMapArea: true,
       ),
       backgroundColor: const Color(0xFF3F8A41),
+      overlayBuilderMap: {
+        'topbar': (context, game) => Positioned(
+              top: 0,
+              left: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton.filledTonal(
+                        tooltip: 'Back',
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        tooltip: game.overlays.isActive('touch')
+                            ? 'Hide touch controls'
+                            : 'Show touch controls',
+                        isSelected: game.overlays.isActive('touch'),
+                        icon: const Icon(Icons.touch_app_outlined),
+                        selectedIcon: const Icon(Icons.touch_app),
+                        onPressed: () {
+                          final show = !game.overlays.isActive('touch');
+                          _input.reset();
+                          game.overlays.setActive('touch', active: show);
+                          game.overlays.setActive('controls', active: !show);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        'hud': (context, game) => Positioned(
+              top: 0,
+              right: 0,
+              child: SafeArea(child: _Hud(race: _race)),
+            ),
+        'touch': (context, game) => Positioned.fill(
+              child: TouchControls(input: _input),
+            ),
+        'controls': (context, game) => const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 12,
+              child: IgnorePointer(child: _Controls()),
+            ),
+      },
+      initialActiveOverlays: [
+        'topbar',
+        'hud',
+        _isTouch ? 'touch' : 'controls',
+      ],
     );
   }
 }

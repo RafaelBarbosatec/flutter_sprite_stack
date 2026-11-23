@@ -100,6 +100,7 @@ class F1Car extends Player with WithCollision {
       ),
     );
   }
+  
 
   void _drive(double dt) {
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
