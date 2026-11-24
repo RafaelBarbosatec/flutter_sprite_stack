@@ -622,6 +622,12 @@ with the sprite-stacking skill (`example/sprites/car/slices.png`,
 the generated `robot_stack.png`, with sliders for yaw, pitch, scale and spacing
 plus toggles for auto-spin, the 1 px outline and the ground shadow.
 
+## Roadmap
+
+The 3D scene work is ordered in [ROADMAP.md](ROADMAP.md): a convincing
+environment first, walking around it (without collision) next, and collision
+later.
+
 ## Contributing
 
 Issues and pull requests are welcome at
