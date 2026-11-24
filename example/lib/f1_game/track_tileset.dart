@@ -19,12 +19,13 @@ import 'track.dart';
 /// band's border a 32 px staircase, which is exactly what a large-radius
 /// corner should not look like.
 ///
-/// Cells crossed by the asphalt/kerb or kerb/grass boundary are therefore
+/// Cells crossed by a curved boundary — the kerb band at the inside of the
+/// corners or the asphalt/grass edge at the outside — are therefore
 /// rasterised pixel by pixel from [Track.cellAtPoint] instead of using a
 /// single tile: each pixel asks the track which region it belongs to and gets
-/// the asphalt, kerb or grass pattern for that region. The band's border then
-/// follows the real curve at one-pixel precision, while the red/white checker
-/// keeps the same 16 px block grid as before. Straights have no kerb at all,
+/// the asphalt, kerb or grass pattern for that region. The borders then
+/// follow the real curves at one-pixel precision, while the red/white checker
+/// keeps the same 16 px block grid as before. Straights have no curved edge,
 /// so only the cells around the four corners need their own art; tiles with
 /// identical pixels are deduplicated.
 class TrackTileset {
@@ -97,11 +98,11 @@ class TrackTileset {
 
     for (var r = 0; r < Track.rows; r++) {
       for (var c = 0; c < Track.cols; c++) {
-        if (!_isKerbEdge(c, r)) continue;
+        if (!_needsPixelArt(c, r)) continue;
 
-        final rows = _kerbArt(c, r);
+        final rows = _boundaryArt(c, r);
         final name = nameByArt.putIfAbsent(rows.join('\n'), () {
-          final generated = 'kerb${tiles.length}';
+          final generated = 'edge${tiles.length}';
           tiles[generated] = PixelTile.single(PixelArt.rows(rows));
           return generated;
         });
@@ -112,8 +113,16 @@ class TrackTileset {
     return _CustomTiles(byCell, tiles);
   }
 
-  /// Whether the asphalt/kerb or kerb/grass boundary crosses cell ([c], [r]).
-  bool _isKerbEdge(int c, int r) {
+  /// Whether cell ([c], [r]) straddles a curved track boundary and therefore
+  /// needs its own pixel-rasterised art.
+  ///
+  /// Two curves matter: the kerb band at the inside of the corners and the
+  /// asphalt/grass edge at the outside. Both are checked, but only inside the
+  /// four corner quadrants — on the straights the boundaries land on cell
+  /// edges, so the regular tiles already look straight.
+  bool _needsPixelArt(int c, int r) {
+    if (!Track.isCornerCell(c, r)) return false;
+
     // Sampling just inside the cell avoids classifying a point that sits
     // exactly on a cell edge, where the inclusive tests can go either way.
     const edge = 0.001;
@@ -124,13 +133,17 @@ class TrackTileset {
       track.cellAtPoint(c + 1 - edge, r + 1 - edge),
     };
     if (samples.length == 1) return false;
-    return samples.contains(TrackCell.kerb) &&
+
+    final kerbEdge = samples.contains(TrackCell.kerb) &&
         (samples.contains(TrackCell.asphalt) ||
             samples.contains(TrackCell.grass));
+    final asphaltGrass = samples.contains(TrackCell.asphalt) &&
+        samples.contains(TrackCell.grass);
+    return kerbEdge || asphaltGrass;
   }
 
-  /// Rasterises one 32x32 cell of the kerb band at sub-tile precision.
-  List<String> _kerbArt(int c, int r) {
+  /// Rasterises one 32x32 boundary cell at sub-tile precision.
+  List<String> _boundaryArt(int c, int r) {
     final phase = (c + r).isOdd ? 1 : 0;
     final rows = <String>[];
 
@@ -339,7 +352,7 @@ class TrackTileset {
   }
 }
 
-/// Rasterised tiles for the cells the kerb boundary crosses.
+/// Rasterised tiles for the corner cells a curved track boundary crosses.
 class _CustomTiles {
   _CustomTiles(this.byCell, this.tiles);
 

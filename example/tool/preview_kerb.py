@@ -7,8 +7,9 @@ generates:
 * kerbs are a 48 px band (three 16 px checker blocks) on the infield side of
   the four corners; the straights have none;
 * the white lines mark both asphalt edges, two pixels wide;
-* cells crossed by the kerb boundary are rasterised per pixel, so the band's
-  border follows the real curve instead of stepping in 32 px squares.
+* cells crossed by the kerb or by the outer asphalt/grass edge are rasterised
+  per pixel, so both the kerb band and the green curve follow the real
+  geometry instead of stepping in 32 px squares.
 
 Usage: python3 tool/preview_kerb.py out.png
 """
@@ -135,6 +136,18 @@ def is_line(x, y):
     return False
 
 
+def in_corner_square(c, r):
+    """Whether cell (c, r) lies entirely inside one corner quadrant."""
+    for cx, cy, sx, sy in CORNERS:
+        if all(
+            (x - cx) * sx >= 0 and (y - cy) * sy >= 0
+            for x in (c, c + 1)
+            for y in (r, r + 1)
+        ):
+            return True
+    return False
+
+
 def is_kerb_edge(c, r):
     edge = 0.001
     samples = {
@@ -145,7 +158,11 @@ def is_kerb_edge(c, r):
     }
     if len(samples) == 1:
         return False
-    return 'kerb' in samples and ('asphalt' in samples or 'grass' in samples)
+    kerb_edge = 'kerb' in samples and (
+        'asphalt' in samples or 'grass' in samples
+    )
+    asphalt_grass = 'asphalt' in samples and 'grass' in samples
+    return in_corner_square(c, r) and (kerb_edge or asphalt_grass)
 
 
 def render(cols, rows):

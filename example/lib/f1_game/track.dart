@@ -107,6 +107,24 @@ class Track {
     return false;
   }
 
+  /// Whether cell ([c], [r]) lies entirely inside one of the four corner
+  /// quadrants.
+  ///
+  /// The asphalt/grass edge of the outer corners is curved there, so tiles
+  /// straddling it have to be rasterised per pixel as well. On the straights
+  /// the same edge falls on cell boundaries, so the plain tiles are already
+  /// crisp.
+  static bool isCornerCell(int c, int r) {
+    for (final corner in _kerbCorners) {
+      final x0 = (c - corner.cx) * corner.sx;
+      final x1 = (c + 1 - corner.cx) * corner.sx;
+      final y0 = (r - corner.cy) * corner.sy;
+      final y1 = (r + 1 - corner.cy) * corner.sy;
+      if (x0 >= 0 && x1 >= 0 && y0 >= 0 && y1 >= 0) return true;
+    }
+    return false;
+  }
+
   TrackCell _classify(double x, double y) {
     bool outer(double grow) => _inRRect(_outer, x, y, grow: grow);
     bool inner(double grow) => _inRRect(_inner, x, y, grow: grow);
