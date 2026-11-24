@@ -69,7 +69,7 @@ class F1Car extends Player with WithCollision {
         'sprites/car/slices.png',
         sliceCount: 15,
       );
-      _visual = CachedStack(_stack!, buckets: 90);
+      _visual = CachedStack(_stack!, buckets: 90)..warmUp();
     } catch (e) {
       onError?.call(e);
     }
