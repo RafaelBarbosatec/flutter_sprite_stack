@@ -27,4 +27,5 @@ flutter:
     - sprites/house/slices.png
     - sprites/tree/slices.png
     - sprites/spaceship/slices.png
+    - sprites/palmeira/slices.png
     - sprites/torch/frames.png

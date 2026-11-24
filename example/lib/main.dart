@@ -8,7 +8,7 @@ import 'f1_game/f1_game_screen.dart';
 import 'stack_metrics.dart';
 import 'torch_screen.dart';
 
-enum _SpriteKind { car, spaceship, house, tree, robot }
+enum _SpriteKind { car, spaceship, house, tree, palm, robot }
 
 extension on _SpriteKind {
   String get label => switch (this) {
@@ -16,6 +16,7 @@ extension on _SpriteKind {
         _SpriteKind.spaceship => 'X-Wing',
         _SpriteKind.house => 'House',
         _SpriteKind.tree => 'Tree',
+        _SpriteKind.palm => 'Palm',
         _SpriteKind.robot => 'Robot',
       };
 
@@ -24,6 +25,7 @@ extension on _SpriteKind {
         _SpriteKind.spaceship => Icons.rocket_launch,
         _SpriteKind.house => Icons.home,
         _SpriteKind.tree => Icons.park,
+        _SpriteKind.palm => Icons.forest,
         _SpriteKind.robot => Icons.smart_toy,
       };
 
@@ -32,6 +34,7 @@ extension on _SpriteKind {
         _SpriteKind.spaceship => 'sprites/spaceship/slices.png',
         _SpriteKind.house => 'sprites/house/slices.png',
         _SpriteKind.tree => 'sprites/tree/slices.png',
+        _SpriteKind.palm => 'sprites/palmeira/slices.png',
         _SpriteKind.robot => 'assets/robot_stack.png',
       };
 
@@ -40,6 +43,7 @@ extension on _SpriteKind {
         _SpriteKind.spaceship => 21,
         _SpriteKind.house => 29,
         _SpriteKind.tree => 43,
+        _SpriteKind.palm => 26,
         _SpriteKind.robot => 24,
       };
 
@@ -48,6 +52,7 @@ extension on _SpriteKind {
         _SpriteKind.spaceship => 4.2,
         _SpriteKind.house => 4.2,
         _SpriteKind.tree => 4.6,
+        _SpriteKind.palm => 5.0,
         _SpriteKind.robot => 4.6,
       };
 }
@@ -88,6 +93,7 @@ class _DemoScreenState extends State<DemoScreen>
   SpriteStack? _spaceshipStack;
   SpriteStack? _houseStack;
   SpriteStack? _treeStack;
+  SpriteStack? _palmStack;
   SpriteStack? _robotStack;
 
   /// Measured pixel height of each stack (lift excluded), used to centre it.
@@ -110,6 +116,7 @@ class _DemoScreenState extends State<DemoScreen>
         _SpriteKind.spaceship => _spaceshipStack,
         _SpriteKind.house => _houseStack,
         _SpriteKind.tree => _treeStack,
+        _SpriteKind.palm => _palmStack,
         _SpriteKind.robot => _robotStack,
       };
 
@@ -127,6 +134,9 @@ class _DemoScreenState extends State<DemoScreen>
     });
     _load(_SpriteKind.tree).then((stack) {
       if (mounted) setState(() => _treeStack = stack);
+    });
+    _load(_SpriteKind.palm).then((stack) {
+      if (mounted) setState(() => _palmStack = stack);
     });
     _load(_SpriteKind.robot).then((stack) {
       if (mounted) setState(() => _robotStack = stack);
@@ -172,6 +182,7 @@ class _DemoScreenState extends State<DemoScreen>
     _spaceshipStack?.dispose();
     _houseStack?.dispose();
     _treeStack?.dispose();
+    _palmStack?.dispose();
     _robotStack?.dispose();
     super.dispose();
   }

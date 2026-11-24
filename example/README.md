@@ -1,17 +1,40 @@
 # flutter_sprite_stack_example
 
-A new Flutter project.
+Demo app for the `flutter_sprite_stack` package.
 
-## Getting Started
+## Screens
 
-This project is a starting point for a Flutter application.
+| Screen | What it shows |
+| --- | --- |
+| Turntable (`lib/main.dart`) | One prop at a time, drag to rotate, sliders for yaw / pitch / scale / spacing, mobile layout with a scrollable control panel. |
+| Torch (`lib/torch_screen.dart`) | Animated frame atlas (`frames.png`). |
+| F1 game (`lib/f1_game/`) | Bonfire-based race using stacked props. |
 
-A few resources to get you started if this is your first Flutter project:
+## Sprites
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Each folder under `sprites/` is a self-contained model: a Python script builds a
+voxel volume and writes `slices.png` (the strip the app loads), plus
+`views.png`, `check.png` and `turntable.gif` proof sheets.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Folder | Model | Slices | Slice size |
+| --- | --- | --- | --- |
+| `car/` | Formula 1 car | 15 | 38×72 |
+| `house/` | Cottage with porch and fence | 29 | 48×48 |
+| `tree/` | Leafy tree | 43 | 33×33 |
+| `spaceship/` | Star-Wars-style starfighter (X-Wing) | 21 | 45×65 |
+| `palmeira/` | Imperial palm (trunk, arching fronds, coconuts) | 26 | 25×25 |
+| `torch/` | Animated torch frame atlas | 8 frames | 20×20 |
+
+Regenerate a model with:
+
+```bash
+cd sprites/palmeira   # or car, house, tree, spaceship
+python3 make_volume.py
+```
+
+Requires Python 3 with Pillow and NumPy. The palm script reads its export
+helpers from `sprites/_stack_export.py`, which in turn uses the slicer helpers
+from the sprite-stacking skill folder (`views_to_slices.py`); adjust `SLICER`
+there if your skill lives elsewhere.
+
+Remember to register any new strip in `pubspec.yaml` under `flutter: assets:`.
