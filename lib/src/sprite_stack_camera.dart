@@ -13,13 +13,12 @@ import 'sprite_stack_point.dart';
 /// props at their natural size.
 class SpriteStackCamera {
   SpriteStackCamera.orbit({
-    double yaw = 0.6,
+    this.yaw = 0.6,
     double pitch = 0.55,
     this.distance = 900,
     this.target = SpriteStackPoint.zero,
     this.near = 1,
-  })  : _yaw = yaw,
-        _pitch = _clampPitch(pitch);
+  }) : _pitch = _clampPitch(pitch);
 
   /// Highest allowed pitch: just short of `pi / 2`.
   static const double maxPitch = math.pi / 2 - 0.001;
@@ -27,7 +26,9 @@ class SpriteStackCamera {
   static double _clampPitch(double value) =>
       value.clamp(0.0, maxPitch).toDouble();
 
-  double _yaw;
+  /// Rotation around the vertical axis, in radians.
+  double yaw;
+
   double _pitch;
 
   /// Distance from [target] to the camera, in world units.
@@ -39,10 +40,6 @@ class SpriteStackCamera {
   /// Anything closer than this to the camera is clipped.
   final double near;
 
-  /// Rotation around the vertical axis, in radians.
-  double get yaw => _yaw;
-  set yaw(double value) => _yaw = value;
-
   /// Elevation above the ground plane, in radians (`0..pi / 2`).
   double get pitch => _pitch;
   set pitch(double value) => _pitch = _clampPitch(value);
@@ -51,8 +48,8 @@ class SpriteStackCamera {
   SpriteStackPoint get eye {
     final cosPitch = math.cos(_pitch);
     return SpriteStackPoint(
-      target.x + distance * math.sin(_yaw) * cosPitch,
-      target.y - distance * math.cos(_yaw) * cosPitch,
+      target.x + distance * math.sin(yaw) * cosPitch,
+      target.y - distance * math.cos(yaw) * cosPitch,
       target.z + distance * math.sin(_pitch),
     );
   }
