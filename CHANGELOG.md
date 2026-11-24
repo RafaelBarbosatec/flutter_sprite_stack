@@ -1,8 +1,6 @@
 # Changelog
 
-# next
-
-## Added
+## Unreleased
 
 - **Engine-free orbit scene**: `SpriteStackScene`, `SpriteStackCamera.orbit`,
   `SpriteStackSceneObject`, `SpriteStackGround` and
@@ -16,8 +14,6 @@
   scene share the same world units: one unit per art pixel and per slice.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
-
-## 0.4.0
 
 - **Breaking:** removed the `flame` dependency and the engine components
   `SpriteStackComponent` and `AnimatedSpriteStackComponent`. The package now
