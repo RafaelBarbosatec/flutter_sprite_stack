@@ -14,7 +14,6 @@
   scene share the same world units: one unit per art pixel and per slice.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
-
 - **Breaking:** removed the `flame` dependency and the engine components
   `SpriteStackComponent` and `AnimatedSpriteStackComponent`. The package now
   only needs `Canvas`, so it cannot conflict with Flame, Bonfire or any other
