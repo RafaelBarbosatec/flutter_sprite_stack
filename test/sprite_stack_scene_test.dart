@@ -214,6 +214,122 @@ void main() {
     });
   });
 
+  group('SpriteStackGround painting', () {
+    test('paints a solid floor', () async {
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
+        background: const ui.Color(0xFF000000),
+        ground: const SpriteStackGround(
+          extent: 400,
+          step: 0,
+          fill: ui.Color(0xFF203040),
+        ),
+      );
+
+      final pixels = await _render(scene);
+
+      // The target is on the plane, so the canvas centre is floor.
+      expect(_pixelAt(pixels, 200, 100, 100), 0xFF203040);
+      expect(_pixelAt(pixels, 200, 100, 150), 0xFF203040);
+    });
+
+    test('alternates checker cells', () async {
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
+        background: const ui.Color(0xFF000000),
+        ground: const SpriteStackGround(
+          extent: 400,
+          step: 0,
+          cellSize: 100,
+          checker: [ui.Color(0xFFFF0000), ui.Color(0xFF0000FF)],
+        ),
+      );
+
+      final pixels = await _render(scene);
+
+      expect(_countColor(pixels, 0xFFFF0000), greaterThan(500));
+      expect(_countColor(pixels, 0xFF0000FF), greaterThan(500));
+    });
+
+    test('gives colorAt the world position of each cell', () async {
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
+        background: const ui.Color(0xFF000000),
+        ground: SpriteStackGround(
+          extent: 400,
+          step: 0,
+          cellSize: 50,
+          colorAt: (x, y) =>
+              x < 0 ? const ui.Color(0xFFFF0000) : const ui.Color(0xFF0000FF),
+        ),
+      );
+
+      final pixels = await _render(scene);
+
+      expect(_countColor(pixels, 0xFFFF0000), greaterThan(500));
+      expect(_countColor(pixels, 0xFF0000FF), greaterThan(500));
+    });
+
+    test('fades distant cells towards fadeColor', () async {
+      SpriteStackScene scene({Color? fadeColor, double fadeDistance = 0}) =>
+          SpriteStackScene(
+            camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
+            background: const ui.Color(0xFF000000),
+            ground: SpriteStackGround(
+              extent: 400,
+              step: 0,
+              fill: const ui.Color(0xFFFF0000),
+              fadeColor: fadeColor,
+              fadeDistance: fadeDistance,
+            ),
+          );
+
+      final plain = await _render(scene());
+      final faded = await _render(
+        scene(fadeColor: const ui.Color(0xFF000000), fadeDistance: 300),
+      );
+
+      expect(_countColor(plain, 0xFFFF0000), greaterThan(500));
+      // Every visible cell has depth > 0, so none stays exactly red.
+      expect(_countColor(faded, 0xFFFF0000), 0);
+    });
+
+    test('paints no cells when cellSize is zero', () async {
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
+        background: const ui.Color(0xFF000000),
+        ground: const SpriteStackGround(
+          extent: 400,
+          step: 0,
+          cellSize: 0,
+          fill: ui.Color(0xFFFF0000),
+        ),
+      );
+
+      final pixels = await _render(scene);
+
+      expect(_countColor(pixels, 0xFFFF0000), 0);
+      expect(_pixelAt(pixels, 200, 100, 100), 0xFF000000);
+    });
+
+    test('clips cells when the camera sits on the plane', () async {
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0, distance: 400),
+        background: const ui.Color(0xFF000000),
+        ground: const SpriteStackGround(
+          extent: 400,
+          step: 0,
+          fill: ui.Color(0xFF203040),
+        ),
+      );
+
+      // Edge-on plane: most cells clip away, but painting must not throw.
+      final pixels = await _render(scene);
+
+      expect(pixels.length, 200 * 200 * 4);
+    });
+  });
+
   group('SpriteStackScene paint', () {
     test('fills the background', () async {
       final scene = SpriteStackScene(
@@ -383,4 +499,16 @@ int _pixelAt(Uint8List pixels, int width, int x, int y) {
   final b = pixels[offset + 2];
   final a = pixels[offset + 3];
   return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+int _countColor(Uint8List pixels, int argb) {
+  var count = 0;
+  for (var offset = 0; offset < pixels.length; offset += 4) {
+    final value = (pixels[offset + 3] << 24) |
+        (pixels[offset] << 16) |
+        (pixels[offset + 1] << 8) |
+        pixels[offset + 2];
+    if (value == argb) count++;
+  }
+  return count;
 }

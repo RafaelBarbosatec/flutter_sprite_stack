@@ -119,6 +119,10 @@ just short of straight down.
 
 - `scene.projectObject(object, size)` → `position`, `depth`, `scale`, `yaw`,
   `bounds`; use `isVisibleIn(size)` to cull.
+- `SpriteStackGround` paints the floor as near-clipped projected cells: `fill`,
+  `checker` (alternates by `(ix + iy)`), `colorAt(x, y)` for procedural floors,
+  and `fadeColor`/`fadeDistance` to blend into the horizon. `step: 0` hides the
+  grid lines. Cells are flat colours, not textures.
 - Sorting is **per object** (painter's algorithm); intersecting props cannot
   resolve per pixel.
 - The volume/mesh is not drawn — pair it with `toVolume()` for collision or

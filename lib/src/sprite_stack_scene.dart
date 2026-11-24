@@ -7,11 +7,16 @@ import 'sprite_stack_camera.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_point.dart';
 
-/// Optional ground grid painted under the objects of a `SpriteStackScene`.
+/// Optional ground plane painted under the objects of a `SpriteStackScene`.
 ///
-/// The grid lies on `z = 0` and spans `-extent..extent` on both horizontal
-/// axes. Lines are clipped against the camera's near plane, so the grid stays
+/// The plane lies on `z = 0` and spans `-extent..extent` on both horizontal
+/// axes. Grid lines are clipped against the camera's near plane, so they stay
 /// correct even with the camera at ground level.
+///
+/// The floor itself is painted cell by cell (see [fill], [checker] and
+/// [colorAt]); each cell is a projected quad clipped against the near plane.
+/// Cells are flat colours, not textures: a texture would need subdivision or a
+/// textured rasterizer to be perspective-correct.
 class SpriteStackGround {
   const SpriteStackGround({
     this.extent = 800,
@@ -19,12 +24,18 @@ class SpriteStackGround {
     this.color = const Color(0x3326323F),
     this.axisColor = const Color(0x663A4A5E),
     this.strokeWidth = 1,
+    this.cellSize = 100,
+    this.fill,
+    this.checker = const <Color>[],
+    this.colorAt,
+    this.fadeColor,
+    this.fadeDistance = 0,
   });
 
   /// Half the grid size, in world units.
   final double extent;
 
-  /// Distance between lines, in world units.
+  /// Distance between lines, in world units. `0` hides the lines.
   final double step;
 
   /// Color of the regular lines.
@@ -35,6 +46,34 @@ class SpriteStackGround {
 
   /// Stroke width in logical pixels.
   final double strokeWidth;
+
+  /// Side of a painted cell, in world units. Only used when the floor is
+  /// painted; `0` disables cell painting.
+  final double cellSize;
+
+  /// Base color of the floor.
+  ///
+  /// Used when neither [checker] nor [colorAt] provide a color. Leave it `null`
+  /// to keep the floor transparent.
+  final Color? fill;
+
+  /// Colors alternated by cell parity: `(ix + iy) % checker.length`.
+  final List<Color> checker;
+
+  /// Per-cell color from the world position of the cell centre.
+  ///
+  /// Overrides [fill] and [checker]. Called once per painted cell; useful for
+  /// procedural floors (roads, grass, water, noise).
+  final Color Function(double x, double y)? colorAt;
+
+  /// Color distant cells are mixed towards. `null` disables the fade.
+  final Color? fadeColor;
+
+  /// Camera distance at which [fadeColor] is fully applied. `0` disables it.
+  final double fadeDistance;
+
+  /// Whether the floor paints any cell.
+  bool get paintsFloor => fill != null || checker.isNotEmpty || colorAt != null;
 }
 
 /// A prop placed in a [SpriteStackScene].
@@ -245,7 +284,12 @@ class SpriteStackScene {
 
   void _paintGround(Canvas canvas, Size size, SpriteStackCameraBasis basis) {
     final ground = this.ground;
-    if (ground == null || ground.step <= 0 || ground.extent <= 0) return;
+    if (ground == null || ground.extent <= 0) return;
+
+    if (ground.paintsFloor) {
+      _paintGroundCells(canvas, size, basis, ground);
+    }
+    if (ground.step <= 0) return;
 
     final paint = Paint()
       ..strokeWidth = ground.strokeWidth
@@ -272,6 +316,114 @@ class SpriteStackScene {
         basis,
       );
     }
+  }
+
+  void _paintGroundCells(
+    Canvas canvas,
+    Size size,
+    SpriteStackCameraBasis basis,
+    SpriteStackGround ground,
+  ) {
+    final cellSize = ground.cellSize;
+    if (cellSize <= 0) return;
+
+    final count = (ground.extent * 2 / cellSize).ceil();
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      // Adjacent cells share edges; anti-aliasing them shows hairline seams.
+      ..isAntiAlias = false;
+
+    for (var iy = 0; iy < count; iy++) {
+      final y0 = -ground.extent + iy * cellSize;
+      final y1 = math.min(y0 + cellSize, ground.extent);
+      for (var ix = 0; ix < count; ix++) {
+        final x0 = -ground.extent + ix * cellSize;
+        final x1 = math.min(x0 + cellSize, ground.extent);
+        final centerX = (x0 + x1) / 2;
+        final centerY = (y0 + y1) / 2;
+
+        var color = ground.colorAt?.call(centerX, centerY);
+        if (color == null) {
+          color = ground.checker.isNotEmpty
+              ? ground.checker[(ix + iy) % ground.checker.length]
+              : ground.fill;
+        }
+        if (color == null) continue;
+
+        final fadeColor = ground.fadeColor;
+        if (fadeColor != null && ground.fadeDistance > 0) {
+          final depth = (SpriteStackPoint(centerX, centerY, 0) - basis.eye)
+              .dot(basis.forward);
+          final t = (depth / ground.fadeDistance).clamp(0.0, 1.0).toDouble();
+          color = Color.lerp(color, fadeColor, t)!;
+        }
+
+        paint.color = color;
+        _fillGroundCell(
+          canvas,
+          paint,
+          x0,
+          y0,
+          x1,
+          y1,
+          size,
+          basis,
+        );
+      }
+    }
+  }
+
+  void _fillGroundCell(
+    Canvas canvas,
+    Paint paint,
+    double x0,
+    double y0,
+    double x1,
+    double y1,
+    Size size,
+    SpriteStackCameraBasis basis,
+  ) {
+    final corners = <SpriteStackPoint>[
+      SpriteStackPoint(x0, y0, 0),
+      SpriteStackPoint(x1, y0, 0),
+      SpriteStackPoint(x1, y1, 0),
+      SpriteStackPoint(x0, y1, 0),
+    ];
+    final clipped = _clipGroundPolygon(corners, basis);
+    if (clipped.length < 3) return;
+
+    final path = Path();
+    final first = _toScreen(clipped.first, size, basis);
+    path.moveTo(first.dx, first.dy);
+    for (var i = 1; i < clipped.length; i++) {
+      final point = _toScreen(clipped[i], size, basis);
+      path.lineTo(point.dx, point.dy);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  /// Sutherland-Hodgman against the camera's near plane.
+  List<SpriteStackPoint> _clipGroundPolygon(
+    List<SpriteStackPoint> polygon,
+    SpriteStackCameraBasis basis,
+  ) {
+    final clipped = <SpriteStackPoint>[];
+    for (var i = 0; i < polygon.length; i++) {
+      final current = polygon[i];
+      final next = polygon[(i + 1) % polygon.length];
+      final currentDepth = (current - basis.eye).dot(basis.forward);
+      final nextDepth = (next - basis.eye).dot(basis.forward);
+      final currentInside = currentDepth >= camera.near;
+      final nextInside = nextDepth >= camera.near;
+
+      if (currentInside) clipped.add(current);
+      if (currentInside != nextInside) {
+        final t = (camera.near - currentDepth) / (nextDepth - currentDepth);
+        clipped.add(current + (next - current) * t);
+      }
+    }
+    return clipped;
   }
 
   void _drawGroundSegment(

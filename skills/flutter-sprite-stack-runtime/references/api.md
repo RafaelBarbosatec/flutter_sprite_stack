@@ -249,8 +249,18 @@ drawing). The scene does not own the stack.
 
 ### SpriteStackGround
 
-`SpriteStackGround({extent = 800, step = 100, color, axisColor, strokeWidth =
-1})` — grid on `z = 0`, clipped against the camera near plane.
+`SpriteStackGround({extent = 800, step = 100, color, axisColor, strokeWidth = 1,
+cellSize = 100, fill, checker = const [], colorAt, fadeColor, fadeDistance = 0})`
+— plane on `z = 0` plus grid lines, both clipped against the camera near plane.
+
+- `fill`: base colour of every cell; `null` keeps the floor transparent.
+- `checker`: colours alternated by `(ix + iy) % checker.length` (overrides `fill`).
+- `colorAt(x, y)`: colour from the cell centre in world units (overrides both);
+  called once per painted cell.
+- `fadeColor` + `fadeDistance`: mix distant cells towards `fadeColor`; `0`
+  disables the fade.
+- `step: 0` hides the grid lines; `cellSize: 0` disables cell painting.
+- Cells are flat colours projected as quads — no textures.
 
 ## SpriteStackPoint
 
