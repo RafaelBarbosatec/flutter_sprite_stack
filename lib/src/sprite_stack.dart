@@ -9,6 +9,7 @@ import 'baked_sprite_stack.dart';
 import 'slice_cut.dart';
 import 'sprite_stack_bounds.dart';
 import 'sprite_stack_motion.dart';
+import 'sprite_stack_volume.dart';
 
 /// A sprite-stacked prop.
 ///
@@ -192,6 +193,41 @@ class SpriteStack {
   /// Height of the rendered stack, in source pixels.
   double heightFor({double pitch = defaultPitch, double spacing = 1}) =>
       sliceHeight * squashFor(pitch) + (sliceCount - 1) * spacing;
+
+  /// Reconstructs the voxel volume of this stack, for 3D scenes and tooling.
+  ///
+  /// Every slice is a horizontal cross-section, so stacking them in order
+  /// rebuilds the object's volume. [frame] selects an atlas row (clamped, like
+  /// [render]) and [alphaThreshold] decides which pixels count as solid: a
+  /// pixel is solid when its alpha is `>=` the threshold.
+  ///
+  /// Only stacks built with [load] or [decode] keep their raw pixels. A stack
+  /// built with [fromImage] cannot be read back synchronously, so this throws
+  /// a [StateError] for it.
+  ///
+  /// ```dart
+  /// final volume = stack.toVolume();
+  /// final mesh = const SpriteStackMesher().build(volume);
+  /// ```
+  SpriteStackVolume toVolume({int frame = 0, int alphaThreshold = 128}) {
+    final pixels = _pixels;
+    if (pixels == null) {
+      throw StateError(
+        'SpriteStack.toVolume() needs raw pixels; build the stack with '
+        'SpriteStack.load() or SpriteStack.decode() instead of '
+        'SpriteStack.fromImage().',
+      );
+    }
+    return SpriteStackVolume.fromPixels(
+      pixels,
+      sliceWidth: sliceWidth,
+      sliceHeight: sliceHeight,
+      sliceCount: sliceCount,
+      frameCount: frameCount,
+      frame: frame,
+      alphaThreshold: alphaThreshold,
+    );
+  }
 
   /// Draws the stack with its **bottom-center** at [position].
   ///

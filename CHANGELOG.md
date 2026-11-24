@@ -1,5 +1,23 @@
 # Changelog
 
+# next
+
+## Added
+
+- `SpriteStack.toVolume()` reconstructs a prop's voxel volume from its
+  cross-sections (`load`/`decode` only — `fromImage` has no raw pixels), with
+  `frame` selection and an `alphaThreshold` (default `128`).
+- `SpriteStackVolume`: occupancy grid (`x` column, `y` depth, `z` slice),
+  `isSolid`, `solidVoxelCount` and tight `bounds` that trim the transparent
+  padding around the prop. Can also be built from raw RGBA pixels or from an
+  occupancy buffer.
+- `SpriteStackMesher`: greedy meshing of the exposed faces into merged,
+  axis-aligned quads. The mesh is **geometry only** (no colour, no UV) — the
+  sprite stack keeps the drawing job; the mesh delimits the prop for a 3D scene.
+  `SpriteStackQuad` exposes corners, normal, axis/direction and area.
+- Docs: volume/mesh section in the README with measured counts for the example
+  assets (car 830 quads, house 1 724, tree 1 435), plus the runtime agent skill.
+
 ## 0.3.0
 
 - **Frame atlases**: `load`, `decode` and `fromImage` accept `frameCount`.
