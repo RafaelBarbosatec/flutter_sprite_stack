@@ -271,7 +271,7 @@ void main() {
     });
 
     test('fades distant cells towards fadeColor', () async {
-      SpriteStackScene scene({Color? fadeColor, double fadeDistance = 0}) =>
+      SpriteStackScene scene({ui.Color? fadeColor, double fadeDistance = 0}) =>
           SpriteStackScene(
             camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.7, distance: 400),
             background: const ui.Color(0xFF000000),

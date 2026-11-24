@@ -343,11 +343,9 @@ class SpriteStackScene {
         final centerY = (y0 + y1) / 2;
 
         var color = ground.colorAt?.call(centerX, centerY);
-        if (color == null) {
-          color = ground.checker.isNotEmpty
-              ? ground.checker[(ix + iy) % ground.checker.length]
-              : ground.fill;
-        }
+        color ??= ground.checker.isNotEmpty
+            ? ground.checker[(ix + iy) % ground.checker.length]
+            : ground.fill;
         if (color == null) continue;
 
         final fadeColor = ground.fadeColor;
