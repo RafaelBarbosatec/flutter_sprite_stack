@@ -46,7 +46,7 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
         color: Color(0x332E4050),
         axisColor: Color(0x664E6A84),
         cellSize: 70,
-        checker: [Color(0xFF13202A), Color(0xFF162430)],
+        checker: [Color(0xFF142430), Color(0xFF1D303D)],
         fadeColor: Color(0xFF0B1118),
         fadeDistance: 2400,
       ),
