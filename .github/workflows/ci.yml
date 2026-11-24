@@ -31,6 +31,17 @@ jobs:
       - name: Lint agent skills
         run: dart run skills_lint
 
+      - name: Render scene previews
+        run: SCENE_PREVIEW=1 flutter test test/scene_preview_test.dart
+
+      - name: Upload scene previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-previews
+          path: build/scene_previews/*.png
+          if-no-files-found: ignore
+
   example:
     runs-on: ubuntu-latest
     defaults:
