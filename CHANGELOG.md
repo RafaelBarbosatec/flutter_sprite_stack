@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0
+## Unreleased
 
 - **Breaking:** removed the `flame` dependency and the engine components
   `SpriteStackComponent` and `AnimatedSpriteStackComponent`. The package now
