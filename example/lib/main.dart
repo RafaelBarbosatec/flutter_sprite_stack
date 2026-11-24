@@ -7,7 +7,6 @@ import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 import 'f1_game/f1_game_screen.dart';
 import 'helicopter_screen.dart';
 import 'stack_metrics.dart';
-import 'torch_screen.dart';
 
 enum _SpriteKind { car, spaceship, helicopter, house, tree, palm, robot }
 
@@ -215,13 +214,6 @@ class _DemoScreenState extends State<DemoScreen>
             ),
           ),
           IconButton(
-            tooltip: 'Torch demo',
-            icon: const Icon(Icons.local_fire_department),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const TorchScreen()),
-            ),
-          ),
-          IconButton(
             tooltip: 'F1 Game',
             icon: const Icon(Icons.sports_score),
             onPressed: () => Navigator.of(context).push(
@@ -295,8 +287,7 @@ class _DemoScreenState extends State<DemoScreen>
         setState(() {
           _spinning = false;
           _yaw += details.delta.dx * 0.015;
-          _pitch = (_pitch - details.delta.dy * 0.01)
-              .clamp(0.05, math.pi / 2);
+          _pitch = (_pitch - details.delta.dy * 0.01).clamp(0.05, math.pi / 2);
         });
       },
       child: ColoredBox(

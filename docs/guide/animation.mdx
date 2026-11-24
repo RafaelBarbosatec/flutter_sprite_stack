@@ -1,0 +1,205 @@
+---
+title: Animation
+description: Animate frame atlases, control playback and rotor RPM, and use SliceCut for dynamic cutaways.
+---
+
+# Animation & Dynamic Effects
+
+`flutter_sprite_stack` provides two ways to animate props:
+1. **Frame Atlas Animation (`SpriteStackAnimation` / `AnimatedSpriteStackComponent`)**: swaps full atlas frames over time (walk cycles, rotating helicopter blades, flickering flames).
+2. **Dynamic Slice Cuts (`SliceCut`)**: dynamically reveals or hides slices from top or bottom (opening roofs to see inside houses, opening chests/crates, or building-up effects).
+
+---
+
+## 1. Frame Atlas Animation
+
+A frame atlas is a vertical strip of frames, where each row is a standard horizontal slice strip (`frameCount` rows stacked top to bottom, frame `0` on top).
+
+Rendering cost is identical to a still sprite stack: drawing frame `N` draws exactly `sliceCount` slices.
+
+### Loading an animated stack
+
+```dart
+final animation = await SpriteStackAnimation.load(
+  'sprites/helicopter/frames.png',
+  sliceCount: 24,
+  frameCount: 8,
+  frameDuration: 0.06, // Seconds per frame
+  loop: true,          // Restarts when finished
+  pingPong: false,     // false: 0->7, 0->7; true: 0->7->0
+);
+```
+
+### Controlling speed / RPM in Flutter
+
+To control animation playback dynamically (such as accelerating helicopter blades from idle to combat RPM, or synchronizing a walk cycle with character velocity):
+
+```dart
+// In your Ticker / update loop:
+void onTick(double dt) {
+  // Multiply dt by any factor to speed up or slow down:
+  final speedMultiplier = isFlying ? 2.5 : 0.8;
+  animation.update(dt * speedMultiplier);
+}
+```
+
+Or adjust `animation.frameDuration` directly:
+
+```dart
+// Lower duration = faster rotation
+animation.frameDuration = 0.03;
+```
+
+### Rendering with `SpriteStackPainter`
+
+Pass `animation.frame` to `SpriteStackPainter`:
+
+```dart
+CustomPaint(
+  size: const Size(400, 400),
+  foregroundPainter: SpriteStackPainter(
+    stack: animation.stack,
+    frame: animation.frame,
+    yaw: currentYaw,
+    pitch: currentPitch,
+    scale: 4.0,
+  ),
+)
+```
+
+### Using in Flame / Bonfire
+
+Use `AnimatedSpriteStackComponent`:
+
+```dart
+final helicopter = AnimatedSpriteStackComponent(
+  animation: animation,
+  position: Vector2(200, 200),
+  stackScale: 4.0,
+);
+
+add(helicopter);
+```
+
+`AnimatedSpriteStackComponent` handles `animation.update(dt)` and passes `animation.frame` to the renderer automatically.
+
+### Controlling playback state
+
+```dart
+animation.play();    // Resume playback
+animation.stop();    // Pause on current frame
+animation.reset();   // Rewind to frame 0 and stop
+
+animation.onFrame = (frame) {
+  // Trigger sound effect or particles on specific frame
+};
+
+animation.onComplete = () {
+  // Fired when non-looping animation reaches the end
+};
+```
+
+---
+
+## 2. Removing stack parts with `SliceCut` (Cutaway Effect)
+
+A common need in top-down games is removing the roof of a house or building when the character steps inside so the player can see the interior rooms, furniture, and floor plan.
+
+With `SliceCut`, you do **not** need extra sprite frames or separate transparent roof assets. You dynamically hide slices above a given threshold.
+
+### Static cutaway
+
+```dart
+// Suppose your house has 30 slices total:
+// Slices 0..19: foundation, floor, interior walls, furniture
+// Slices 20..29: roof and chimney
+
+// Show only the interior (hiding roof slices 20+):
+const cut = SliceCut(top: 20);
+
+stack.render(
+  canvas,
+  position: offset,
+  yaw: yaw,
+  cut: cut,
+);
+```
+
+### Smooth animated cutaway (dissolving the roof)
+
+`SliceCut` supports **fractional slice frontiers**. When the boundary lands on a fractional slice (e.g. `24.5`), the package applies an integer-preserving **4×4 Bayer dither** to that slice so the transition dissolves smoothly without alpha-blending artifacts:
+
+```dart
+class CutawayBuilding extends StatefulWidget {
+  const CutawayBuilding({super.key, required this.stack});
+  final SpriteStack stack;
+
+  @override
+  State<CutawayBuilding> createState() => _CutawayBuildingState();
+}
+
+class _CutawayBuildingState extends State<CutawayBuilding>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _playerIsInside = false;
+
+  static const double _wallHeight = 18.0; // Interior wall limit
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+  }
+
+  void _toggleInterior() {
+    setState(() => _playerIsInside = !_playerIsInside);
+    if (_playerIsInside) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final total = widget.stack.sliceCount.toDouble();
+        // Eases from total down to _wallHeight
+        final currentTop = total - (_controller.value * (total - _wallHeight));
+
+        return CustomPaint(
+          size: const Size(320, 320),
+          painter: SpriteStackPainter(
+            stack: widget.stack,
+            cut: SliceCut(top: currentTop),
+            yaw: 0.8,
+            scale: 4,
+          ),
+        );
+      },
+    );
+  }
+}
+```
+
+### Construction / Build-up animation
+
+You can also use `SliceCut(top: progress)` to animate an object rising out of the ground slice by slice:
+
+```dart
+// Animates a tower being constructed from slice 0 up to sliceCount:
+final buildCut = SliceCut(top: currentProgress * stack.sliceCount);
+```
+
+---
+
+## 3. Best Practices & Reference Examples
+
+- **Helicopter / Aircraft Rotors (`example/sprites/helicopter/`)**: Check out `HelicopterScreen` in the example app. It demonstrates controlling rotor RPM in real-time and hovering with dynamic shadows.
+- **Flame / Bonfire Component**: Check `CutawayRoof` component (`skills/flutter-sprite-stack-runtime/assets/cutaway_house.dart`) for a complete Flame component implementation.
+- **Draw Order with Interiors**: A single sprite stack renders as one combined unit. To have a character walk behind one wall and in front of another, carve the prop as two stacks (back wall and front wall) and sort `back_wall -> character -> front_wall`.
