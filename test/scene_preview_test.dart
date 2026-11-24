@@ -55,7 +55,7 @@ void main() {
           color: ui.Color(0x332E4050),
           axisColor: ui.Color(0x664E6A84),
           cellSize: 70,
-          checker: [ui.Color(0xFF13202A), ui.Color(0xFF162430)],
+          checker: [ui.Color(0xFF142430), ui.Color(0xFF1D303D)],
           fadeColor: ui.Color(0xFF0B1118),
           fadeDistance: 2400,
         ),
