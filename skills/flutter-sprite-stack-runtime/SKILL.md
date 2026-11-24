@@ -1,6 +1,6 @@
 ---
 name: flutter-sprite-stack-runtime
-description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, and choosing between live render, bake, turntable and cache.
+description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, and extracting the voxel volume and greedy mesh that delimit a prop for a 3D scene.
 license: MIT
 metadata:
   package: flutter_sprite_stack
@@ -28,6 +28,7 @@ stack.render(canvas, position: groundPoint, yaw: 0.6, scale: 4);
 | scenery drawn every frame, never deforms | `stack.bake(...)` → `BakedSpriteStack` |
 | prop spins constantly | `SpriteStackTurntable` |
 | many instances of the same asset | `SpriteStackCache` |
+| prop needs volume for a 3D scene or collision | `stack.toVolume()` + `SpriteStackMesher` |
 
 ## CustomPainter
 
@@ -189,6 +190,35 @@ Never size a prop as `sliceWidth × sliceCount × spacing`: that ignores `yaw`,
 final bounds = stack.boundsFor(yaw: yaw, scale: 4, cut: cut);
 final rect = bounds.rectAt(groundPoint);  // place/hit-test with this
 ```
+
+## Volume and mesh (3D groundwork)
+
+The slices are cross-sections, so the strip also describes the prop's volume.
+Use it to size, cull, collide and depth-sort props in a 3D scene. The mesh is
+**not** drawn: the sprite stack keeps every pixel.
+
+```dart
+final volume = stack.toVolume();                    // load/decode only
+final mesh = const SpriteStackMesher().build(volume);
+
+volume.width; volume.depth; volume.height;          // grid, in art pixels
+volume.isSolid(x, y, z);                            // out of range = false
+volume.solidVoxelCount;
+volume.bounds;                                      // tight box, or null
+mesh.quadCount; mesh.triangleCount;
+mesh.quads.first.corners;                           // voxel units, CCW from outside
+mesh.quads.first.normal;
+```
+
+`x` is the slice column, `y` the slice row (depth) and `z` the slice index.
+`alphaThreshold` (default `128`) decides solid vs empty; a volume is built per
+frame. Stacks built with `fromImage` throw `StateError` because they keep no raw
+pixels.
+
+Faces have no colour or UV on purpose. Greedy meshing merges coplanar exposed
+faces and skips faces between two solid voxels, so a solid `2×2×2` block is 6
+quads (12 triangles) instead of 96. Build the volume and mesh once per asset and
+frame — never every game frame.
 
 ## Pitfalls
 

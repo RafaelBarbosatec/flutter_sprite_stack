@@ -5,8 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 /// Vertical squash used by [measureProjectedHeight] (the default camera).
-final double _referenceSquash =
-    SpriteStack.squashFor(SpriteStack.defaultPitch);
+final double _referenceSquash = SpriteStack.squashFor(SpriteStack.defaultPitch);
 
 /// Height of the stack's *actual pixels* (lift excluded), in art pixels,
 /// averaged over a full turn.
@@ -21,8 +20,7 @@ final double _referenceSquash =
 /// re-measuring every frame is what makes a spinning prop bob up and down.
 Future<double> measureProjectedHeight(SpriteStack stack) async {
   const steps = 6;
-  final side =
-      stack.sliceWidth + stack.sliceHeight + stack.sliceCount + 32;
+  final side = stack.sliceWidth + stack.sliceHeight + stack.sliceCount + 32;
   final anchor = Offset(side / 2, side - 16.0);
 
   final heights = <double>[];

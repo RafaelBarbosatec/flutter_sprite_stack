@@ -10,6 +10,19 @@
   projected size for culling and hit boxes.
 - The runtime agent skill no longer references engine components and shows the
   manual wrapper instead.
+- `SpriteStack.toVolume()` reconstructs a prop's voxel volume from its
+  cross-sections (`load`/`decode` only — `fromImage` has no raw pixels), with
+  `frame` selection and an `alphaThreshold` (default `128`).
+- `SpriteStackVolume`: occupancy grid (`x` column, `y` depth, `z` slice),
+  `isSolid`, `solidVoxelCount` and tight `bounds` that trim the transparent
+  padding around the prop. Can also be built from raw RGBA pixels or from an
+  occupancy buffer.
+- `SpriteStackMesher`: greedy meshing of the exposed faces into merged,
+  axis-aligned quads. The mesh is **geometry only** (no colour, no UV) — the
+  sprite stack keeps the drawing job; the mesh delimits the prop for a 3D scene.
+  `SpriteStackQuad` exposes corners, normal, axis/direction and area.
+- Docs: volume/mesh section in the README with measured counts for the example
+  assets (car 830 quads, house 1 724, tree 1 435), plus the runtime agent skill.
 - Added an **Animation & Cutaways** guide covering frame playback, dynamic RPM,
   and `SliceCut` cutaways (roof-off houses with a smooth dithered frontier).
 - Example: `HelicopterScreen`, an animated AH-64 style attack helicopter with

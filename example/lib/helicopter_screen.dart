@@ -101,8 +101,7 @@ class _HelicopterScreenState extends State<HelicopterScreen>
     final n = stack.sliceCount.toDouble();
     final squash = SpriteStack.squashFor(_pitch);
     final maxWidth = math.sqrt(w * w + h * h) + 8; // outline + shadow margin
-    final maxHeight =
-        ((w + h) / math.sqrt2) * squash + (n - 1) * _spacing + 36;
+    final maxHeight = ((w + h) / math.sqrt2) * squash + (n - 1) * _spacing + 36;
     final fit = math.min(
       (stage.width - 20) / maxWidth,
       (stage.height - 28) / maxHeight,
@@ -172,12 +171,12 @@ class _HelicopterScreenState extends State<HelicopterScreen>
 
                       // Hover: bob and tilt, lifting off the pad.
                       final hoverLift = _hovering
-                          ? -math.max(10.0, math.min(30.0, stage.height * 0.08)) +
+                          ? -math.max(
+                                  10.0, math.min(30.0, stage.height * 0.08)) +
                               math.sin(_time * 2.8) * 5
                           : 0.0;
-                      final hoverTilt = _hovering
-                          ? math.sin(_time * 2.1) * 0.04
-                          : 0.0;
+                      final hoverTilt =
+                          _hovering ? math.sin(_time * 2.1) * 0.04 : 0.0;
 
                       return Column(
                         children: [
@@ -196,8 +195,8 @@ class _HelicopterScreenState extends State<HelicopterScreen>
                                 setState(() {
                                   _spinning = false;
                                   _yaw += dx * 0.013;
-                                  _pitch = (_pitch + dy * 0.005)
-                                      .clamp(0.2, 1.4);
+                                  _pitch =
+                                      (_pitch + dy * 0.005).clamp(0.2, 1.4);
                                 });
                               },
                             ),
@@ -247,8 +246,8 @@ class _HelicopterScreenState extends State<HelicopterScreen>
                                             () => _spinning = !_spinning),
                                         onOutlineToggle: () => setState(
                                             () => _outline = !_outline),
-                                        onShadowToggle: () => setState(
-                                            () => _shadow = !_shadow),
+                                        onShadowToggle: () =>
+                                            setState(() => _shadow = !_shadow),
                                       ),
                                     ),
                                   ),
@@ -295,8 +294,7 @@ class _Stage extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onPanUpdate: (details) =>
-          onRotate(details.delta.dx, details.delta.dy),
+      onPanUpdate: (details) => onRotate(details.delta.dx, details.delta.dy),
       child: ClipRect(
         child: LayoutBuilder(
           builder: (context, constraints) {

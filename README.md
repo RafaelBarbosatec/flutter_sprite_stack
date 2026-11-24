@@ -271,6 +271,41 @@ final bounds = stack.boundsFor(yaw: yaw, scale: 4);
 final rect = bounds.rectAt(groundPosition); // ready for Rect.contains
 ```
 
+## Volume and mesh (3D groundwork)
+
+A strip is a stack of cross-sections, so it also describes the prop's **volume**.
+`toVolume()` rebuilds it as an occupancy grid, and `SpriteStackMesher` turns that
+grid into the smallest set of axis-aligned quads (greedy meshing). A scene can
+use the result to size, cull, collide and depth-sort a prop.
+
+```dart
+final volume = stack.toVolume();               // x = column, y = depth, z = slice
+final mesh = const SpriteStackMesher().build(volume);
+
+volume.solidVoxelCount;                        // 14 716 for the example car
+volume.bounds;                                 // tight box, transparent padding trimmed
+mesh.quadCount;                                // 830
+mesh.triangleCount;                            // 1 660
+```
+
+Faces carry **no colour and no UV**: the mesh is geometry only, because the
+sprite stack keeps the drawing job. Coplanar exposed faces are merged, and faces
+between two solid voxels are skipped.
+
+| Asset | Grid (x × y × z) | Solid voxels | Quads | Triangles |
+| --- | --- | --- | --- | --- |
+| `car` | 38 × 72 × 15 | 14 716 | 830 | 1 660 |
+| `house` | 48 × 48 × 29 | 18 091 | 1 724 | 3 448 |
+| `tree` | 33 × 33 × 43 | 19 903 | 1 435 | 2 870 |
+
+`alphaThreshold` (default `128`) decides what counts as solid, so anti-aliased
+slices do not grow a skin of semi-transparent voxels. Volumes are built per
+frame, and only stacks loaded with `load`/`decode` keep the raw pixels —
+`fromImage` throws a `StateError`.
+
+The scene renderer that consumes this geometry is the next milestone; today the
+API ships the volume and the mesher.
+
 ## Asset format
 
 - One **horizontal strip** PNG, every slice the same size.
@@ -458,6 +493,11 @@ produces.
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
 | `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
 | `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
+| `toVolume(frame:, alphaThreshold:)` | Rebuilds the voxel volume from the slices |
+| `SpriteStackVolume.fromPixels(...)` / `fromVoxels(...)` | Occupancy grid (`x` column, `y` depth, `z` slice) |
+| `SpriteStackVolume.isSolid(x, y, z)` / `solidVoxelCount` / `bounds` | Occupancy queries and tight occupied box |
+| `SpriteStackMesher().build(volume)` | Greedy-meshed, colourless surface quads |
+| `SpriteStackMesh` / `SpriteStackQuad` | Quad/triangle counts, corners, normals |
 | `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
@@ -492,6 +532,9 @@ collapses to nothing.
 - Keep `scale` at an integer value and filtering at nearest for crisp pixels.
 - Y-sort whole stacks by their ground point; never interleave slices of two
   props.
+- Build the volume and the mesh **once per asset and frame**, not per frame of
+  gameplay. They are static data; a volume is a byte per voxel and a mesh is
+  just a list of quads.
 
 ## Limitations
 
@@ -500,6 +543,9 @@ collapses to nothing.
 - **No per-voxel lighting or reflections.** The built-in shadow is a flat
   projected ground shadow; shading has to be baked into the slices — the
   carving script does that with `--shade`.
+- **The volume/mesh does not render.** It is geometry for sizing, culling,
+  collision and depth sorting; `SpriteStack` still draws every pixel. The scene
+  renderer that consumes it is a separate milestone.
 - **Uniform slices only**: `sliceCount` must match the asset and divide its
   width exactly.
 - A very large `scale` plus many slices costs fill rate; cache or pre-bake if

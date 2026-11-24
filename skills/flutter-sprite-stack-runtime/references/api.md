@@ -16,6 +16,7 @@ Everything is exported from `package:flutter_sprite_stack/flutter_sprite_stack.d
 | `render(...)` | Draw one frame (see below) |
 | `boundsFor(...)` | Projected `SpriteStackBounds` |
 | `bake(...)` | Record into a `BakedSpriteStack` |
+| `toVolume({frame = 0, alphaThreshold = 128})` | Rebuild the voxel volume (needs `load`/`decode`) |
 | `dispose()` | Releases the decoded `ui.Image` |
 
 ### render
@@ -175,6 +176,44 @@ that is 5° and invisible on pixel art.
 
 The default loader ignores `frameCount`; if you cache an atlas, load it
 yourself or use a custom `loader`.
+
+## SpriteStackVolume
+
+Built with `stack.toVolume()`, `SpriteStackVolume.fromPixels(...)` or
+`SpriteStackVolume.fromVoxels(...)`. Coordinates: `x` slice column, `y` slice
+row (depth), `z` slice index (height).
+
+| Member | Meaning |
+| --- | --- |
+| `width`, `depth`, `height` | Grid size, in art pixels / slices |
+| `voxelCount` | Total cells (`width * depth * height`) |
+| `solidVoxelCount` | Occupied cells |
+| `isSolid(x, y, z)` | Occupancy; out-of-range coordinates are `false` |
+| `bounds` | Tight `SpriteStackVolumeBounds`, or `null` when empty |
+| `voxels` | Raw occupancy bytes, `(z * depth + y) * width + x` |
+
+`SpriteStackVolume.fromPixels(pixels, {required sliceWidth, required
+sliceHeight, required sliceCount, frameCount = 1, frame = 0, alphaThreshold =
+128})` reads raw RGBA; `frame` is clamped and a pixel is solid when
+`alpha >= alphaThreshold`.
+
+`SpriteStackVolumeBounds` exposes inclusive `minX/minY/minZ/maxX/maxY/maxZ`,
+`width/depth/height` and `contains(x, y, z)`.
+
+## SpriteStackMesher
+
+| Member | Meaning |
+| --- | --- |
+| `const SpriteStackMesher()` | Stateless mesher |
+| `build(volume)` | Returns a `SpriteStackMesh` |
+
+`SpriteStackMesh` exposes `volume`, `quads`, `quadCount`, `triangleCount`,
+`bounds` and `isEmpty`. Each `SpriteStackQuad` has `axis` (0/1/2), `direction`
+(+1/-1), `plane`, `u0/v0/u1/v1` (half-open voxel rectangle), `uAxis`, `vAxis`,
+`area`, `normal` and `corners` (CCW seen from outside).
+
+The mesh carries **no colour or UV** by design; it is geometry for 3D sizing,
+culling, collision and depth sorting. The sprite stack still draws.
 
 ## Draw counts
 
