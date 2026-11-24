@@ -5,15 +5,17 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'f1_game/f1_game_screen.dart';
+import 'helicopter_screen.dart';
 import 'stack_metrics.dart';
 import 'torch_screen.dart';
 
-enum _SpriteKind { car, spaceship, house, tree, palm, robot }
+enum _SpriteKind { car, spaceship, helicopter, house, tree, palm, robot }
 
 extension on _SpriteKind {
   String get label => switch (this) {
         _SpriteKind.car => 'Car',
         _SpriteKind.spaceship => 'X-Wing',
+        _SpriteKind.helicopter => 'Helicopter',
         _SpriteKind.house => 'House',
         _SpriteKind.tree => 'Tree',
         _SpriteKind.palm => 'Palm',
@@ -23,6 +25,7 @@ extension on _SpriteKind {
   IconData get icon => switch (this) {
         _SpriteKind.car => Icons.directions_car,
         _SpriteKind.spaceship => Icons.rocket_launch,
+        _SpriteKind.helicopter => Icons.airplanemode_active,
         _SpriteKind.house => Icons.home,
         _SpriteKind.tree => Icons.park,
         _SpriteKind.palm => Icons.forest,
@@ -32,6 +35,7 @@ extension on _SpriteKind {
   String get asset => switch (this) {
         _SpriteKind.car => 'sprites/car/slices.png',
         _SpriteKind.spaceship => 'sprites/spaceship/slices.png',
+        _SpriteKind.helicopter => 'sprites/helicopter/slices.png',
         _SpriteKind.house => 'sprites/house/slices.png',
         _SpriteKind.tree => 'sprites/tree/slices.png',
         _SpriteKind.palm => 'sprites/palmeira/slices.png',
@@ -41,6 +45,7 @@ extension on _SpriteKind {
   int get sliceCount => switch (this) {
         _SpriteKind.car => 15,
         _SpriteKind.spaceship => 21,
+        _SpriteKind.helicopter => 24,
         _SpriteKind.house => 29,
         _SpriteKind.tree => 43,
         _SpriteKind.palm => 26,
@@ -50,6 +55,7 @@ extension on _SpriteKind {
   double get defaultScale => switch (this) {
         _SpriteKind.car => 4.0,
         _SpriteKind.spaceship => 4.2,
+        _SpriteKind.helicopter => 3.8,
         _SpriteKind.house => 4.2,
         _SpriteKind.tree => 4.6,
         _SpriteKind.palm => 5.0,
@@ -91,6 +97,7 @@ class _DemoScreenState extends State<DemoScreen>
   _SpriteKind _selected = _SpriteKind.spaceship;
   SpriteStack? _carStack;
   SpriteStack? _spaceshipStack;
+  SpriteStack? _helicopterStack;
   SpriteStack? _houseStack;
   SpriteStack? _treeStack;
   SpriteStack? _palmStack;
@@ -114,6 +121,7 @@ class _DemoScreenState extends State<DemoScreen>
   SpriteStack? get _stack => switch (_selected) {
         _SpriteKind.car => _carStack,
         _SpriteKind.spaceship => _spaceshipStack,
+        _SpriteKind.helicopter => _helicopterStack,
         _SpriteKind.house => _houseStack,
         _SpriteKind.tree => _treeStack,
         _SpriteKind.palm => _palmStack,
@@ -128,6 +136,9 @@ class _DemoScreenState extends State<DemoScreen>
     });
     _load(_SpriteKind.spaceship).then((stack) {
       if (mounted) setState(() => _spaceshipStack = stack);
+    });
+    _load(_SpriteKind.helicopter).then((stack) {
+      if (mounted) setState(() => _helicopterStack = stack);
     });
     _load(_SpriteKind.house).then((stack) {
       if (mounted) setState(() => _houseStack = stack);
@@ -180,6 +191,7 @@ class _DemoScreenState extends State<DemoScreen>
     _ticker.dispose();
     _carStack?.dispose();
     _spaceshipStack?.dispose();
+    _helicopterStack?.dispose();
     _houseStack?.dispose();
     _treeStack?.dispose();
     _palmStack?.dispose();
@@ -195,6 +207,13 @@ class _DemoScreenState extends State<DemoScreen>
       appBar: AppBar(
         title: const Text('Sprite Stack'),
         actions: [
+          IconButton(
+            tooltip: 'Helicopter demo (animated)',
+            icon: const Icon(Icons.airplanemode_active),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const HelicopterScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Torch demo',
             icon: const Icon(Icons.local_fire_department),

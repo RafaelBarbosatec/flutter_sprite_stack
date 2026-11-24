@@ -29,3 +29,5 @@ flutter:
     - sprites/spaceship/slices.png
     - sprites/palmeira/slices.png
     - sprites/torch/frames.png
+    - sprites/helicopter/frames.png
+    - sprites/helicopter/slices.png
