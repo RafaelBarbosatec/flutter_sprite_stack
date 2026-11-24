@@ -1,5 +1,22 @@
 # Changelog
 
+# next
+
+## Added
+
+- **Engine-free orbit scene**: `SpriteStackScene`, `SpriteStackCamera.orbit`,
+  `SpriteStackSceneObject`, `SpriteStackGround` and
+  `SpriteStackSceneProjection`. The camera projects each prop's ground point
+  with perspective, derives the visible yaw (`object.yaw - camera.yaw`), scales
+  by depth and paints far to near. Props keep their world facing while the
+  camera orbits, and an optional near-clipped ground grid makes the rotation
+  readable.
+- `SpriteStackPoint` moved to its own library and gained vector operators
+  (`+`, `-`, `*`, `dot`, `cross`, `length`, `normalized`). Volume, mesh and
+  scene share the same world units: one unit per art pixel and per slice.
+- Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
+- Docs: orbit scene section in the README and the runtime agent skill.
+
 ## 0.4.0
 
 - **Breaking:** removed the `flame` dependency and the engine components

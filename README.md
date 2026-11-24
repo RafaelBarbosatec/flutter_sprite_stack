@@ -133,6 +133,52 @@ shadow — so hit boxes, camera culling and Y sorting match what is drawn. `yaw`
 spins the prop; it does **not** touch the component's own `angle`, and the
 drawing stays anchored by its feet while the bounds change.
 
+## Orbit scene (3D camera)
+
+`SpriteStackScene` places stacks in a world with an orbiting camera — no engine
+required. It projects each prop's ground point with perspective, derives the
+visible `yaw` from the camera (`object.yaw - camera.yaw`), scales by depth and
+draws far to near. Props keep their world facing while the camera moves, so every
+side of their cross-sections becomes visible.
+
+```dart
+final scene = SpriteStackScene(
+  camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
+  zoom: 2.4,                       // art pixels per world unit at the target
+  background: const Color(0xFF0B1118),
+  ground: const SpriteStackGround(extent: 700, step: 70),
+  objects: [
+    SpriteStackSceneObject(
+      stack: house,
+      position: const SpriteStackPoint(-230, -40, 0), // x, y, z (z is up)
+      yaw: 0.5,
+    ),
+  ],
+);
+```
+
+From a `Ticker` + `CustomPainter`, once per frame:
+
+```dart
+scene.camera.yaw += dt * 0.2;
+scene.paint(canvas, size);
+```
+
+World units are art pixels, so a 48 px wide house is 48 units wide. `zoom` is
+the scale at the camera's target plane; objects closer to the camera grow.
+
+| Piece | Meaning |
+| --- | --- |
+| `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
+| `SpriteStackScene(camera:, zoom:, background:, ground:, objects:)` | Projects, depth-sorts and draws the props |
+| `SpriteStackSceneObject(stack:, position:, yaw:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point and `yaw` its world facing |
+| `SpriteStackGround(extent:, step:, color:, axisColor:)` | Optional grid on `z = 0`, clipped against the near plane |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+
+Sorting is per object (painter's algorithm), so two intersecting props cannot
+resolve per pixel. The volume/mesh is not drawn; pair the scene with
+`toVolume()` / `SpriteStackMesher` when you need collision or exact bounds.
+
 ## Animation
 
 Animation is a **frame atlas**: the same horizontal strips stacked vertically,
@@ -498,6 +544,12 @@ produces.
 | `SpriteStackVolume.isSolid(x, y, z)` / `solidVoxelCount` / `bounds` | Occupancy queries and tight occupied box |
 | `SpriteStackMesher().build(volume)` | Greedy-meshed, colourless surface quads |
 | `SpriteStackMesh` / `SpriteStackQuad` | Quad/triangle counts, corners, normals |
+| `SpriteStackScene(...)` / `paint(canvas, size)` | Projects, depth-sorts and draws stacks with an orbit camera |
+| `SpriteStackCamera.orbit(...)` / `eye` / `basis` | 3D camera; `pitch` is clamped just short of top-down |
+| `SpriteStackSceneObject(...)` | Stack + world position, yaw, scale, frame, cut and motion |
+| `projectObject(object, size)` | Screen point, depth, scale, relative yaw and projected bounds |
+| `SpriteStackGround(...)` | Optional ground grid on `z = 0` |
+| `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |
 | `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
@@ -535,11 +587,17 @@ collapses to nothing.
 - Build the volume and the mesh **once per asset and frame**, not per frame of
   gameplay. They are static data; a volume is a byte per voxel and a mesh is
   just a list of quads.
+- A `SpriteStackScene` projects and depth-sorts per object, then draws each one
+  with the same per-slice cost as a standalone stack. Share decoded stacks via
+  `SpriteStackCache`, and `projectObject(...)` already gives you the projected
+  bounds for culling.
 
 ## Limitations
 
 - **Painter's algorithm**: props that intersect each other cannot resolve per
   voxel. Two overlapping stacks draw in `priority` order.
+- **Scene sorting is per object too**: `SpriteStackScene` orders props by the
+  camera depth of their ground point, not per pixel.
 - **No per-voxel lighting or reflections.** The built-in shadow is a flat
   projected ground shadow; shading has to be baked into the slices — the
   carving script does that with `--shade`.
