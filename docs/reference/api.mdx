@@ -1,6 +1,6 @@
 ---
 title: API
-description: SpriteStack, SpriteStackPainter and SpriteStackComponent reference.
+description: SpriteStack, SpriteStackPainter and SpriteStackAnimation reference.
 ---
 
 # API
@@ -19,13 +19,11 @@ description: SpriteStack, SpriteStackPainter and SpriteStackComponent reference.
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
 | `SpriteStackPainter(...)` | `CustomPainter` for plain Flutter |
-| `SpriteStackComponent(...)` | Flame/Bonfire `PositionComponent` |
 | `BakedSpriteStack` | A recorded frame; `draw(canvas, ground)` + `dispose()` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked frames per yaw bucket |
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
 | `SpriteStackAnimation(stack, frameDuration:, loop:, pingPong:, ...)` | Plays the atlas frames |
 | `SpriteStackAnimation.load(path, sliceCount:, frameCount:, ...)` | Loads an atlas and plays it |
-| `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component driven by an animation |
 
 `pitch` is clamped to `0..π/2` and its squash to `0.08..1`, so the stack never
 collapses to nothing.

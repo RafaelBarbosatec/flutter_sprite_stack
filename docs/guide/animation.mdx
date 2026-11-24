@@ -6,7 +6,7 @@ description: Animate frame atlases, control playback and rotor RPM, and use Slic
 # Animation & Dynamic Effects
 
 `flutter_sprite_stack` provides two ways to animate props:
-1. **Frame Atlas Animation (`SpriteStackAnimation` / `AnimatedSpriteStackComponent`)**: swaps full atlas frames over time (walk cycles, rotating helicopter blades, flickering flames).
+1. **Frame Atlas Animation (`SpriteStackAnimation`)**: swaps full atlas frames over time (walk cycles, rotating helicopter blades, flickering flames).
 2. **Dynamic Slice Cuts (`SliceCut`)**: dynamically reveals or hides slices from top or bottom (opening roofs to see inside houses, opening chests/crates, or building-up effects).
 
 ---
@@ -67,21 +67,31 @@ CustomPaint(
 )
 ```
 
-### Using in Flame / Bonfire
+### Using in a game loop (Flame / Bonfire / custom)
 
-Use `AnimatedSpriteStackComponent`:
+The package ships no engine component on purpose — it only needs a `Canvas`.
+Call `animation.update(dt)` in your update loop and pass `animation.frame` to
+`render`:
 
 ```dart
-final helicopter = AnimatedSpriteStackComponent(
-  animation: animation,
-  position: Vector2(200, 200),
-  stackScale: 4.0,
-);
+@override
+void update(double dt) {
+  animation.update(dt * speedMultiplier);
+}
 
-add(helicopter);
+@override
+void render(Canvas canvas) {
+  animation.stack.render(
+    canvas,
+    position: groundPoint,
+    yaw: yaw,
+    scale: 4,
+    frame: animation.frame,
+  );
+}
 ```
 
-`AnimatedSpriteStackComponent` handles `animation.update(dt)` and passes `animation.frame` to the renderer automatically.
+See [Game Engines](/guide/flame) for a complete component wrapper.
 
 ### Controlling playback state
 
@@ -201,5 +211,5 @@ final buildCut = SliceCut(top: currentProgress * stack.sliceCount);
 ## 3. Best Practices & Reference Examples
 
 - **Helicopter / Aircraft Rotors (`example/sprites/helicopter/`)**: Check out `HelicopterScreen` in the example app. It demonstrates controlling rotor RPM in real-time and hovering with dynamic shadows.
-- **Flame / Bonfire Component**: Check `CutawayRoof` component (`skills/flutter-sprite-stack-runtime/assets/cutaway_house.dart`) for a complete Flame component implementation.
+- **Cutaway reference**: the `flutter-sprite-stack-runtime` skill covers `SliceCut` together with bounds, bake and turntable usage.
 - **Draw Order with Interiors**: A single sprite stack renders as one combined unit. To have a character walk behind one wall and in front of another, carve the prop as two stacks (back wall and front wall) and sort `back_wall -> character -> front_wall`.

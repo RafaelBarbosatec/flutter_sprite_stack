@@ -38,8 +38,8 @@ slices (ground slice on the left)
 - **Pixel-art finish**: crisp 1 px ink outline and a projected ground shadow,
   matching the reference `viewer.html` look.
 - **Tiny API**: load a strip, call `render`.
-- **Flutter and Flame/Bonfire**: `CustomPainter` for plain canvases,
-  `PositionComponent` for scenes with Y sorting and hit boxes.
+- **Flutter and any canvas-based engine**: `CustomPainter` for plain canvases;
+  in Flame, Bonfire or a custom loop, call `render` from your own component.
 - **No 3D engine, no shaders, no platform channels** — it is just `Canvas`.
 
 ## Installation
@@ -52,7 +52,7 @@ Or add it manually:
 
 ```yaml
 dependencies:
-  flutter_sprite_stack: ^0.3.0
+  flutter_sprite_stack: ^0.4.0
 ```
 
 Requires Flutter 3.22+ and Dart 3.5+. Works on every platform Flutter supports,
@@ -98,25 +98,40 @@ CustomPaint(
 re-paints when `yaw`, `pitch`, `scale`, `spacing`, `offset`, `outline`,
 `shadow`, their colors or `stackPaint` change.
 
-### Flame / Bonfire
+### Game engines (Flame, Bonfire, custom loop)
+
+The package deliberately ships no engine component: it only needs a `Canvas`,
+so it stays free of engine version constraints. In Flame or Bonfire, wrap it in
+any component that exposes `render(Canvas)` and size it from the projected
+bounds:
 
 ```dart
-add(
-  SpriteStackComponent(
-    stack: robot,
-    position: Vector2(120, 200),
-    yaw: 0.6,
-    stackScale: 4,
-    priority: 10, // Y-sort with the rest of the scene
-  ),
-);
+class StackProp extends PositionComponent {
+  StackProp({required this.stack, required Vector2 ground, this.yaw = 0})
+      : super(position: ground, size: Vector2.zero()) {
+    final bounds = stack.boundsFor(yaw: yaw, scale: 4);
+    size = Vector2(bounds.size.width, bounds.size.height);
+  }
+
+  final SpriteStack stack;
+  final double yaw;
+
+  @override
+  void render(Canvas canvas) {
+    stack.render(
+      canvas,
+      position: Offset(size.x / 2, size.y), // ground point
+      yaw: yaw,
+      scale: 4,
+    );
+  }
+}
 ```
 
-The component keeps `size` in sync with the **projected** bounds — rotated
-footprint, outline and ground shadow — so hit boxes, camera culling and
-`priority`-based sorting match what is actually drawn. `yaw` spins the prop; it
-does **not** touch the component's own `angle`, and the drawing stays anchored
-by its feet while the bounds change.
+`boundsFor` gives the **projected** bounds — rotated footprint, outline and
+shadow — so hit boxes, camera culling and Y sorting match what is drawn. `yaw`
+spins the prop; it does **not** touch the component's own `angle`, and the
+drawing stays anchored by its feet while the bounds change.
 
 ## Animation
 
@@ -140,28 +155,17 @@ final torch = await SpriteStackAnimation.load(
   loop: true,
 );
 
-// In a Ticker / Flame update:
+// In your update loop:
 torch.update(dt);
-stackPainter.frame = torch.frame; // or render(..., frame: torch.frame)
+
+// In your draw call:
+stack.render(canvas, position: ground, frame: torch.frame);
 ```
 
 `SpriteStackAnimation` handles timing, looping, ping-pong, `play`/`stop`/`reset`
 and `onComplete`. The rendering cost does not change: an 8-frame torch still
-draws `sliceCount` slices per frame.
-
-In Flame/Bonfire, use the animated component — same bounds, culling and Y
-sorting as the static one:
-
-```dart
-add(
-  AnimatedSpriteStackComponent(
-    animation: torch,
-    position: Vector2(120, 200),
-    stackScale: 4,
-    priority: 10,
-  ),
-);
-```
+draws `sliceCount` slices per frame. Drive `dt` through your own multiplier to
+sync playback with movement or RPM.
 
 Animate transforms too when it fits better: a spinning coin, a bobbing item or a
 pulsing warning light does not need frames at all.
@@ -183,10 +187,9 @@ final motion = StackMotion(
 
 // Any Canvas:
 robot.render(canvas, position: ground, motion: motion, time: elapsed);
-
-// Flame/Bonfire: the component advances the clock for you.
-SpriteStackComponent(stack: tree, motion: motion);
 ```
+
+Advance `time` yourself in your game loop; the package does not own a clock.
 
 The sway is `sin(time * speed - slice * wave + phase) * sway * (slice / (n-1))²`.
 The squared falloff is what pins slice `0` — it is the formula recommended by
@@ -211,15 +214,13 @@ final roof = SliceCut(top: sliceCount * (1 - progress));
 house.render(canvas, position: ground, cut: roof);
 ```
 
-In Flame/Bonfire, set it on the component — `size` follows the cut, so culling
-and hit boxes shrink with the roof:
+In a game loop, feed the cut to the draw call and recompute the bounds so
+culling and hit boxes shrink with the roof:
 
 ```dart
-final house = SpriteStackComponent(stack: walls, position: Vector2(320, 200));
-add(house);
-
-// On enter:
-house.cut = const SliceCut(top: 19);
+final cut = SliceCut(top: 19);
+house.render(canvas, position: ground, cut: cut);
+final bounds = house.boundsFor(yaw: yaw, scale: 4, cut: cut);
 ```
 
 The slice sitting at the cut is dissolved with a 4×4 Bayer dither, so the pixel
@@ -385,8 +386,7 @@ your_app/
 │   │   └── scripts/
 │   └── flutter-sprite-stack-runtime/
 │       ├── SKILL.md
-│       ├── references/
-│       └── assets/
+│       └── references/
 └── .config/dart_skills/      # install/update tracking
 ```
 
@@ -400,7 +400,7 @@ With the skills installed, prompts like these produce code that compiles:
 
 ```text
 Slice this four-view sheet into a 24-slice stack and validate it.
-Add a 5-frame walk atlas to my Flame game and drive it from the player speed.
+Add a 5-frame walk atlas to my game and drive it from the player speed.
 Make this tree sway in the wind without adding frames.
 Drop the cottage roof when the player walks in, and keep the bounds correct.
 Why does my prop wobble while it rotates?
@@ -424,16 +424,16 @@ whether to keep your version or take the upstream one.
 | --- | --- | --- |
 | Loading an asset | agent guesses `sliceCount`, invents parameters | knows `load(path, sliceCount:, frameCount:)` and that the numbers are not stored in the PNG |
 | Sizing / hit box | `sliceWidth * sliceCount` | `boundsFor(yaw:, scale:)` with the projected rect |
-| Animation | invents a sprite-sheet API | `SpriteStackAnimation` + `AnimatedSpriteStackComponent`, frame atlas layout |
+| Animation | invents a sprite-sheet API | `SpriteStackAnimation`, `render(frame:)`, frame atlas layout |
 | Sway | authors 6 extra frames | `StackMotion(sway:, speed:, wave:)` |
 | Roof cutaway | hides the whole sprite | `SliceCut(top:)`, dither at the frontier, bounds follow the cut |
 | Broken asset | trial and error in game | `validate_atlas.py` reports the gap, pivot drift or opaque background |
 | Performance | one `load` per entity | `SpriteStackCache`, `bake`, `SpriteStackTurntable` |
 
-#### Before 0.3.0 is published
+#### Before 0.4.0 is published
 
 The skills travel with the package version, so this path needs a published
-`0.3.0`. Until then, install them straight from the repository:
+`0.4.0`. Until then, install them straight from the repository:
 
 ```bash
 dart run skills@ add https://github.com/RafaelBarbosatec/flutter_sprite_stack
@@ -463,7 +463,6 @@ produces.
 | `SpriteStackCache()` | Shares decoded stacks by asset path |
 | `SpriteStackAnimation.load(path, sliceCount:, frameCount:, ...)` | Loads and plays a frame atlas |
 | `SpriteStackAnimation` | Timing, loop, ping-pong, `play`/`stop`/`reset` |
-| `AnimatedSpriteStackComponent(animation:, ...)` | Flame/Bonfire component with animation |
 | `render(..., frame:)` / `SpriteStackPainter.frame` | Draws a specific atlas frame |
 | `StackMotion(sway:, speed:, wave:, phase:, lean:)` | Per-slice sway/lean, no extra frames |
 | `SliceCut(top:, bottom:)` | Hides slices above/below a frontier (roof cutaway) |
@@ -472,7 +471,6 @@ produces.
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
 | `SpriteStackPainter(...)` | `CustomPainter` for plain Flutter |
-| `SpriteStackComponent(...)` | Flame/Bonfire `PositionComponent` |
 
 `pitch` is clamped to `0..π/2` and its squash to `0.08..1`, so the stack never
 collapses to nothing.

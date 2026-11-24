@@ -16,7 +16,7 @@ package instead of inventing a plausible-looking `drawStack(...)`.
 | Skill | What it teaches |
 | --- | --- |
 | `flutter-sprite-stack-assets` | turning four orthographic views into a strip, building vertical frame atlases, and the `validate_atlas.py` / `make_atlas.py` scripts |
-| `flutter-sprite-stack-runtime` | `render`, `boundsFor`, components, animation, `StackMotion`, `SliceCut`, bake / turntable / cache, and a cutaway-house component |
+| `flutter-sprite-stack-runtime` | `render`, `boundsFor`, animation, `StackMotion`, `SliceCut`, bake / turntable / cache |
 
 Each skill is a directory under `skills/` in the package:
 
@@ -30,8 +30,7 @@ skills/
 └── flutter-sprite-stack-runtime/
     ├── SKILL.md
     ├── references/api.md
-    ├── references/performance.md
-    └── assets/cutaway_house.dart
+    └── references/performance.md
 ```
 
 The directory names are prefixed with the package name on purpose: the installer
@@ -68,7 +67,7 @@ dart run skills@ get -p flutter_sprite_stack -s flutter-sprite-stack-runtime
 ```
 
 > **Version note.** The skills are versioned with the package, so
-> `-p flutter_sprite_stack` needs a published `0.3.0` or newer. Before that (or
+> `-p flutter_sprite_stack` needs a published `0.4.0` or newer. Before that (or
 > to track the repository's `main`), install straight from Git:
 >
 > ```bash
@@ -103,7 +102,7 @@ that used to produce guesses now produce code that compiles:
 
 ```text
 Slice this four-view sheet into a 24-slice stack and validate it.
-Add a 5-frame atlas to my Flame game and drive it from the player speed.
+Add a 5-frame atlas to my game and drive it from the player speed.
 Make this tree sway in the wind without adding frames.
 Drop the cottage roof when the player walks in, and keep culling correct.
 Why does my prop wobble while it rotates?
@@ -115,7 +114,7 @@ What that looks like in practice:
 | --- | --- | --- |
 | Load an asset | guesses `sliceCount`, invents parameters | `SpriteStack.load(path, sliceCount:, frameCount:)`, and knows the numbers are not stored in the PNG |
 | Size / hit box | `sliceWidth * sliceCount` | `boundsFor(yaw:, scale:)` and `rectAt(groundPoint)` |
-| Animation | invents a sprite-sheet API | `SpriteStackAnimation` + `AnimatedSpriteStackComponent` and the atlas layout |
+| Animation | invents a sprite-sheet API | `SpriteStackAnimation`, `render(frame:)` and the atlas layout |
 | Wind / sway | authors extra frames | `StackMotion(sway:, speed:, wave:)` |
 | Roof cutaway | hides the whole sprite | `SliceCut(top:)`, dither at the frontier, bounds follow the cut |
 | Broken asset | trial and error in game | `validate_atlas.py` names the gap, pivot drift or opaque background |

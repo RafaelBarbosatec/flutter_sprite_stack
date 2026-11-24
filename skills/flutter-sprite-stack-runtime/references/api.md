@@ -1,4 +1,4 @@
-# API reference (0.3.0)
+# API reference (0.4.0)
 
 Everything is exported from `package:flutter_sprite_stack/flutter_sprite_stack.dart`.
 
@@ -58,44 +58,6 @@ SpriteStackBounds boundsFor({
 `size` is the full projected size; `ground` is where the ground point sits
 inside it. `rectAt(groundPosition)` places the rect in world space,
 `localRect` is it relative to the ground point.
-
-## SpriteStackComponent
-
-`PositionComponent` with `anchor: Anchor.topLeft` but drawing anchored at
-`groundLocal`.
-
-| Field | Meaning |
-| --- | --- |
-| `stack` | The decoded stack (shared, not owned) |
-| `yaw`, `pitch`, `stackScale`, `spacing` | Camera; setters refresh bounds |
-| `frame` | Atlas row; geometry does not change per frame |
-| `motion`, `motionTime` | Per-slice deformation; `update(dt)` advances `motionTime` |
-| `cut` | `SliceCut?`; setter refreshes bounds |
-| `pixelSnap`, `outline`, `shadow`, `outlineColor`, `shadowColor` | Draw options |
-| `bounds`, `groundLocal`, `size` | Derived from the camera and cut |
-| `updateBounds()` | Recompute after mutating several fields directly |
-
-## AnimatedSpriteStackComponent
-
-```dart
-AnimatedSpriteStackComponent({
-  required SpriteStackAnimation animation,
-  super.yaw, super.pitch, super.stackScale, super.spacing,
-  super.pixelSnap, super.outline, super.shadow,
-  super.outlineColor, super.shadowColor,
-  super.position, super.priority,
-})
-```
-
-Forwards everything to the base component and, in `update`, calls
-`animation.update(dt)` then `frame = animation.frame`. It does **not** expose
-`cut` or `motion` as constructor arguments — set them on the instance:
-
-```dart
-final torch = AnimatedSpriteStackComponent(animation: anim);
-torch.motion = const StackMotion(sway: 1.2);
-torch.cut = const SliceCut(top: 12);
-```
 
 ## SpriteStackAnimation
 
