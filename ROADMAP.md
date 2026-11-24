@@ -28,8 +28,12 @@ Polish that makes the environment read as a place (still no gameplay):
 - [ ] sky/backdrop beyond a flat `background` colour (vertical gradient, optional
       horizon) and a distance fade so the ground grid dissolves instead of
       ending in a hard edge.
-- [ ] ground surface options: a repeated tile texture or coloured plane on
-      `z = 0` instead of only lines.
+- [x] ground surface options: solid `fill`, alternating `checker` cells,
+      procedural `colorAt(x, y)` and `fadeColor`/`fadeDistance` for distance
+      fade (`step: 0` hides the lines).
+- [ ] textured ground: a tiled image needs subdivision or `drawVertices` for a
+      correct perspective mapping; deferred until a flat-colored floor is not
+      enough.
 - [ ] scene composition: groups/named objects and an easy way to place a
       "room", "island" or "street" as a reusable block.
 - [ ] camera helpers: pan the `target`, clamp zoom/distance, and a

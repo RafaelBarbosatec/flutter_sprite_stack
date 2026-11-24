@@ -146,7 +146,14 @@ final scene = SpriteStackScene(
   camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
   zoom: 2.4,                       // art pixels per world unit at the target
   background: const Color(0xFF0B1118),
-  ground: const SpriteStackGround(extent: 700, step: 70),
+  ground: const SpriteStackGround(
+    extent: 700,
+    step: 70,
+    cellSize: 70,
+    checker: [Color(0xFF13202A), Color(0xFF162430)],
+    fadeColor: Color(0xFF0B1118),
+    fadeDistance: 2400,
+  ),
   objects: [
     SpriteStackSceneObject(
       stack: house,
@@ -172,8 +179,16 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
 | `SpriteStackScene(camera:, zoom:, background:, ground:, objects:)` | Projects, depth-sorts and draws the props |
 | `SpriteStackSceneObject(stack:, position:, yaw:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point and `yaw` its world facing |
-| `SpriteStackGround(extent:, step:, color:, axisColor:)` | Optional grid on `z = 0`, clipped against the near plane |
+| `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+
+**Painting the ground.** The floor is drawn as projected cells clipped against
+the near plane: `fill` paints a solid base, `checker` alternates colors by
+`(ix + iy)`, and `colorAt(x, y)` returns a color per cell centre for procedural
+floors (roads, grass, water, noise). `fadeColor` + `fadeDistance` blend distant
+cells into the horizon, and `step: 0` hides the grid lines. Cells are flat
+colors, not textures — a texture would need subdivision or a textured
+rasterizer to be perspective-correct.
 
 Sorting is per object (painter's algorithm), so two intersecting props cannot
 resolve per pixel. The volume/mesh is not drawn; pair the scene with

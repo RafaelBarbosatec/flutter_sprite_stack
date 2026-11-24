@@ -54,6 +54,10 @@ void main() {
           step: 70,
           color: ui.Color(0x332E4050),
           axisColor: ui.Color(0x664E6A84),
+          cellSize: 70,
+          checker: [ui.Color(0xFF13202A), ui.Color(0xFF162430)],
+          fadeColor: ui.Color(0xFF0B1118),
+          fadeDistance: 2400,
         ),
         objects: [
           SpriteStackSceneObject(

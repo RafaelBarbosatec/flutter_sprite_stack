@@ -45,6 +45,10 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
         step: 70,
         color: Color(0x332E4050),
         axisColor: Color(0x664E6A84),
+        cellSize: 70,
+        checker: [Color(0xFF13202A), Color(0xFF162430)],
+        fadeColor: Color(0xFF0B1118),
+        fadeDistance: 2400,
       ),
     );
     _ticker = createTicker(_tick)..start();

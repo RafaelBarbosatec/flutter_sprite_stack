@@ -12,6 +12,10 @@
 - `SpriteStackPoint` moved to its own library and gained vector operators
   (`+`, `-`, `*`, `dot`, `cross`, `length`, `normalized`). Volume, mesh and
   scene share the same world units: one unit per art pixel and per slice.
+- `SpriteStackGround` can paint the floor: solid `fill`, alternating `checker`
+  cells, a procedural `colorAt(x, y)` callback and `fadeColor`/`fadeDistance`
+  for distance fade. Cells are projected and near-clipped like the grid;
+  `step: 0` hides the lines.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
 - **Breaking:** removed the `flame` dependency and the engine components
