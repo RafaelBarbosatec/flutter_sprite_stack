@@ -203,7 +203,7 @@ void main() {
       expect(bounds.height, 1);
       expect(bounds.contains(1, 1, 0), isTrue);
       expect(bounds.contains(0, 1, 0), isFalse);
-      expect(bounds.voxelCount, 1);
+      expect(bounds.width * bounds.depth * bounds.height, 1);
     });
 
     test('an empty volume has no bounds', () {
