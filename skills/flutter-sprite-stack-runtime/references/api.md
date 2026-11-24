@@ -215,6 +215,49 @@ sliceHeight, required sliceCount, frameCount = 1, frame = 0, alphaThreshold =
 The mesh carries **no colour or UV** by design; it is geometry for 3D sizing,
 culling, collision and depth sorting. The sprite stack still draws.
 
+## SpriteStackScene
+
+| Member | Meaning |
+| --- | --- |
+| `SpriteStackScene({camera, zoom = 1, background, ground, objects})` | Projects, depth-sorts and draws the props |
+| `paint(Canvas, Size)` | Draws background, ground grid and every visible prop, far to near |
+| `projectObject(object, size)` | `SpriteStackSceneProjection?` — null when behind the camera |
+| `camera`, `zoom`, `background`, `ground`, `objects` | Mutable scene state |
+
+`SpriteStackSceneProjection` exposes `position` (screen ground point), `depth`
+(camera-space, smaller is closer), `scale`, `yaw` (prop yaw minus camera yaw),
+`bounds` and `isVisibleIn(size)`.
+
+### SpriteStackCamera
+
+| Member | Meaning |
+| --- | --- |
+| `SpriteStackCamera.orbit({yaw, pitch, distance, target, near})` | Camera on a sphere around `target` |
+| `yaw`, `pitch`, `distance`, `target` | Mutable orbit state; `pitch` clamps to `0..maxPitch` |
+| `eye` | World position |
+| `basis` | `SpriteStackCameraBasis`: `eye`, `forward`, `right`, `up`, `depthOf`, `horizontalOf`, `verticalOf` |
+
+`maxPitch = pi / 2 - 0.001`; at exactly `pi / 2` the basis would degenerate.
+
+### SpriteStackSceneObject
+
+`SpriteStackSceneObject({required stack, position = zero, yaw = 0, scale = 1,
+spacing = 1, frame = 0, time = 0, motion, cut, outline = true, shadow = true,
+pixelSnap = true, outlineColor, shadowColor})`. `position` is the ground point
+in world space; `yaw` is the world facing (the camera yaw is subtracted when
+drawing). The scene does not own the stack.
+
+### SpriteStackGround
+
+`SpriteStackGround({extent = 800, step = 100, color, axisColor, strokeWidth =
+1})` — grid on `z = 0`, clipped against the camera near plane.
+
+## SpriteStackPoint
+
+`SpriteStackPoint(x, y, z)` with `zero`, `+`, `-`, unary `-`, `*`, `dot`,
+`cross`, `length` and `normalized`. One unit = one art pixel horizontally and
+one slice vertically; volume, mesh and scene share these units.
+
 ## Draw counts
 
 | Path | Per frame |

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'sprite_stack_point.dart';
 import 'sprite_stack_volume.dart';
 
 /// Builds a compact, **geometry-only** surface mesh from a [SpriteStackVolume].
@@ -291,23 +292,4 @@ class SpriteStackQuad {
 
   @override
   int get hashCode => Object.hash(axis, direction, plane, u0, v0, u1, v1);
-}
-
-/// A point in volume space: one unit per art pixel and per slice.
-class SpriteStackPoint {
-  const SpriteStackPoint(this.x, this.y, this.z);
-
-  final double x;
-  final double y;
-  final double z;
-
-  @override
-  String toString() => 'SpriteStackPoint($x, $y, $z)';
-
-  @override
-  bool operator ==(Object other) =>
-      other is SpriteStackPoint && other.x == x && other.y == y && other.z == z;
-
-  @override
-  int get hashCode => Object.hash(x, y, z);
 }

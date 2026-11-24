@@ -6,6 +6,7 @@ import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 import 'f1_game/f1_game_screen.dart';
 import 'helicopter_screen.dart';
+import 'orbit_scene_screen.dart';
 import 'stack_metrics.dart';
 
 enum _SpriteKind { car, spaceship, helicopter, house, tree, palm, robot }
@@ -206,6 +207,13 @@ class _DemoScreenState extends State<DemoScreen>
       appBar: AppBar(
         title: const Text('Sprite Stack'),
         actions: [
+          IconButton(
+            tooltip: 'Orbit scene (3D camera)',
+            icon: const Icon(Icons.view_in_ar),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const OrbitSceneScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Helicopter demo (animated)',
             icon: const Icon(Icons.airplanemode_active),

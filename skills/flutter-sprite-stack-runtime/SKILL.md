@@ -1,6 +1,6 @@
 ---
 name: flutter-sprite-stack-runtime
-description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, and extracting the voxel volume and greedy mesh that delimit a prop for a 3D scene.
+description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, extracting the voxel volume and greedy mesh, and placing props in an orbit-camera 3D scene.
 license: MIT
 metadata:
   package: flutter_sprite_stack
@@ -29,6 +29,7 @@ stack.render(canvas, position: groundPoint, yaw: 0.6, scale: 4);
 | prop spins constantly | `SpriteStackTurntable` |
 | many instances of the same asset | `SpriteStackCache` |
 | prop needs volume for a 3D scene or collision | `stack.toVolume()` + `SpriteStackMesher` |
+| rotating 3D diorama over a ground plane | `SpriteStackScene` + `SpriteStackCamera` |
 
 ## CustomPainter
 
@@ -85,6 +86,44 @@ Use `priority` (or Bonfire's Y-sort) to place props behind/in front of actors.
 For many props of the same asset, pre-render with `stack.bake(...)` or
 `SpriteStackTurntable` and replay the `Picture` instead of rasterizing per
 frame.
+
+## Orbit scene (3D camera)
+
+`SpriteStackScene` puts stacks in a world with an orbiting camera, still with no
+engine dependency. It projects each ground point with perspective, subtracts the
+camera yaw from the prop yaw, scales by depth and paints far to near.
+
+```dart
+final scene = SpriteStackScene(
+  camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
+  zoom: 2.4,                     // art pixels per world unit at the target
+  background: const Color(0xFF0B1118),
+  ground: const SpriteStackGround(extent: 700, step: 70),
+  objects: [
+    SpriteStackSceneObject(
+      stack: house,
+      position: const SpriteStackPoint(-230, -40, 0), // z is up
+      yaw: 0.5,
+    ),
+  ],
+);
+
+// per frame, from a Ticker/CustomPainter
+scene.camera.yaw += dt * 0.2;
+scene.paint(canvas, size);
+```
+
+World units are art pixels, so a 48 px wide house is 48 units wide. `zoom` is
+the scale at the camera's target plane; closer props grow. `pitch` is clamped
+just short of straight down.
+
+- `scene.projectObject(object, size)` → `position`, `depth`, `scale`, `yaw`,
+  `bounds`; use `isVisibleIn(size)` to cull.
+- Sorting is **per object** (painter's algorithm); intersecting props cannot
+  resolve per pixel.
+- The volume/mesh is not drawn — pair it with `toVolume()` for collision or
+  exact bounds.
+- Update `object.time` yourself when using `StackMotion`; the scene has no clock.
 
 ## Animation (frame atlas)
 
