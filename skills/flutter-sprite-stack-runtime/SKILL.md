@@ -1,10 +1,10 @@
 ---
 name: flutter-sprite-stack-runtime
-description: Use the flutter_sprite_stack package in Flutter, Flame or Bonfire — loading strips and frame atlases, drawing with CustomPainter or SpriteStackComponent, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, and extracting the voxel volume and greedy mesh that delimit a prop for a 3D scene.
+description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, and extracting the voxel volume and greedy mesh that delimit a prop for a 3D scene.
 license: MIT
 metadata:
   package: flutter_sprite_stack
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Sprite-stack runtime
@@ -23,8 +23,8 @@ stack.render(canvas, position: groundPoint, yaw: 0.6, scale: 4);
 | Situation | Use |
 | --- | --- |
 | one-off draw inside a `CustomPainter` | `stack.render(...)` |
-| prop in a Flame/Bonfire game | `SpriteStackComponent` |
-| prop whose frames animate | `AnimatedSpriteStackComponent` |
+| prop inside a game loop (Flame, Bonfire, custom) | call `stack.render(...)` from your own component |
+| prop whose frames animate | `SpriteStackAnimation` + `render(frame:)` |
 | scenery drawn every frame, never deforms | `stack.bake(...)` → `BakedSpriteStack` |
 | prop spins constantly | `SpriteStackTurntable` |
 | many instances of the same asset | `SpriteStackCache` |
@@ -57,23 +57,34 @@ class StackPainter extends CustomPainter {
 
 `position` is the **ground contact point**, not the top-left corner.
 
-## Flame / Bonfire
+## Game engines (Flame, Bonfire, custom loop)
+
+The package ships no engine component on purpose: it only needs a `Canvas`. In
+Flame or Bonfire, wrap it in any component that exposes `render(Canvas)` and
+size it from `boundsFor`:
 
 ```dart
-add(
-  SpriteStackComponent(
-    stack: stack,
-    position: Vector2(320, 240),   // ground point in world space
-    yaw: 0.6,
-    stackScale: 4,
-    priority: 10,
-  ),
-);
+class StackProp extends PositionComponent {
+  StackProp({required this.stack, required Vector2 ground, this.yaw = 0})
+      : super(position: ground, size: Vector2.zero()) {
+    final b = stack.boundsFor(yaw: yaw, scale: 4);
+    size = Vector2(b.size.width, b.size.height);
+  }
+
+  final SpriteStack stack;
+  final double yaw;
+
+  @override
+  void render(Canvas canvas) {
+    stack.render(canvas, position: Offset(size.x / 2, size.y), yaw: yaw, scale: 4);
+  }
+}
 ```
 
-The component keeps `size` and `groundLocal` in sync with `yaw`, `pitch`,
-`stackScale`, `spacing` and `cut`, so culling, hit testing and Y sorting behave.
 Use `priority` (or Bonfire's Y-sort) to place props behind/in front of actors.
+For many props of the same asset, pre-render with `stack.bake(...)` or
+`SpriteStackTurntable` and replay the `Picture` instead of rasterizing per
+frame.
 
 ## Animation (frame atlas)
 
@@ -88,11 +99,14 @@ final torch = await SpriteStackAnimation.load(
   loop: true,
 );
 
-add(AnimatedSpriteStackComponent(animation: torch, stackScale: 4));
+// In your update loop:
+torch.update(dt);
+
+// In your draw call:
+torch.stack.render(canvas, position: ground, yaw: yaw, scale: 4, frame: torch.frame);
 ```
 
-The component calls `animation.update(dt)` and sets `frame` for you. Rendering
-cost is unchanged: `sliceCount` draws per frame.
+Rendering cost is unchanged: `sliceCount` draws per frame.
 
 ```dart
 torch.pingPong = true;         // 0→4→0 instead of wrapping
@@ -104,48 +118,47 @@ torch.play(); torch.stop(); torch.reset();
 ## Motion (sway, lean — no extra frames)
 
 ```dart
-add(
-  SpriteStackComponent(
-    stack: banner,
-    position: Vector2(120, 300),
-    motion: const StackMotion(sway: 2.5, speed: 1.8, wave: 0.7),
-    stackScale: 4,
-  ),
+stack.render(
+  canvas,
+  position: ground,
+  yaw: yaw,
+  scale: 4,
+  motion: const StackMotion(sway: 2.5, speed: 1.8, wave: 0.7),
+  time: elapsedSeconds,
 );
 ```
 
 `StackMotion` offsets each slice by `sin(time · speed − z · wave + phase) · sway
 · (z / (n−1))²`. The square pins slice 0 to the ground and moves the tip by
 exactly `sway` source pixels. `lean` is a constant bend for wind direction.
-The component advances `motionTime` in `update`; with `render()` you pass
-`time:` yourself.
+Advance `time` yourself in your game loop.
 
 ## Cutaway (`SliceCut`) — roof off, interior visible
 
 ```dart
-final house = SpriteStackComponent(stack: cottage, position: Vector2(320, 200));
-house.cut = SliceCut(top: 30);          // keep slices 0..29, drop the roof
-add(house);
+// Keep slices 0..29, drop the roof.
+stack.render(canvas, position: ground, yaw: yaw, scale: 4,
+  cut: const SliceCut(top: 30));
 
 // Animate the roof off when the player walks in:
-house.cut = SliceCut(top: 30 + 18 * (1 - roofProgress));
+final top = 30 + 18 * (1 - roofProgress);
+stack.render(..., cut: SliceCut(top: top));
 ```
 
 `top` and `bottom` are in **slices**, and may be fractional. The slice sitting
 exactly on the frontier dissolves with a 4×4 Bayer dither, so the pixel grid
-survives. Bounds shrink with the cut, so the component stays correctly culled.
+survives. `boundsFor(cut:)` shrinks with the cut, so culling stays correct.
 The default `top: double.infinity` keeps everything.
 
 **Draw order matters.** A single stack cannot put the player *between* the front
 and back walls. What works with one asset:
 
-1. add the house first (lower priority), cut the roof;
-2. add the player after (higher priority) — it draws over the remaining
-   cross-sections, reading as "inside" in a top-down/dollhouse camera.
+1. draw the house first, cut the roof;
+2. draw the player after — it draws over the remaining cross-sections, reading
+   as "inside" in a top-down/dollhouse camera.
 
 If the front wall must occlude the player, split the cottage into two assets
-(back walls + front walls) and draw: back, player, front. See
-`assets/cutaway_house.dart` for a ready component.
+(back walls + front walls) and draw: back, player, front.
 
 ## Bake, turntable, cache
 
@@ -174,12 +187,9 @@ Never size a prop as `sliceWidth × sliceCount × spacing`: that ignores `yaw`,
 `pitch`, the outline and the shadow.
 
 ```dart
-final bounds = stack.boundsFor(yaw: yaw, scale: 4);
+final bounds = stack.boundsFor(yaw: yaw, scale: 4, cut: cut);
 final rect = bounds.rectAt(groundPoint);  // place/hit-test with this
 ```
-
-`SpriteStackComponent` already does it — `size` is the projected bounds and
-`containsLocalPoint` tests the real area.
 
 ## Volume and mesh (3D groundwork)
 
@@ -219,7 +229,7 @@ frame — never every game frame.
 | prop flickers behind other props | `priority` / Y-sort not set from the ground point |
 | animation runs at fixed speed regardless of movement | drive `frame` from your own phase instead of `frameDuration` |
 | baked prop never animates | `bake()` freezes frame, yaw and motion — use live render |
-| bounds wrong after changing `cut` | setters refresh; if you mutate several fields, call `updateBounds()` |
+| bounds wrong after changing `cut` | recompute `boundsFor(cut: …)` whenever the cut moves |
 | memory grows per instance | share one `SpriteStack` via `SpriteStackCache`, do not `load` per entity |
 | `Picture` leaked | `BakedSpriteStack.dispose()` / `SpriteStackTurntable.dispose()` |
 
@@ -227,4 +237,3 @@ frame — never every game frame.
 
 - `references/api.md` — every parameter of every public API.
 - `references/performance.md` — draw counts, memory, when to bake.
-- `assets/cutaway_house.dart` — animated roof-off component.

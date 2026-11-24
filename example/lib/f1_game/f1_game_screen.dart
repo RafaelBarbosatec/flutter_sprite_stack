@@ -7,6 +7,7 @@ import 'race_state.dart';
 import 'scenery.dart';
 import 'touch_controls.dart';
 import 'track.dart';
+import 'track_lines.dart';
 import 'track_tileset.dart';
 
 /// A small Bonfire game: drive the sprite-stacked F1 car around a circuit.
@@ -78,6 +79,7 @@ class _F1GameScreenState extends State<F1GameScreen> {
       map: TrackTileset(_track).buildWorldMap(),
       player: car,
       components: [
+        TrackLines(_track),
         Scenery(track: _track, onError: _onLoadError),
       ],
       playerControllers: [

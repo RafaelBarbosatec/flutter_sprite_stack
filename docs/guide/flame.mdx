@@ -1,70 +1,111 @@
 ---
-title: Flame / Bonfire
-description: Use SpriteStackComponent in Flame scenes with Y sorting and hit boxes.
+title: Game Engines (Flame / Bonfire)
+description: Wrap SpriteStack.render in any engine component — no engine dependency required.
 ---
 
-# Flame / Bonfire
+# Game Engines (Flame / Bonfire)
+
+The package deliberately ships **no engine component**. It only needs a
+`Canvas`, so it stays free of Flame, Bonfire or any other engine version
+constraint. You can use it in Flame, Bonfire, a plain `Ticker` loop or a custom
+renderer by calling `render` from your own component.
+
+## A minimal prop component
+
+Wrap `SpriteStack.render` in any component that exposes `render(Canvas)` and
+size it from the projected bounds:
 
 ```dart
-add(
-  SpriteStackComponent(
-    stack: robot,
-    position: Vector2(120, 200),
-    yaw: 0.6,
-    stackScale: 4,
-    priority: 10, // Y-sort with the rest of the scene
-  ),
-);
+class StackProp extends PositionComponent {
+  StackProp({
+    required this.stack,
+    required Vector2 ground,
+    this.yaw = 0,
+    this.stackScale = 4,
+  }) : super(position: ground, size: Vector2.zero()) {
+    final bounds = stack.boundsFor(
+      yaw: yaw,
+      scale: stackScale,
+    );
+    size = Vector2(bounds.size.width, bounds.size.height);
+  }
+
+  final SpriteStack stack;
+  final double yaw;
+  final double stackScale;
+
+  @override
+  void render(Canvas canvas) {
+    stack.render(
+      canvas,
+      position: Offset(size.x / 2, size.y), // ground point
+      yaw: yaw,
+      scale: stackScale,
+    );
+  }
+}
 ```
 
-The component keeps `size` in sync with the **projected** bounds — rotated
-footprint, outline and ground shadow — so hit boxes, camera culling and
-`priority`-based sorting match what is actually drawn.
+`boundsFor` returns the **projected** bounds — rotated footprint, outline and
+ground shadow — so hit boxes, camera culling and `priority`-based Y sorting
+match what is actually drawn. `yaw` spins the prop in place; it does **not**
+touch the component's own `angle`. The drawing stays anchored by its ground
+point, so the prop does not slide while the bounds change.
 
-`yaw` spins the prop in place; it does **not** touch the component's own
-`angle`. Drawing stays anchored by the ground point (`groundLocal`), so the
-prop does not slide while the bounds change.
+## Animation
 
-The `yaw`, `pitch`, `stackScale`, `spacing`, `outline` and `shadow` setters
-refresh the bounds for you. `updateBounds()` only exists for bulk changes:
+Drive a `SpriteStackAnimation` from your component's `update` and pass its
+frame to `render`:
 
 ```dart
-component.pitch = 0.8; // size updated here
+class AnimatedProp extends StackProp {
+  AnimatedProp({
+    required this.animation,
+    required super.stack,
+    required super.ground,
+    super.yaw,
+    super.stackScale,
+  });
+
+  final SpriteStackAnimation animation;
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    animation.update(dt);
+  }
+
+  @override
+  void render(Canvas canvas) {
+    stack.render(
+      canvas,
+      position: Offset(size.x / 2, size.y),
+      yaw: yaw,
+      scale: stackScale,
+      frame: animation.frame,
+    );
+  }
+}
 ```
 
-For frame animation, `AnimatedSpriteStackComponent` forwards every camera
-option and drives `frame` from a `SpriteStackAnimation`:
+## Wind, banners and vegetation
+
+Pass a `StackMotion` and advance the clock yourself:
 
 ```dart
-final torch = await SpriteStackAnimation.load(
-  'sprites/torch/frames.png',
-  sliceCount: 32,
-  frameCount: 8,
-  frameDuration: 0.13,
-);
-
-add(
-  AnimatedSpriteStackComponent(
-    animation: torch,
-    position: Vector2(120, 200),
-    stackScale: 4,
-  ),
-);
-```
-
-For wind, banners and vegetation, pass a `StackMotion`; the component advances
-its clock in `update`, so there is nothing else to drive:
-
-```dart
-SpriteStackComponent(
-  stack: tree,
+stack.render(
+  canvas,
+  position: ground,
+  yaw: yaw,
+  scale: 4,
   motion: const StackMotion(sway: 2.5, speed: 1.8),
-  position: Vector2(320, 200),
+  time: elapsedSeconds,
 );
 ```
 
-For scenery that does not spin every frame, skip the CPU rasterizer and draw a
-baked frame:
+## Scenery that does not spin every frame
+
+Skip the CPU rasterizer and replay a baked frame:
 
 ```dart
 class BakedProp extends PositionComponent {
@@ -88,3 +129,6 @@ class BakedProp extends PositionComponent {
   }
 }
 ```
+
+`SpriteStackTurntable` does the same for props that rotate: bake one `Picture`
+per yaw bucket and draw the closest one.

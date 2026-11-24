@@ -8,7 +8,7 @@ environment:
   flutter: '>=3.22.0'
 
 dependencies:
-  bonfire: ^4.2.0
+  bonfire: ^4.2.1
   flutter:
     sdk: flutter
   flutter_sprite_stack:
@@ -26,4 +26,7 @@ flutter:
     - sprites/car/slices.png
     - sprites/house/slices.png
     - sprites/tree/slices.png
-    - sprites/torch/frames.png
+    - sprites/spaceship/slices.png
+    - sprites/palmeira/slices.png
+    - sprites/helicopter/frames.png
+    - sprites/helicopter/slices.png

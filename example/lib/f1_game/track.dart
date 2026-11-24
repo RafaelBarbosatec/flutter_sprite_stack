@@ -6,8 +6,10 @@ enum TrackCell { asphalt, kerb, grass, wall, scenery }
 
 /// Procedural oval circuit built from a rounded-rectangle ring.
 ///
-/// From the asphalt outwards: 1 tile of kerb, 2 tiles of slow grass and a
-/// solid barrier wall. Everything past the wall is scenery.
+/// From the asphalt outwards: 2 tiles of slow grass and a solid barrier wall;
+/// everything past the wall is scenery. Kerbs are painted only on the infield
+/// side of the four corners, where a real circuit has them, and the asphalt
+/// edges are marked by white track-limit lines.
 class Track {
   Track() {
     _cells = List.generate(
@@ -30,11 +32,26 @@ class Track {
   /// Column of the start/finish line.
   static const int startColumn = 54;
 
+  /// Width of the kerb band, in tiles.
+  ///
+  /// The band sits on the infield side of the asphalt, at the inside of the
+  /// four corners. 1.5 tiles = 48 px = three 16 px checker blocks, which reads
+  /// as a kerb instead of the wide 64 px ribbon the circuit used to have.
+  static const double kerbWidth = 1.5;
+
   late final List<List<TrackCell>> _cells;
 
   Vector2 get mapSize => Vector2(cols * tileSize, rows * tileSize);
 
   double get startLineX => startColumn * tileSize;
+
+  /// Bounds of the outer asphalt edge, in tiles.
+  static ({double left, double top, double right, double bottom, double r})
+      get outerBounds => _outer;
+
+  /// Bounds of the infield edge, in tiles.
+  static ({double left, double top, double right, double bottom, double r})
+      get innerBounds => _inner;
 
   /// Middle of the map, used to tell the two straights apart.
   double get midY => rows * tileSize / 2;
@@ -60,6 +77,54 @@ class Track {
     return dx * dx + dy * dy <= r * r;
   }
 
+  /// Centres of the four infield corner arcs, with the direction that points
+  /// into each corner's quadrant.
+  static const List<({double cx, double cy, double sx, double sy})>
+      _kerbCorners = [
+    (cx: 32.0, cy: 32.0, sx: -1.0, sy: -1.0), // top-left
+    (cx: 76.0, cy: 32.0, sx: 1.0, sy: -1.0), // top-right
+    (cx: 32.0, cy: 48.0, sx: -1.0, sy: 1.0), // bottom-left
+    (cx: 76.0, cy: 48.0, sx: 1.0, sy: 1.0), // bottom-right
+  ];
+
+  /// Whether ([x], [y]) is inside the kerb band.
+  ///
+  /// A kerb is painted only at the inside of a corner, never along the
+  /// straights: the point must be inside the infield, within [kerbWidth] of
+  /// its edge, and inside one of the four corner quadrants.
+  static bool _inKerbZone(double x, double y) {
+    if (!_inRRect(_inner, x, y)) return false;
+    if (_inRRect(_inner, x, y, grow: -kerbWidth)) return false;
+
+    for (final corner in _kerbCorners) {
+      final u = (x - corner.cx) * corner.sx;
+      final v = (y - corner.cy) * corner.sy;
+      if (u < 0 || v < 0) continue;
+      // The band is already guaranteed by the two rounded-rect tests above;
+      // the quadrant test removes the parts that run along the straights.
+      if (u * u + v * v <= _inner.r * _inner.r) return true;
+    }
+    return false;
+  }
+
+  /// Whether cell ([c], [r]) lies entirely inside one of the four corner
+  /// quadrants.
+  ///
+  /// The asphalt/grass edge of the outer corners is curved there, so tiles
+  /// straddling it have to be rasterised per pixel as well. On the straights
+  /// the same edge falls on cell boundaries, so the plain tiles are already
+  /// crisp.
+  static bool isCornerCell(int c, int r) {
+    for (final corner in _kerbCorners) {
+      final x0 = (c - corner.cx) * corner.sx;
+      final x1 = (c + 1 - corner.cx) * corner.sx;
+      final y0 = (r - corner.cy) * corner.sy;
+      final y1 = (r + 1 - corner.cy) * corner.sy;
+      if (x0 >= 0 && x1 >= 0 && y0 >= 0 && y1 >= 0) return true;
+    }
+    return false;
+  }
+
   TrackCell _classify(double x, double y) {
     bool outer(double grow) => _inRRect(_outer, x, y, grow: grow);
     bool inner(double grow) => _inRRect(_inner, x, y, grow: grow);
@@ -67,14 +132,12 @@ class Track {
     if (outer(0) && !inner(0)) return TrackCell.asphalt;
 
     if (inner(0)) {
-      // Infield: grow < 0 shrinks the infield, i.e. moves away from asphalt.
-      if (!inner(-2)) return TrackCell.kerb;
+      if (_inKerbZone(x, y)) return TrackCell.kerb;
       if (!inner(-6)) return TrackCell.grass;
       if (!inner(-8)) return TrackCell.wall;
       return TrackCell.scenery;
     }
 
-    if (outer(2)) return TrackCell.kerb;
     if (outer(6)) return TrackCell.grass;
     if (outer(8)) return TrackCell.wall;
     return TrackCell.scenery;
@@ -88,6 +151,14 @@ class Track {
 
   /// Direct cell lookup by column/row, used by [TrackTileset].
   TrackCell cellAtCell(int c, int r) => _cells[r][c];
+
+  /// Classifies an arbitrary point, given in tiles, without snapping it to a
+  /// cell centre.
+  ///
+  /// `TrackTileset` uses this to rasterise the kerb boundary at pixel
+  /// precision, which is what rounds the corners instead of leaving a
+  /// 32 px staircase.
+  TrackCell cellAtPoint(double x, double y) => _classify(x, y);
 
   late final List<Vector2> _wallCenters = [
     for (var r = 0; r < rows; r++)

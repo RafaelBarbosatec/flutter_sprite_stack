@@ -1,4 +1,5 @@
 import 'package:bonfire/bonfire.dart';
+import 'package:bonfire/map/base/layer.dart';
 
 import 'track.dart';
 
@@ -7,14 +8,35 @@ import 'track.dart';
 /// Every tile is drawn from code-generated [PixelArt] strings and packed into
 /// a runtime atlas, so the whole track needs no image asset. Two variants of
 /// the asphalt/grass/scenery tiles keep the original alternating-cell look,
-/// while kerbs, walls and the animated start/finish line use checkered art.
+/// while walls and the animated start/finish line use checkered art. The
+/// white track-limit lines are drawn by `TrackLines`, not by tiles.
+///
+/// ## Rounded corner kerbs
+///
+/// A kerb is not one tile: it is a 48 px band (three 16 px checker blocks)
+/// that sits on the infield side of the asphalt, at the inside of the four
+/// corners. Painting every kerb cell as a full checkered square makes the
+/// band's border a 32 px staircase, which is exactly what a large-radius
+/// corner should not look like.
+///
+/// Cells crossed by a curved boundary — the kerb band at the inside of the
+/// corners or the asphalt/grass edge at the outside — are therefore
+/// rasterised pixel by pixel from [Track.cellAtPoint] instead of using a
+/// single tile: each pixel asks the track which region it belongs to and gets
+/// the asphalt, kerb or grass pattern for that region. The borders then
+/// follow the real curves at one-pixel precision, while the red/white checker
+/// keeps the same 16 px block grid as before. Straights have no curved edge,
+/// so only the cells around the four corners need their own art; tiles with
+/// identical pixels are deduplicated.
 class TrackTileset {
   TrackTileset(this.track) {
+    _customTiles = _buildCustomTiles();
     _tileset = _createTileset();
   }
 
   final Track track;
   late final PixelTileset _tileset;
+  late final _CustomTiles _customTiles;
 
   static const _asphaltA = Color(0xFF3A3F4B);
   static const _asphaltB = Color(0xFF353A46);
@@ -35,43 +57,159 @@ class TrackTileset {
   static const _lineBlack = Color(0xFF14161C);
 
   static const int _tilePx = 32;
+  static const int _checkerBlock = 16;
 
   /// Generates a ready-to-use single-layer [WorldMap] for the track.
   WorldMap buildWorldMap() {
-    final legend = <String, String>{
-      'A': 'asphalt0',
-      'B': 'asphalt1',
-      'G': 'grass0',
-      'H': 'grass1',
-      'E': 'scenery0',
-      'F': 'scenery1',
-      'K': 'kerb',
-      'W': 'wall',
-      'S': 'startline',
-    };
-    final asciiRows = <String>[
+    final tiles = <Tile>[
       for (var r = 0; r < Track.rows; r++)
-        [
-          for (var c = 0; c < Track.cols; c++)
-            _asciiFor(track.cellAtCell(c, r), c, r),
-        ].join(),
+        for (var c = 0; c < Track.cols; c++)
+          _tileset.tile(
+            x: c.toDouble(),
+            y: r.toDouble(),
+            name: _tileNameAt(c, r),
+          ),
     ];
-    return _tileset.worldMapFromAscii(legend: legend, rows: asciiRows);
+    return WorldMap([Layer(id: 0, name: 'track', tiles: tiles)]);
   }
 
-  String _asciiFor(TrackCell cell, int c, int r) {
+  String _tileNameAt(int c, int r) {
+    final custom = _customTiles.byCell[r * Track.cols + c];
+    if (custom != null) return custom;
+
+    final cell = track.cellAtCell(c, r);
+    if (cell == TrackCell.asphalt && c == Track.startColumn) return 'startline';
+
+    final phase = (c + r).isOdd ? 1 : 0;
+    return switch (cell) {
+      TrackCell.asphalt => 'asphalt$phase',
+      TrackCell.kerb => 'kerb',
+      TrackCell.grass => 'grass$phase',
+      TrackCell.scenery => 'scenery$phase',
+      TrackCell.wall => 'wall',
+    };
+  }
+
+  /// Builds the per-cell rasterised tiles for the cells the kerb edge crosses.
+  _CustomTiles _buildCustomTiles() {
+    final byCell = <int, String>{};
+    final tiles = <String, PixelTile>{};
+    final nameByArt = <String, String>{};
+
+    for (var r = 0; r < Track.rows; r++) {
+      for (var c = 0; c < Track.cols; c++) {
+        if (!_needsPixelArt(c, r)) continue;
+
+        final rows = _boundaryArt(c, r);
+        final name = nameByArt.putIfAbsent(rows.join('\n'), () {
+          final generated = 'edge${tiles.length}';
+          tiles[generated] = PixelTile.single(PixelArt.rows(rows));
+          return generated;
+        });
+        byCell[r * Track.cols + c] = name;
+      }
+    }
+
+    return _CustomTiles(byCell, tiles);
+  }
+
+  /// Whether cell ([c], [r]) straddles a curved track boundary and therefore
+  /// needs its own pixel-rasterised art.
+  ///
+  /// Two curves matter: the kerb band at the inside of the corners and the
+  /// asphalt/grass edge at the outside. Both are checked, but only inside the
+  /// four corner quadrants — on the straights the boundaries land on cell
+  /// edges, so the regular tiles already look straight.
+  bool _needsPixelArt(int c, int r) {
+    if (!Track.isCornerCell(c, r)) return false;
+
+    // Sampling just inside the cell avoids classifying a point that sits
+    // exactly on a cell edge, where the inclusive tests can go either way.
+    const edge = 0.001;
+    final samples = <TrackCell>{
+      track.cellAtPoint(c + edge, r + edge),
+      track.cellAtPoint(c + 1 - edge, r + edge),
+      track.cellAtPoint(c + edge, r + 1 - edge),
+      track.cellAtPoint(c + 1 - edge, r + 1 - edge),
+    };
+    if (samples.length == 1) return false;
+
+    final kerbEdge = samples.contains(TrackCell.kerb) &&
+        (samples.contains(TrackCell.asphalt) ||
+            samples.contains(TrackCell.grass));
+    final asphaltGrass = samples.contains(TrackCell.asphalt) &&
+        samples.contains(TrackCell.grass);
+    return kerbEdge || asphaltGrass;
+  }
+
+  /// Rasterises one 32x32 boundary cell at sub-tile precision.
+  List<String> _boundaryArt(int c, int r) {
+    final phase = (c + r).isOdd ? 1 : 0;
+    final rows = <String>[];
+
+    for (var py = 0; py < _tilePx; py++) {
+      final row = StringBuffer();
+      for (var px = 0; px < _tilePx; px++) {
+        final cell = track.cellAtPoint(
+          c + (px + 0.5) / _tilePx,
+          r + (py + 0.5) / _tilePx,
+        );
+        row.write(_pixelCode(cell, px, py, phase));
+      }
+      rows.add(row.toString());
+    }
+
+    return rows;
+  }
+
+  /// Palette code for one pixel, matching the pattern of the neighbouring
+  /// full-cell tiles so the seams disappear.
+  static String _pixelCode(TrackCell cell, int px, int py, int phase) {
     switch (cell) {
       case TrackCell.asphalt:
-        if (c == Track.startColumn) return 'S';
-        return (c + r).isOdd ? 'B' : 'A';
-      case TrackCell.kerb:
-        return 'K';
+        return _texturedPixel(
+          a: 'a',
+          b: 'b',
+          dark: 'c',
+          light: 's',
+          x: px,
+          y: py,
+          phase: phase,
+          darkEvery: 97,
+          lightEvery: 61,
+        );
       case TrackCell.grass:
-        return (c + r).isOdd ? 'H' : 'G';
-      case TrackCell.wall:
-        return 'W';
+        return _texturedPixel(
+          a: 'g',
+          b: 'h',
+          dark: 'd',
+          light: 'l',
+          x: px,
+          y: py,
+          phase: phase,
+          darkEvery: 83,
+          lightEvery: 71,
+        );
       case TrackCell.scenery:
-        return (c + r).isOdd ? 'F' : 'E';
+        return _texturedPixel(
+          a: 'e',
+          b: 'f',
+          dark: 'm',
+          light: 'n',
+          x: px,
+          y: py,
+          phase: phase,
+          darkEvery: 89,
+          lightEvery: 67,
+        );
+      case TrackCell.kerb:
+        return ((px ~/ _checkerBlock) + (py ~/ _checkerBlock)) % 2 == 0
+            ? 'r'
+            : 'w';
+      case TrackCell.wall:
+        return ((px ~/ _checkerBlock) + (py ~/ _checkerBlock)) % 2 == 0
+            ? 'W'
+            : 'D';
     }
   }
 
@@ -135,10 +273,10 @@ class TrackTileset {
           ),
         ),
         'kerb': PixelTile.single(
-          PixelArt.rows(_checker('r', 'w', block: 16)),
+          PixelArt.rows(_checker('r', 'w', block: _checkerBlock)),
         ),
         'wall': PixelTile.single(
-          PixelArt.rows(_checker('W', 'D', block: 16)),
+          PixelArt.rows(_checker('W', 'D', block: _checkerBlock)),
           collision: true,
         ),
         'startline': PixelTile.animated(
@@ -148,6 +286,7 @@ class TrackTileset {
           ],
           stepTime: 0.6,
         ),
+        ..._customTiles.tiles,
       },
     );
   }
@@ -211,4 +350,15 @@ class TrackTileset {
     if (lightEvery > 0 && n % lightEvery == 0) return light;
     return ((x + y + phase) % 2 == 0) ? a : b;
   }
+}
+
+/// Rasterised tiles for the corner cells a curved track boundary crosses.
+class _CustomTiles {
+  _CustomTiles(this.byCell, this.tiles);
+
+  /// Tile name by `row * Track.cols + column`.
+  final Map<int, String> byCell;
+
+  /// Generated tiles, keyed by name, in first-seen order.
+  final Map<String, PixelTile> tiles;
 }

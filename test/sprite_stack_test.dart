@@ -452,37 +452,6 @@ void main() {
     });
   });
 
-  group('component', () {
-    test('size and ground follow the projected bounds', () async {
-      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
-      final stack = SpriteStack.fromImage(image, sliceCount: 2);
-
-      final component = SpriteStackComponent(
-        stack: stack,
-        yaw: math.pi / 2,
-        pitch: math.pi / 2,
-        outline: false,
-        shadow: false,
-      );
-
-      expect(component.size.x, closeTo(4, 1e-9));
-      expect(component.size.y, closeTo(3, 1e-9));
-      expect(component.groundLocal.dx, closeTo(2, 1e-9));
-      expect(component.groundLocal.dy, closeTo(3, 1e-9));
-
-      component.yaw = 0;
-      expect(component.size.x, 2);
-      expect(component.size.y, 5);
-      expect(component.groundLocal, const ui.Offset(1, 5));
-
-      component.stackScale = 2;
-      expect(component.size.x, 4);
-      expect(component.size.y, 10);
-
-      stack.dispose();
-    });
-  });
-
   group('frames', () {
     test('decode() splits the atlas into vertical frames', () async {
       final image = await _twoFrameImage();
@@ -656,22 +625,6 @@ void main() {
 
       stack.dispose();
     });
-
-    test('component drives its frame from the animation', () async {
-      final stack = await _fourFrameStack();
-      final animation = SpriteStackAnimation(stack, frameDuration: 0.1);
-      final component = AnimatedSpriteStackComponent(
-        animation: animation,
-        yaw: 0.4,
-        stackScale: 2,
-      );
-
-      expect(component.frame, 0);
-      component.update(0.1);
-      expect(component.frame, 1);
-
-      stack.dispose();
-    });
   });
 
   group('motion', () {
@@ -721,19 +674,6 @@ void main() {
       expect(_pixelAt(pixels, 32, 12, 18), 0xFFFF0000);
       expect(_pixelAt(pixels, 32, 16, 17), 0xFF00FF00);
       expect(_pixelAt(pixels, 32, 8, 17), 0x00000000);
-
-      stack.dispose();
-    });
-
-    test('component advances the motion clock', () async {
-      final stack = await _fourFrameStack();
-      final component = SpriteStackComponent(
-        stack: stack,
-        motion: const StackMotion(sway: 1),
-      );
-
-      component.update(0.5);
-      expect(component.motionTime, closeTo(0.5, 1e-9));
 
       stack.dispose();
     });
@@ -833,23 +773,6 @@ void main() {
 
       expect(full.size.height, closeTo(16, 1e-9));
       expect(cut.size.height, closeTo(8, 1e-9));
-
-      stack.dispose();
-    });
-
-    test('component refreshes its size when the cut changes', () async {
-      final stack = await _fourSliceStack();
-      final component = SpriteStackComponent(
-        stack: stack,
-        pitch: math.pi / 2,
-        spacing: 4,
-        outline: false,
-        shadow: false,
-      );
-
-      expect(component.size.y, closeTo(16, 1e-9));
-      component.cut = const SliceCut(top: 2);
-      expect(component.size.y, closeTo(8, 1e-9));
 
       stack.dispose();
     });
