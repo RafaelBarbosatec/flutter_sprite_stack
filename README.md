@@ -145,12 +145,11 @@ drawing stays anchored by its feet while the bounds change.
 
 `SpriteStackScene` places stacks in a world with an orbiting camera — no engine
 required. It projects each prop's ground point with perspective and draws far
-to near. By default props are **billboards**: `yaw` is a fixed screen-space
-angle and the camera orbit does not spin them, so scenery reads as a stable
-landscape you fly or drive past. Set `billboard: false` for a prop that must
-stay aligned with the world (a vehicle turning on its heading); the scene then
-derives the visible yaw from the camera basis (`camera.yaw - object.yaw + π`)
-so it follows the projected ground grid.
+to near. By default props stay **world-aligned**: the scene derives each prop's
+visible yaw and pitch from the camera-to-prop vector, so every prop follows the
+projected ground grid and reads as a fixed object on the map while the camera
+moves (orbit **or** follow). Set `billboard: true` for a true billboard that
+keeps a fixed screen-space facing instead.
 
 ```dart
 final scene = SpriteStackScene(
@@ -193,7 +192,7 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | --- | --- |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
-| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point. `yaw` is a fixed screen angle by default (`billboard: true`); set `billboard: false` for world-aligned facing |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point. `yaw` is its world facing by default (`billboard: false`); set `billboard: true` for a fixed screen facing |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
@@ -238,12 +237,12 @@ follow.update(scene.camera, subject: car.position, yaw: car.yaw,
     velocity: velocity, dt: dt);
 ```
 
-The lag is the point. The subject is world-aligned (`billboard: false`), so the
-scene draws it at `camera.yaw - object.yaw + π`: a camera that copied the car's
-yaw instantly would keep that difference at zero and the car would never appear
-to rotate — the world would just spin around a locked sprite. Trailing the
-subject by a fraction of a second exposes the turn. `distance` and `pitch` stay
-in the caller's hands.
+The lag is the point. The subject is world-aligned (the default), so the scene
+derives its sprite yaw from the camera-to-prop vector: a camera that copied the
+car's yaw instantly would keep that difference at zero and the car would never
+appear to rotate — the world would just spin around a locked sprite. Trailing
+the subject by a fraction of a second exposes the turn. `distance` and `pitch`
+stay in the caller's hands.
 
 **Culling.** Props behind the near plane, props whose projected bounds miss the
 canvas and props smaller than `minimumProjectedPixels` (default `0.5`) never

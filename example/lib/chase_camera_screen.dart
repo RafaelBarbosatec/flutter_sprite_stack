@@ -44,11 +44,11 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
     _scene = SpriteStackScene(
       camera: SpriteStackCamera.orbit(
         yaw: 0,
-        pitch: 0.32,
-        distance: 320,
+        pitch: 0.55,
+        distance: 900,
         target: const SpriteStackPoint(0, 0, 30),
       ),
-      zoom: 2.4,
+      zoom: 2.0,
       sky: const SpriteStackSky(
         top: Color(0xFF070D16),
         horizon: Color(0xFF27435E),
@@ -66,6 +66,8 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
       ),
     );
     _follow = SpriteStackFollowCamera(
+      // Chase behind the car; a long distance keeps the scenery in front of
+      // the camera with a gentle perspective, like the OrbitScene example.
       positionRate: 6,
       yawRate: 3,
       lookAhead: 55,
@@ -89,8 +91,9 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
         stack: car,
         position: const SpriteStackPoint(0, 0, 0),
         scale: 1,
-        // The subject is world-aligned so its body turns with the heading;
-        // the scenery around it keeps the default billboard facing.
+        // World-aligned (the default) so the body turns with the heading;
+        // the scenery around it is world-aligned too, so it stays fixed on
+        // the map while the camera drives past.
         billboard: false,
       );
       _scene.objects.add(_car);

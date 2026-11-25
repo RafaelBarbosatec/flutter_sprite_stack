@@ -3,9 +3,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 /// Engine-free 3D diorama: an orbiting camera over sprite stacks placed on a
-/// ground grid. Drag to orbit; the props opt out of the default billboard so
-/// they keep their world orientation and stay aligned with the ground grid,
-/// which makes the orbit read as a camera circling a fixed diorama.
+/// ground grid. Drag to orbit; the props use the default world-aligned
+/// behaviour, so they stay aligned with the ground grid and the orbit reads as
+/// a camera circling a fixed diorama.
 class OrbitSceneScreen extends StatefulWidget {
   const OrbitSceneScreen({super.key});
 
@@ -74,34 +74,29 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
           stack: house,
           position: const SpriteStackPoint(-230, -40, 0),
           yaw: 0.5,
-          billboard: false,
         ),
         SpriteStackSceneObject(
           stack: tree,
           position: const SpriteStackPoint(180, 130, 0),
           yaw: 0.2,
           scale: 1.1,
-          billboard: false,
         ),
         SpriteStackSceneObject(
           stack: palm,
           position: const SpriteStackPoint(260, -140, 0),
           yaw: 1.2,
-          billboard: false,
         ),
         SpriteStackSceneObject(
           stack: car,
           position: const SpriteStackPoint(-40, 150, 0),
           yaw: 2.4,
           scale: 0.9,
-          billboard: false,
         ),
         SpriteStackSceneObject(
           stack: car,
           position: const SpriteStackPoint(-80, -170, 0),
           yaw: 0.6,
           scale: 0.9,
-          billboard: false,
         ),
       ]);
       setState(() => _loading = false);

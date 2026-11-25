@@ -80,14 +80,13 @@ class SpriteStackGround {
 /// A prop placed in a [SpriteStackScene].
 ///
 /// [position] is the ground contact point in world space. [yaw] is the prop's
-/// rotation: with the default `billboard: true` it is a fixed screen-space
-/// angle, so the prop keeps one facing while the camera moves. Scenery reads as
-/// a stable landscape you fly or drive past.
+/// world rotation. By default the scene derives the visible sprite yaw from the
+/// camera basis, so the prop stays aligned with the projected ground plane and
+/// reads as a fixed object on the map while the camera moves.
 ///
-/// Set [billboard] to `false` for props that must stay aligned with the world
-/// (a vehicle turning on its heading): the scene then derives the visible
-/// sprite yaw from the camera basis so the prop's world axes follow the
-/// projected ground plane.
+/// Set [billboard] to `true` for a true billboard: the prop is drawn with its
+/// [yaw] as a fixed screen-space angle, so it always keeps one facing on screen
+/// instead of turning with the world.
 ///
 /// [scale] is a multiplier on the projected art scale. The scene does not own
 /// the [stack]; dispose it yourself when no scene uses it.
@@ -96,7 +95,7 @@ class SpriteStackSceneObject {
     required this.stack,
     this.position = SpriteStackPoint.zero,
     this.yaw = 0,
-    this.billboard = true,
+    this.billboard = false,
     this.scale = 1,
     this.spacing = 1,
     this.frame = 0,
@@ -116,9 +115,9 @@ class SpriteStackSceneObject {
   SpriteStackPoint position;
   double yaw;
 
-  /// When `true` (the default), [yaw] is a fixed screen-space angle and the
-  /// camera orbit does not rotate the prop. Set it to `false` for world-aligned
-  /// props such as a vehicle that turns with its heading.
+  /// When `true`, [yaw] is a fixed screen-space angle and the camera orbit does
+  /// not rotate the prop. The default `false` keeps the prop aligned with the
+  /// projected ground plane, which is what most scenery should use.
   bool billboard;
 
   double scale;
@@ -155,6 +154,7 @@ class SpriteStackSceneProjection {
     required this.depth,
     required this.scale,
     required this.yaw,
+    required this.pitch,
     required this.bounds,
   });
 
@@ -168,9 +168,14 @@ class SpriteStackSceneProjection {
   /// Art-pixel scale the stack is drawn with.
   final double scale;
 
-  /// Prop yaw passed to `SpriteStack.render`: derived from the camera basis
-  /// for world-aligned props, or the fixed screen-space yaw for billboards.
+  /// Prop yaw passed to `SpriteStack.render`: derived from the camera-to-prop
+  /// vector for world-aligned props, or the fixed screen-space yaw for
+  /// billboards.
   final double yaw;
+
+  /// Prop pitch passed to `SpriteStack.render`: the camera's elevation above
+  /// the prop, derived from the camera-to-prop vector.
+  final double pitch;
 
   /// Projected bounds of the stack at [position].
   final Rect bounds;
@@ -300,16 +305,37 @@ class SpriteStackScene {
       size.width / 2 + relative.dot(basis.right) * scale,
       size.height / 2 - relative.dot(basis.up) * scale,
     );
-    // World-aligned props follow the ground grid: the sprite's front must land
-    // on the projected world front (`forwardOf(object.yaw)`). Solving the
-    // sprite's forward mapping `(-sin ψ, cos ψ · squash)` against the camera
-    // basis projection gives `ψ = camera.yaw - object.yaw + π`.
-    final yaw = object.billboard
-        ? object.yaw
-        : camera.yaw - object.yaw + math.pi;
+
+    // The camera direction from the prop to the eye drives the sprite's own
+    // yaw/pitch. Using the global camera yaw/pitch for every prop is only
+    // exact at the orbit target; deriving per-prop values keeps off-centre
+    // props glued to the ground as a follow camera moves past them.
+    final toCamera = basis.eye - object.position;
+    final horizontal =
+        math.sqrt(toCamera.x * toCamera.x + toCamera.y * toCamera.y);
+    final pitch = horizontal < 1e-9
+        ? math.pi / 2
+        : math.atan2(toCamera.z, horizontal);
+
+    final double yaw;
+    if (object.billboard) {
+      yaw = object.yaw;
+    } else {
+      // World-aligned: express the camera direction in the prop's local
+      // horizontal axes (right = source +X, forward = source +Y) and take its
+      // azimuth. At the orbit target this reduces to
+      // `camera.yaw - object.yaw + π`.
+      final cosY = math.cos(object.yaw);
+      final sinY = math.sin(object.yaw);
+      yaw = math.atan2(
+        -(toCamera.x * cosY + toCamera.y * sinY),
+        -toCamera.x * sinY + toCamera.y * cosY,
+      );
+    }
+
     final bounds = object.stack.boundsFor(
       yaw: yaw,
-      pitch: camera.pitch,
+      pitch: pitch,
       scale: scale,
       spacing: object.spacing,
       cut: object.cut,
@@ -323,6 +349,7 @@ class SpriteStackScene {
       depth: depth,
       scale: scale,
       yaw: yaw,
+      pitch: pitch,
       bounds: bounds.rectAt(screen),
     );
   }
@@ -397,7 +424,7 @@ class SpriteStackScene {
         canvas,
         position: projection.position,
         yaw: projection.yaw,
-        pitch: camera.pitch,
+        pitch: projection.pitch,
         scale: projection.scale,
         spacing: object.spacing,
         frame: object.frame,

@@ -47,11 +47,11 @@ class _FlightScreenState extends State<FlightScreen>
     _scene = SpriteStackScene(
       camera: SpriteStackCamera.orbit(
         yaw: 0,
-        pitch: 0.22,
-        distance: 300,
+        pitch: 0.45,
+        distance: 1000,
         target: const SpriteStackPoint(0, 0, 200),
       ),
-      zoom: 2.4,
+      zoom: 1.5,
       sky: const SpriteStackSky(
         top: Color(0xFF05090F),
         horizon: Color(0xFF2C4C6B),
@@ -69,6 +69,8 @@ class _FlightScreenState extends State<FlightScreen>
       ),
     );
     _follow = SpriteStackFollowCamera(
+      // Chase behind the ship; a long distance keeps the scenery in front of
+      // the camera with a gentle perspective, like the OrbitScene example.
       positionRate: 5,
       yawRate: 2.4,
       lookAhead: 70,
@@ -91,8 +93,9 @@ class _FlightScreenState extends State<FlightScreen>
         stack: ship,
         position: const SpriteStackPoint(0, 0, _cruiseAltitude),
         scale: 1,
-        // The ship is world-aligned so it turns and banks on its heading; the
-        // ground props below keep the default billboard facing.
+        // World-aligned (the default) so it turns and banks on its heading;
+        // the ground props below are world-aligned too, so they stay fixed on
+        // the map while the camera flies past.
         billboard: false,
         // An airborne prop should not carry the ground shadow baked under its
         // feet; the shadow would float with it.
