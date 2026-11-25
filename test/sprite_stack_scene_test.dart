@@ -575,8 +575,10 @@ void main() {
         zoom: 3,
         background: const ui.Color(0xFF000000),
       );
+      // Unrotated bounds end just past the right edge (x ~210 of 200); the
+      // rolled body reaches back into the canvas, so it must not be culled.
       final object = objectAt(stack, 0)
-        ..position = const SpriteStackPoint(52, 0, 0)
+        ..position = const SpriteStackPoint(20.5, 0, 0)
         ..roll = math.pi / 2;
       scene.objects.add(object);
 
