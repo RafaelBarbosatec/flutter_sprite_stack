@@ -482,6 +482,112 @@ void main() {
     });
   });
 
+  group('SpriteStackScene roll', () {
+    // Tall and thin: 4 wide, 12 slices up.
+    Future<SpriteStack> tall() async {
+      return _solidStack(0xFFFF0000, sliceCount: 12);
+    }
+
+    SpriteStackSceneObject objectAt(SpriteStack stack, double yaw) =>
+        SpriteStackSceneObject(
+          stack: stack,
+          yaw: yaw,
+          scale: 2,
+          outline: false,
+          shadow: false,
+        );
+
+    test('turns a tall prop on its side at a quarter turn', () async {
+      final stack = await tall();
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),
+        zoom: 3,
+        background: const ui.Color(0xFF000000),
+      );
+      final object = objectAt(stack, 0);
+      scene.objects.add(object);
+
+      final upright = await _render(scene);
+      final uprightInk = _inkBounds(upright, 200, 200)!;
+      expect(uprightInk.height, greaterThan(uprightInk.width));
+
+      object.roll = math.pi / 2;
+      final rolled = await _render(scene);
+      final rolledInk = _inkBounds(rolled, 200, 200)!;
+      expect(rolledInk.width, greaterThan(rolledInk.height));
+
+      stack.dispose();
+    });
+
+    test('rolls whatever the camera angle is', () async {
+      // The roll is a render effect, not a projection: a side view must tilt
+      // the sprite just like a rear view does.
+      final stack = await tall();
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),
+        zoom: 3,
+        background: const ui.Color(0xFF000000),
+      );
+      final object = objectAt(stack, math.pi / 2);
+      scene.objects.add(object);
+
+      final flat = _inkBounds(await _render(scene), 200, 200)!;
+      object.roll = math.pi / 2;
+      final banked = _inkBounds(await _render(scene), 200, 200)!;
+
+      expect(flat.height, greaterThan(flat.width));
+      expect(banked.width, greaterThan(banked.height));
+
+      stack.dispose();
+    });
+
+    test('rollPivot moves the rotation centre', () async {
+      final stack = await tall();
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),
+        zoom: 3,
+        background: const ui.Color(0xFF000000),
+      );
+      final object = objectAt(stack, 0)
+        ..roll = math.pi / 2
+        ..rollPivot = 0;
+      scene.objects.add(object);
+
+      final feet = _inkBounds(await _render(scene), 200, 200)!;
+      object.rollPivot = 1;
+      final top = _inkBounds(await _render(scene), 200, 200)!;
+
+      expect(feet, isNot(top));
+      // Pivoting at the feet keeps the body level with the ground point;
+      // pivoting at the top lifts it a body height up the screen.
+      expect(top.top, lessThan(feet.top));
+
+      stack.dispose();
+    });
+
+    test('a rolled prop is not culled early near the edge', () async {
+      final stack = await tall();
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),
+        zoom: 3,
+        background: const ui.Color(0xFF000000),
+      );
+      // Unrotated bounds end just past the right edge (x ~211 of 200). Rolling
+      // left swings the body back into the canvas, so the rotated bounds must
+      // keep it alive.
+      final object = objectAt(stack, 0)
+        ..position = const SpriteStackPoint(20.5, 0, 0)
+        ..roll = -math.pi / 2;
+      scene.objects.add(object);
+
+      await _render(scene);
+
+      expect(scene.stats.drawn, 1);
+
+      stack.dispose();
+    });
+  });
+
   group('SpriteStackScene paint', () {
     test('counts drawn, culled, behind and tiny props', () async {
       final stack = await _solidStack(0xFFFF0000, sliceCount: 4);
@@ -709,6 +815,35 @@ int _pixelAt(Uint8List pixels, int width, int x, int y) {
   final b = pixels[offset + 2];
   final a = pixels[offset + 3];
   return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+/// Bounding box of every non-black pixel.
+ui.Rect? _inkBounds(Uint8List pixels, int width, int height) {
+  var minX = width;
+  var minY = height;
+  var maxX = -1;
+  var maxY = -1;
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final offset = (y * width + x) * 4;
+      if (pixels[offset] == 0 &&
+          pixels[offset + 1] == 0 &&
+          pixels[offset + 2] == 0) {
+        continue;
+      }
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  return ui.Rect.fromLTRB(
+    minX.toDouble(),
+    minY.toDouble(),
+    maxX + 1.0,
+    maxY + 1.0,
+  );
 }
 
 int _red(Uint8List pixels, int width, int x, int y) =>

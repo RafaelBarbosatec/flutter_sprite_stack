@@ -27,6 +27,8 @@ void render(
   required Offset position,   // ground contact point
   double yaw = 0,             // radians around Y
   double pitch = defaultPitch,// 0 = edge-on, pi/2 = top-down
+  double roll = 0,            // screen-space tilt, radians
+  double rollPivot = 0,       // 0 = feet, 0.5 = body middle
   double scale = 1,           // keep it an integer for crisp pixels
   double spacing = 1,         // lift between slices, source pixels
   int frame = 0,              // atlas row, clamped
@@ -48,6 +50,8 @@ void render(
 SpriteStackBounds boundsFor({
   double yaw = 0,
   double pitch = defaultPitch,
+  double roll = 0,
+  double rollPivot = 0,
   double scale = 1,
   double spacing = 1,
   SliceCut? cut,
@@ -55,6 +59,11 @@ SpriteStackBounds boundsFor({
   bool shadow = true,
 })
 ```
+
+`roll` tilts the finished sprite in screen space around a pivot `rollPivot` of
+the way up the body. Like `pitch` it is a drawing effect, not a re-projection:
+the silhouette rotates, no new side appears. `boundsFor` returns the rotated
+envelope.
 
 `size` is the full projected size; `ground` is where the ground point sits
 inside it. `rectAt(groundPosition)` places the rect in world space,

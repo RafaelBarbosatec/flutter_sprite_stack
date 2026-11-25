@@ -101,6 +101,8 @@ class SpriteStackSceneObject {
     this.pixelSnap = true,
     this.outlineColor = const Color(0xFF181C24),
     this.shadowColor = const Color(0xFFBAC6D4),
+    this.roll = 0,
+    this.rollPivot = 0,
   });
 
   final SpriteStack stack;
@@ -117,6 +119,20 @@ class SpriteStackSceneObject {
   bool pixelSnap;
   Color outlineColor;
   Color shadowColor;
+
+  /// Screen-space tilt of the finished sprite, in radians, forwarded to
+  /// `SpriteStack.render`.
+  ///
+  /// Like the pitch squash it is a drawing effect, not a re-projection: the
+  /// silhouette rotates and no new side of the prop is revealed. The baked
+  /// ground shadow tilts with the body, so pair a banked airborne prop with
+  /// `shadow: false`.
+  double roll;
+
+  /// Pivot of [roll], as a fraction of the prop's projected body height above
+  /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
+  /// `1` the top.
+  double rollPivot;
 }
 
 /// Where a [SpriteStackSceneObject] lands on screen.
@@ -279,6 +295,8 @@ class SpriteStackScene {
       cut: object.cut,
       outline: object.outline,
       shadow: object.shadow,
+      roll: object.roll,
+      rollPivot: object.rollPivot,
     );
     return SpriteStackSceneProjection(
       position: screen,
@@ -371,6 +389,8 @@ class SpriteStackScene {
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
+        roll: object.roll,
+        rollPivot: object.rollPivot,
       );
     }
   }

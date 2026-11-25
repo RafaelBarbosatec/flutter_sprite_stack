@@ -76,6 +76,8 @@ class SpriteStackTurntable {
     this.stack, {
     this.buckets = 72,
     this.pitch = SpriteStack.defaultPitch,
+    this.roll = 0,
+    this.rollPivot = 0,
     this.scale = 1,
     this.spacing = 1,
     this.outline = true,
@@ -93,6 +95,12 @@ class SpriteStackTurntable {
 
   /// Camera tilt used for every bucket.
   final double pitch;
+
+  /// Screen-space tilt baked into every bucket, in radians.
+  final double roll;
+
+  /// Pivot of [roll] as a fraction of the body height above the anchor.
+  final double rollPivot;
 
   /// Uniform scale used for every bucket.
   final double scale;
@@ -136,6 +144,8 @@ class SpriteStackTurntable {
       return stack.bake(
         yaw: index * yawStep,
         pitch: pitch,
+        roll: roll,
+        rollPivot: rollPivot,
         scale: scale,
         spacing: spacing,
         outline: outline,

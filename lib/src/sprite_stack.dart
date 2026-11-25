@@ -249,6 +249,10 @@ class SpriteStack {
   /// seconds. Motion shifts slices in whole art pixels in the software
   /// rasterizer and continuously in the fallback path.
   /// [cut] hides slices above (or below) a frontier, for roof-off cutaways.
+  /// [roll] tilts the finished sprite in screen space, around a pivot
+  /// [rollPivot] of the way up the body (`0` = the ground point, `1` = the
+  /// top). Like [pitch], it is a drawing effect, not a re-projection: the
+  /// silhouette rotates but no new side of the prop is revealed.
   void render(
     Canvas canvas, {
     required Offset position,
@@ -266,8 +270,28 @@ class SpriteStack {
     bool pixelSnap = true,
     Color outlineColor = const Color(0xFF181C24),
     Color shadowColor = const Color(0xFFBAC6D4),
+    double roll = 0,
+    double rollPivot = 0,
   }) {
     final squash = squashFor(pitch);
+
+    // Roll tilts the finished sprite in screen space, around a pivot
+    // `rollPivot` of the way up the body (`0` keeps the ground point planted).
+    // It is a 2D effect like the pitch squash, not a re-projection: the shadow
+    // and the slices move together.
+    final pivot = roll == 0
+        ? null
+        : Offset(
+            position.dx,
+            position.dy -
+                heightFor(pitch: pitch, spacing: spacing) * scale * rollPivot,
+          );
+    if (pivot != null) {
+      canvas.save();
+      canvas.translate(pivot.dx, pivot.dy);
+      canvas.rotate(roll);
+      canvas.translate(-pivot.dx, -pivot.dy);
+    }
     final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final activeMotion = (motion == null || motion.isEmpty) ? null : motion;
     final activeCut = (cut == null || !cut.isActive) ? null : cut;
@@ -290,27 +314,27 @@ class SpriteStack {
         outlineColor: outlineColor,
         shadowColor: shadowColor,
       );
-      return;
+    } else {
+      _renderSlices(
+        canvas,
+        position: position,
+        yaw: yaw,
+        squash: squash,
+        scale: scale,
+        spacing: spacing,
+        frame: frameIndex,
+        motion: activeMotion,
+        time: time,
+        cut: activeCut,
+        paint: paint,
+        outline: outline,
+        shadow: shadow,
+        pixelSnap: pixelSnap,
+        outlineColor: outlineColor,
+        shadowColor: shadowColor,
+      );
     }
-
-    _renderSlices(
-      canvas,
-      position: position,
-      yaw: yaw,
-      squash: squash,
-      scale: scale,
-      spacing: spacing,
-      frame: frameIndex,
-      motion: activeMotion,
-      time: time,
-      cut: activeCut,
-      paint: paint,
-      outline: outline,
-      shadow: shadow,
-      pixelSnap: pixelSnap,
-      outlineColor: outlineColor,
-      shadowColor: shadowColor,
-    );
+    if (pivot != null) canvas.restore();
   }
 
   /// Projected bounds of the stack for a given camera and scale.
@@ -336,6 +360,8 @@ class SpriteStack {
     SliceCut? cut,
     bool outline = true,
     bool shadow = true,
+    double roll = 0,
+    double rollPivot = 0,
   }) {
     final ca = math.cos(yaw).abs();
     final sa = math.sin(yaw).abs();
@@ -358,10 +384,44 @@ class SpriteStack {
     // Outline below the feet plus the projected ground shadow (+3 source px).
     final below = grow + (shadow ? 3 + projectedSliceHeight / 2 : 0.0);
 
-    final size = Size(width * scale, (above + below) * scale);
+    final boxW = width * scale;
+    final boxH = (above + below) * scale;
+    final gx = boxW / 2;
+    final gy = above * scale;
+    if (roll == 0) {
+      return SpriteStackBounds(size: Size(boxW, boxH), ground: Offset(gx, gy));
+    }
+
+    // Rotate the box around the roll pivot and return its axis-aligned
+    // envelope, plus where the ground point ends up inside it.
+    final pivotY =
+        gy - heightFor(pitch: pitch, spacing: spacing) * scale * rollPivot;
+    final c = math.cos(roll);
+    final s = math.sin(roll);
+    var minX = double.infinity;
+    var minY = double.infinity;
+    var maxX = double.negativeInfinity;
+    var maxY = double.negativeInfinity;
+    for (final corner in <Offset>[
+      Offset.zero,
+      Offset(boxW, 0),
+      Offset(boxW, boxH),
+      Offset(0, boxH),
+    ]) {
+      final dx = corner.dx - gx;
+      final dy = corner.dy - pivotY;
+      final x = gx + dx * c - dy * s;
+      final y = pivotY + dx * s + dy * c;
+      minX = math.min(minX, x);
+      minY = math.min(minY, y);
+      maxX = math.max(maxX, x);
+      maxY = math.max(maxY, y);
+    }
+    final anchorDx = -(gy - pivotY) * s;
+    final anchorDy = (gy - pivotY) * c;
     return SpriteStackBounds(
-      size: size,
-      ground: Offset(size.width / 2, above * scale),
+      size: Size(maxX - minX, maxY - minY),
+      ground: Offset(gx + anchorDx - minX, pivotY + anchorDy - minY),
     );
   }
 
@@ -384,6 +444,8 @@ class SpriteStack {
     bool pixelSnap = true,
     Color outlineColor = const Color(0xFF181C24),
     Color shadowColor = const Color(0xFFBAC6D4),
+    double roll = 0,
+    double rollPivot = 0,
   }) {
     final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final recorder = PictureRecorder();
@@ -404,6 +466,8 @@ class SpriteStack {
       pixelSnap: pixelSnap,
       outlineColor: outlineColor,
       shadowColor: shadowColor,
+      roll: roll,
+      rollPivot: rollPivot,
     );
     return BakedSpriteStack.fromPicture(
       recorder.endRecording(),

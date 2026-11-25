@@ -34,6 +34,10 @@ Polish that makes the environment read as a place (still no gameplay):
 - [ ] textured ground: a tiled image needs subdivision or `drawVertices` for a
       correct perspective mapping; deferred until a flat-colored floor is not
       enough.
+- [x] screen-space `roll` in the renderer (`render(roll:, rollPivot:)`,
+      `boundsFor`, `bake`, painter, turntable) for banking and leaning props.
+      A true 3D roll needs the volume re-sliced along tilted planes — out of
+      scope; `yaw` is what reveals another side.
 - [x] visibility counters (`scene.stats`) and sub-pixel culling
       (`minimumProjectedPixels`); occlusion culling still needs a depth buffer.
 - [ ] scene composition: groups/named objects and an easy way to place a
