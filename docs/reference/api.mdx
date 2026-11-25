@@ -56,12 +56,12 @@ collapses to nothing.
 | --- | --- |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:, near:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
-| `SpriteStackSceneObject(stack:, position:, yaw:, roll:, rollPivot:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point, `yaw` its world facing, `roll` the screen-space bank |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, roll:, rollPivot:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point, `yaw` its world facing (`billboard: false`, the default) or a fixed screen facing (`billboard: true`), `roll` the screen-space bank |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
 | `scene.paint(canvas, size)` | Projects and draws every object, far to near |
-| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 | `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `total` from the last paint |
 | `scene.minimumProjectedPixels` | Props whose scaled bounds are smaller than this many pixels are skipped (default `0.5`) |
