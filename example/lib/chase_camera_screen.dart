@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
-/// Third-person chase camera: a car laps a closed loop and the camera follows
-/// it with an exponential delay.
+/// Third-person chase camera: a car laps a stadium-shaped track (two
+/// straights, two turns) and the camera follows it with an exponential delay.
 ///
-/// The delay is the feature. Because the camera yaw lags behind the car yaw,
-/// the car's relative yaw is non-zero in the turns, so the body rotates on
-/// screen instead of the whole world spinning around a locked sprite. Drag the
-/// slider to trade responsiveness for that read.
+/// The straights are the point: the camera's yaw stays constant while the car
+/// drives one, so the ground grid and every prop glide past in a predictable
+/// straight line instead of sweeping around like they would on a track that
+/// never stops curving. The delay is the other feature: because the camera
+/// yaw lags behind the car yaw in the turns, the car's relative yaw is
+/// non-zero there, so the body rotates on screen instead of the whole world
+/// spinning around a locked sprite. Drag the slider to trade responsiveness
+/// for that read.
 class ChaseCameraScreen extends StatefulWidget {
   const ChaseCameraScreen({super.key});
 
@@ -25,7 +29,7 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
 
   final SpriteStackCache _cache = SpriteStackCache();
   final ValueNotifier<int> _frame = ValueNotifier<int>(0);
-  final _Loop _loop = _Loop();
+  final _Track _track = const _Track(straight: 450, radius: 200);
 
   late final SpriteStackScene _scene;
   late final SpriteStackSceneObject _car;
@@ -101,18 +105,31 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
       final random = math.Random(7);
       final props = <SpriteStack>[tree, palm, house];
       for (var i = 0; i < _propCount; i++) {
-        final angle = i * 2 * math.pi / _propCount + random.nextDouble() * 0.3;
-        final radius = 430 + random.nextDouble() * 190;
+        // Spread evenly along the lap, offset to either side of the track so
+        // the car passes near them without driving through them.
+        final distance =
+            (i + random.nextDouble() * 0.7) * _track.length / _propCount;
+        final point = _track.pointAt(distance);
+        final ahead = _track.pointAt(distance + 4);
+        final headingX = ahead.dx - point.dx;
+        final headingY = ahead.dy - point.dy;
+        final headingLength = math.sqrt(
+          headingX * headingX + headingY * headingY,
+        );
+        final normalX = headingLength > 0 ? -headingY / headingLength : 1.0;
+        final normalY = headingLength > 0 ? headingX / headingLength : 0.0;
+        final side = random.nextBool() ? 1.0 : -1.0;
+        final offset = (140 + random.nextDouble() * 220) * side;
         _scene.objects.add(
           SpriteStackSceneObject(
             stack: props[i % props.length],
             position: SpriteStackPoint(
-              math.cos(angle) * radius,
-              math.sin(angle) * radius,
+              point.dx + normalX * offset,
+              point.dy + normalY * offset,
               0,
             ),
-            yaw: random.nextDouble() * math.pi * 2,
-            scale: 0.9 + random.nextDouble() * 0.5,
+            // yaw: random.nextDouble() * math.pi * 2,
+            scale: 1.5 + random.nextDouble() * 0.5,
           ),
         );
       }
@@ -134,8 +151,8 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
   }
 
   _Pose _poseAt(double distance) {
-    final point = _loop.pointAt(distance);
-    final ahead = _loop.pointAt(distance + 4);
+    final point = _track.pointAt(distance);
+    final ahead = _track.pointAt(distance + 4);
     final vx = ahead.dx - point.dx;
     final vy = ahead.dy - point.dy;
     return _Pose(
@@ -281,55 +298,57 @@ class _Pose {
   final double yaw;
 }
 
-/// A closed superellipse loop, sampled by arc length.
-class _Loop {
-  _Loop({int samples = 720})
-      : _points = List<Offset>.filled(samples, Offset.zero),
-        _turns = List<double>.filled(samples + 1, 0) {
-    const a = 330.0;
-    const b = 300.0;
-    const exponent = 0.72;
-    for (var i = 0; i < samples; i++) {
-      final t = 2 * math.pi * i / samples;
-      final c = math.cos(t);
-      final s = math.sin(t);
-      _points[i] = Offset(
-        a * c.sign * math.pow(c.abs(), exponent).toDouble(),
-        b * s.sign * math.pow(s.abs(), exponent).toDouble(),
-      );
-    }
-    for (var i = 0; i < samples; i++) {
-      final next = (i + 1) % samples;
-      _turns[i + 1] = _turns[i] + (_points[next] - _points[i]).distance;
-    }
-    length = _turns[samples];
-  }
+/// A stadium-shaped track: two straights joined by two semicircular turns.
+///
+/// A continuously-curving closed loop (the previous shape here) never lets
+/// the chase camera stop rotating to stay behind the car, so the background
+/// sweeps past for the *entire* lap — every static prop reads as if it were
+/// drifting, because the camera's viewing angle never settles. On the
+/// straights of a stadium track the camera only translates (its yaw is
+/// constant), so the ground grid and every prop glide past in a straight,
+/// predictable line, the way driving past roadside scenery actually looks;
+/// the sweep is confined to the turns, where the camera has to swing to stay
+/// behind the car — exactly like a racing game's chase cam.
+class _Track {
+  const _Track({required this.straight, required this.radius});
 
-  final List<Offset> _points;
+  /// Length of each straight segment, in world units.
+  final double straight;
 
-  /// Cumulative arc length at each sample; the last entry is [length].
-  final List<double> _turns;
+  /// Radius of each semicircular turn, in world units.
+  final double radius;
 
-  late final double length;
+  double get _turnLength => math.pi * radius;
 
-  /// Point [distance] units along the loop, wrapping around.
+  /// Total length of one lap.
+  double get length => 2 * straight + 2 * _turnLength;
+
+  /// Point [distance] units along the track, wrapping around.
   Offset pointAt(double distance) {
+    final turnLength = _turnLength;
     var d = distance % length;
     if (d < 0) d += length;
-    var low = 0;
-    var high = _points.length;
-    while (low + 1 < high) {
-      final mid = (low + high) >> 1;
-      if (_turns[mid] <= d) {
-        low = mid;
-      } else {
-        high = mid;
-      }
+    if (d < straight) {
+      return Offset(-straight / 2 + d, -radius);
     }
-    final span = _turns[low + 1] - _turns[low];
-    final t = span <= 0 ? 0.0 : (d - _turns[low]) / span;
-    final next = (low + 1) % _points.length;
-    return Offset.lerp(_points[low], _points[next], t)!;
+    d -= straight;
+    if (d < turnLength) {
+      final angle = -math.pi / 2 + d / radius;
+      return Offset(
+        straight / 2 + radius * math.cos(angle),
+        radius * math.sin(angle),
+      );
+    }
+    d -= turnLength;
+    if (d < straight) {
+      return Offset(straight / 2 - d, radius);
+    }
+    d -= straight;
+    final angle = math.pi / 2 + d / radius;
+    return Offset(
+      -straight / 2 + radius * math.cos(angle),
+      radius * math.sin(angle),
+    );
   }
 }
 
