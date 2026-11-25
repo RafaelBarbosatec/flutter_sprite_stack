@@ -31,6 +31,14 @@
   `behindCamera` and `tooSmall` after each `paint`, and
   `minimumProjectedPixels` (default `0.5`) skips props too small to show a
   pixel before they reach the rasterizer.
+- `render(roll:, rollPivot:)`, `boundsFor(roll:, rollPivot:)`,
+  `SpriteStackPainter.roll` and `bake(roll:)`: tilt the finished sprite in
+  screen space, like the pitch squash. `roll` rotates the silhouette around a
+  pivot `rollPivot` of the way up the body (`0` = the ground point, `0.5` = the
+  middle); it is a 2D drawing effect, not a re-projection, so it does not reveal
+  a new side of the prop. `boundsFor` returns the rotated envelope, keeping
+  culling exact.
+- Example: `FlightScreen`, a spaceship banking into its turns over the ground.
 - Example: `ChaseCameraScreen`, a car lapping a superellipse with a lag slider
   and a live culling readout.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.

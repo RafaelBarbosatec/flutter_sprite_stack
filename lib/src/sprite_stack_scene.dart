@@ -102,7 +102,7 @@ class SpriteStackSceneObject {
     this.outlineColor = const Color(0xFF181C24),
     this.shadowColor = const Color(0xFFBAC6D4),
     this.roll = 0,
-    this.rollPivot = 0.5,
+    this.rollPivot = 0,
   });
 
   final SpriteStack stack;
@@ -120,19 +120,18 @@ class SpriteStackSceneObject {
   Color outlineColor;
   Color shadowColor;
 
-  /// Bank around the prop's forward axis, in radians. Positive banks right.
+  /// Screen-space tilt of the finished sprite, in radians, forwarded to
+  /// `SpriteStack.render`.
   ///
-  /// Painted as a screen-space rotation around [rollPivot]. That is exact when
-  /// the camera looks along the roll axis — a chase view, where [roll] reads as
-  /// a bank — and fades out towards a side view (`cos(renderYaw)`), where a 2D
-  /// rotation would not be the real projection.
-  ///
-  /// The prop's baked ground shadow rotates with it, so pair a banked airborne
-  /// prop with `shadow: false`.
+  /// Like the pitch squash it is a drawing effect, not a re-projection: the
+  /// silhouette rotates and no new side of the prop is revealed. The baked
+  /// ground shadow tilts with the body, so pair a banked airborne prop with
+  /// `shadow: false`.
   double roll;
 
-  /// Height of the roll pivot above the prop's ground point, as a fraction of
-  /// its projected body height: `0` is the feet, `0.5` the middle, `1` the top.
+  /// Pivot of [roll], as a fraction of the prop's projected body height above
+  /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
+  /// `1` the top.
   double rollPivot;
 }
 
@@ -296,6 +295,8 @@ class SpriteStackScene {
       cut: object.cut,
       outline: object.outline,
       shadow: object.shadow,
+      roll: object.roll,
+      rollPivot: object.rollPivot,
     );
     return SpriteStackSceneProjection(
       position: screen,
@@ -346,7 +347,7 @@ class SpriteStackScene {
         behindCamera++;
         continue;
       }
-      if (!_isVisible(object, projection, size)) {
+      if (!projection.isVisibleIn(size)) {
         culled++;
         continue;
       }
@@ -372,9 +373,6 @@ class SpriteStackScene {
     for (final item in drawables) {
       final object = item.object;
       final projection = item.projection;
-      final roll = object.roll;
-      final rolled = roll != 0;
-      if (rolled) _applyRoll(canvas, object, projection);
       object.stack.render(
         canvas,
         position: projection.position,
@@ -391,41 +389,10 @@ class SpriteStackScene {
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
+        roll: object.roll,
+        rollPivot: object.rollPivot,
       );
-      if (rolled) canvas.restore();
     }
-  }
-
-  /// Rotates the canvas around the prop's roll pivot.
-  ///
-  /// `cos(renderYaw)` is the projected length of the roll axis: full strength
-  /// with the camera behind or in front, zero when it looks from the side.
-  void _applyRoll(
-    Canvas canvas,
-    SpriteStackSceneObject object,
-    SpriteStackSceneProjection projection,
-  ) {
-    final bodyHeight =
-        object.stack.heightFor(pitch: camera.pitch, spacing: object.spacing) *
-            projection.scale;
-    final pivotY = projection.position.dy - bodyHeight * object.rollPivot;
-    canvas.save();
-    canvas.translate(projection.position.dx, pivotY);
-    canvas.rotate(object.roll * math.cos(projection.yaw));
-    canvas.translate(-projection.position.dx, -pivotY);
-  }
-
-  /// Visibility test; a rolled prop needs its bounds padded because the
-  /// unrotated bounds do not cover the rotated draw.
-  bool _isVisible(
-    SpriteStackSceneObject object,
-    SpriteStackSceneProjection projection,
-    Size size,
-  ) {
-    final bounds = object.roll == 0
-        ? projection.bounds
-        : projection.bounds.inflate(projection.bounds.longestSide);
-    return bounds.overlaps(Offset.zero & size);
   }
 
   void _paintBackdrop(Canvas canvas, Size size) {

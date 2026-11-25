@@ -76,10 +76,18 @@ robot.render(
   pitch: SpriteStack.defaultPitch, // asin(0.75), the reference 0.75 squash
   scale: 6,                        // integer scale keeps pixels crisp
   spacing: 1,                      // lift per slice, in source pixels
+  roll: 0,                         // screen-space tilt (bank/lean), radians
+  rollPivot: 0,                    // 0 = feet planted, 0.5 = body middle
   outline: true,                   // crisp 1 px ink outline around the stack
   shadow: true,                    // projected ground shadow
 );
 ```
+
+`yaw` and `pitch` pick the viewpoint; `roll` tilts the finished sprite in screen
+space, like the pitch squash: a drawing effect, not a re-projection. It rotates
+the silhouette without revealing a new side of the prop — for that, turn `yaw`.
+Pivot it at the feet (`0`, a grounded lean) or at the body middle (`0.5`, a
+banked aircraft). `boundsFor` accounts for it, so culling stays correct.
 
 ### Plain Flutter
 
@@ -598,8 +606,8 @@ produces.
 | `SpriteStack.load(path, sliceCount:)` | Loads a strip from a Flutter asset |
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
-| `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
-| `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
+| `render(canvas, position:, yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
+| `boundsFor(yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
 | `toVolume(frame:, alphaThreshold:)` | Rebuilds the voxel volume from the slices |
 | `SpriteStackVolume.fromPixels(...)` / `fromVoxels(...)` | Occupancy grid (`x` column, `y` depth, `z` slice) |
 | `SpriteStackVolume.isSolid(x, y, z)` / `solidVoxelCount` / `bounds` | Occupancy queries and tight occupied box |

@@ -519,8 +519,9 @@ void main() {
       stack.dispose();
     });
 
-    test('fades to nothing when the camera looks from the side', () async {
-      // renderYaw = object yaw - camera yaw = pi / 2, so cos() is ~0.
+    test('rolls whatever the camera angle is', () async {
+      // The roll is a render effect, not a projection: a side view must tilt
+      // the sprite just like a rear view does.
       final stack = await tall();
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),
@@ -530,16 +531,12 @@ void main() {
       final object = objectAt(stack, math.pi / 2);
       scene.objects.add(object);
 
-      final flat = await _render(scene);
-      object.roll = 0.9;
-      final banked = await _render(scene);
+      final flat = _inkBounds(await _render(scene), 200, 200)!;
+      object.roll = math.pi / 2;
+      final banked = _inkBounds(await _render(scene), 200, 200)!;
 
-      final a = _inkBounds(flat, 200, 200)!;
-      final b = _inkBounds(banked, 200, 200)!;
-      expect(b.left, closeTo(a.left, 1));
-      expect(b.top, closeTo(a.top, 1));
-      expect(b.width, closeTo(a.width, 1));
-      expect(b.height, closeTo(a.height, 1));
+      expect(flat.height, greaterThan(flat.width));
+      expect(banked.width, greaterThan(banked.height));
 
       stack.dispose();
     });

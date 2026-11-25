@@ -12,6 +12,8 @@ class SpriteStackPainter extends CustomPainter {
     required this.stack,
     this.yaw = 0,
     this.pitch = SpriteStack.defaultPitch,
+    this.roll = 0,
+    this.rollPivot = 0,
     this.scale = 1,
     this.spacing = 1,
     this.offset = Offset.zero,
@@ -34,6 +36,12 @@ class SpriteStackPainter extends CustomPainter {
 
   /// Camera tilt, `0` (edge-on) to `pi / 2` (top-down).
   final double pitch;
+
+  /// Screen-space tilt of the finished sprite, in radians.
+  final double roll;
+
+  /// Pivot of [roll] as a fraction of the body height above the anchor.
+  final double rollPivot;
 
   final double scale;
 
@@ -80,6 +88,8 @@ class SpriteStackPainter extends CustomPainter {
       position: Offset(size.width / 2, size.height) + offset,
       yaw: yaw,
       pitch: pitch,
+      roll: roll,
+      rollPivot: rollPivot,
       scale: scale,
       spacing: spacing,
       frame: frame,
@@ -100,6 +110,8 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.stack != stack ||
       oldDelegate.yaw != yaw ||
       oldDelegate.pitch != pitch ||
+      oldDelegate.roll != roll ||
+      oldDelegate.rollPivot != rollPivot ||
       oldDelegate.scale != scale ||
       oldDelegate.spacing != spacing ||
       oldDelegate.offset != offset ||

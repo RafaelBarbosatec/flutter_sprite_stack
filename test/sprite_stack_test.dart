@@ -113,6 +113,54 @@ void main() {
       stack.dispose();
     });
 
+    group('roll', () {
+      test('boundsFor rotates the box', () async {
+        final image =
+            await _solidImage(width: 32 * 8, height: 32, color: 0xFFFF0000);
+        final stack = SpriteStack.fromImage(image, sliceCount: 8);
+
+        final flat = stack.boundsFor(scale: 2);
+        final quarter = stack.boundsFor(scale: 2, roll: math.pi / 2);
+
+        expect(quarter.size.width, closeTo(flat.size.height, 1e-9));
+        expect(quarter.size.height, closeTo(flat.size.width, 1e-9));
+
+        stack.dispose();
+      });
+
+      test('boundsFor covers exactly what render draws', () async {
+        final image =
+            await _solidImage(width: 32 * 8, height: 32, color: 0xFFFF0000);
+        final stack = SpriteStack.fromImage(image, sliceCount: 8);
+        const position = ui.Offset(150, 300);
+
+        for (final roll in [0.0, 0.4, math.pi / 2, 2.4]) {
+          final pixels = await _renderToPixels(
+            stack,
+            width: 300,
+            height: 400,
+            position: position,
+            pitch: 0.8,
+            scale: 2,
+            roll: roll,
+          );
+          final ink = _inkRect(pixels, 300, 400);
+          final bounds = stack
+              .boundsFor(pitch: 0.8, scale: 2, roll: roll)
+              .rectAt(position);
+
+          expect(ink, isNotNull, reason: 'roll $roll drew nothing');
+          // One pixel of slack for the rasterizer's rounding.
+          expect(ink!.left, greaterThanOrEqualTo(bounds.left - 1.5));
+          expect(ink.top, greaterThanOrEqualTo(bounds.top - 1.5));
+          expect(ink.right, lessThanOrEqualTo(bounds.right + 1.5));
+          expect(ink.bottom, lessThanOrEqualTo(bounds.bottom + 1.5));
+        }
+
+        stack.dispose();
+      });
+    });
+
     test('renders without throwing for a full stack', () async {
       final image =
           await _solidImage(width: 32 * 24, height: 32, color: 0xFF00FF00);
@@ -902,6 +950,10 @@ Future<Uint8List> _renderToPixels(
   required int height,
   required ui.Offset position,
   required double pitch,
+  double yaw = 0,
+  double scale = 1,
+  double roll = 0,
+  double rollPivot = 0,
   double spacing = 1,
   bool outline = false,
   bool shadow = false,
@@ -916,7 +968,11 @@ Future<Uint8List> _renderToPixels(
   stack.render(
     canvas,
     position: position,
+    yaw: yaw,
     pitch: pitch,
+    scale: scale,
+    roll: roll,
+    rollPivot: rollPivot,
     spacing: spacing,
     frame: frame,
     motion: motion,
@@ -934,6 +990,30 @@ Future<Uint8List> _renderToPixels(
   picture.dispose();
 
   return data!.buffer.asUint8List();
+}
+
+/// Bounding box of every non-transparent pixel.
+ui.Rect? _inkRect(Uint8List pixels, int width, int height) {
+  var minX = width;
+  var minY = height;
+  var maxX = -1;
+  var maxY = -1;
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      if (pixels[(y * width + x) * 4 + 3] == 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  return ui.Rect.fromLTRB(
+    minX.toDouble(),
+    minY.toDouble(),
+    maxX + 1.0,
+    maxY + 1.0,
+  );
 }
 
 int _pixelAt(Uint8List pixels, int width, int x, int y) {
