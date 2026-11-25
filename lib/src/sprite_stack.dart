@@ -578,11 +578,22 @@ class SpriteStack {
     final out = Uint8List(cw * ch * 4); // RGBA
     final alpha = Uint8List(cw * ch); // body occupancy
 
+    // Bounds of everything actually written into the buffer. The draw and
+    // outline passes only need to visit this region; the rest is padding.
+    var bodyMinX = cw;
+    var bodyMinY = ch;
+    var bodyMaxX = -1;
+    var bodyMaxY = -1;
+    var shadowMinX = cw;
+    var shadowMinY = ch;
+    var shadowMaxX = -1;
+    var shadowMaxY = -1;
+
     // 1. Projected ground shadow: the union footprint rendered like one slice,
     // offset +2,+3 art px from the ground slice centre.
     if (shadow && _footprintMasks != null) {
       final shadowArgb = shadowColor.toARGB32();
-      _rasterFootprint(
+      final box = _rasterFootprint(
         out,
         cw,
         ch,
@@ -597,6 +608,10 @@ class SpriteStack {
         shadowArgb & 0xFF,
         (shadowArgb >> 24) & 0xFF,
       );
+      shadowMinX = box.$1;
+      shadowMinY = box.$2;
+      shadowMaxX = box.$3;
+      shadowMaxY = box.$4;
     }
 
     // 2. Body slices, bottom to top, overwriting.
@@ -681,6 +696,10 @@ class SpriteStack {
           out[dp + 2] = pixels[sp + 2];
           out[dp + 3] = pixels[sp + 3];
           alpha[idx] = 1;
+          if (x < bodyMinX) bodyMinX = x;
+          if (x > bodyMaxX) bodyMaxX = x;
+          if (y < bodyMinY) bodyMinY = y;
+          if (y > bodyMaxY) bodyMaxY = y;
         }
       }
     }
@@ -692,9 +711,13 @@ class SpriteStack {
       final og = (outlineArgb >> 8) & 0xFF;
       final ob = outlineArgb & 0xFF;
       final oa = (outlineArgb >> 24) & 0xFF;
-      for (var y = 1; y < ch - 1; y++) {
-        var idx = y * cw + 1;
-        for (var x = 1; x < cw - 1; x++, idx++) {
+      final ox0 = math.max(1, bodyMinX - 1);
+      final ox1 = math.min(cw - 2, bodyMaxX + 1);
+      final oy0 = math.max(1, bodyMinY - 1);
+      final oy1 = math.min(ch - 2, bodyMaxY + 1);
+      for (var y = oy0; y <= oy1; y++) {
+        var idx = y * cw + ox0;
+        for (var x = ox0; x <= ox1; x++, idx++) {
           if (alpha[idx] != 0) continue;
           if (alpha[idx - 1] != 0 ||
               alpha[idx + 1] != 0 ||
@@ -717,6 +740,13 @@ class SpriteStack {
     final rawAnchorY = position.dy - h * squash * scale / 2;
     final anchorX = pixelSnap ? position.dx.roundToDouble() : position.dx;
     final anchorY = pixelSnap ? rawAnchorY.roundToDouble() : rawAnchorY;
+
+    // Union of the body and the shadow, one pixel out for the outline ring.
+    final drawMinX = math.min(bodyMinX, shadowMinX);
+    final drawMinY = math.min(bodyMinY, shadowMinY);
+    final drawMaxX = math.max(bodyMaxX, shadowMaxX);
+    final drawMaxY = math.max(bodyMaxY, shadowMaxY);
+    if (drawMaxX < drawMinX || drawMaxY < drawMinY) return;
     _drawBuffer(
       canvas,
       out,
@@ -724,13 +754,17 @@ class SpriteStack {
       ch,
       cx,
       baseY,
+      x0: math.max(0, drawMinX - 1),
+      y0: math.max(0, drawMinY - 1),
+      x1: math.min(cw - 1, drawMaxX + 1),
+      y1: math.min(ch - 1, drawMaxY + 1),
       anchorX: anchorX,
       anchorY: anchorY,
       scale: scale,
     );
   }
 
-  void _rasterFootprint(
+  (int, int, int, int) _rasterFootprint(
     Uint8List out,
     int cw,
     int ch,
@@ -774,6 +808,7 @@ class SpriteStack {
         out[dp + 3] = a;
       }
     }
+    return (xMin, yMin, xMax, yMax);
   }
 
   void _drawBuffer(
@@ -783,15 +818,19 @@ class SpriteStack {
     int ch,
     int cx,
     int baseY, {
+    required int x0,
+    required int y0,
+    required int x1,
+    required int y1,
     required double anchorX,
     required double anchorY,
     required double scale,
   }) {
     final strokeWidth = math.max(scale, 0.01);
     final pointsByColor = <int, List<Offset>>{};
-    for (var y = 0; y < ch; y++) {
-      var idx = y * cw * 4;
-      for (var x = 0; x < cw; x++, idx += 4) {
+    for (var y = y0; y <= y1; y++) {
+      var idx = (y * cw + x0) * 4;
+      for (var x = x0; x <= x1; x++, idx += 4) {
         if (out[idx + 3] == 0) continue;
         final color = (out[idx + 3] << 24) |
             (out[idx] << 16) |
