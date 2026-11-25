@@ -6,7 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('SpriteStackFollowCamera', () {
     test('exponential smoothing is frame-rate independent', () {
-      final camera = SpriteStackCamera.orbit(yaw: 0, pitch: 0.3, distance: 300);
+      final camera = SpriteStackCamera.orbit(
+        yaw: 0,
+        pitch: 0.3,
+        distance: 300,
+        target: const SpriteStackPoint(0, 0, 30),
+      );
       final follow = SpriteStackFollowCamera(positionRate: 6, yawRate: 3);
       const subject = SpriteStackPoint(200, 120, 0);
 
@@ -32,7 +37,7 @@ void main() {
       final follow = SpriteStackFollowCamera(yawRate: 3, lookAhead: 0);
       const yaw = -math.pi / 2; // facing +X
 
-      for (var i = 0; i < 240; i++) {
+      for (var i = 0; i < 600; i++) {
         follow.update(
           camera,
           subject: SpriteStackPoint(i.toDouble(), 0, 0),
@@ -45,7 +50,7 @@ void main() {
       expect(camera.yaw, closeTo(yaw, 1e-6));
     });
 
-    test('lags by omega * dt / (1 - exp(-rate * dt)) in a steady turn', () {
+    test('lags by omega * dt * (1 - f) / f in a steady turn', () {
       const rate = 3.0;
       const omega = 0.5;
       const dt = 1 / 60;
@@ -67,7 +72,9 @@ void main() {
         );
       }
 
-      final expected = omega * dt / (1 - math.exp(-rate * dt));
+      // e = (e + omega*dt)(1 - f) at equilibrium, with f the smoothing factor.
+      final f = 1 - math.exp(-rate * dt);
+      final expected = omega * dt * (1 - f) / f;
       final lag = (angle - camera.yaw).abs();
       expect(lag, closeTo(expected, 1e-3));
       // A visible lag: the car keeps rotating on screen in the turn.
@@ -84,8 +91,8 @@ void main() {
         closeTo(0.08, 1e-9),
       );
       expect(
-        SpriteStackFollowCamera.approachAngle(0, math.pi, 0.5),
-        closeTo(math.pi / 2, 1e-9),
+        SpriteStackFollowCamera.approachAngle(0, 2.0, 0.5),
+        closeTo(1.0, 1e-9),
       );
     });
 

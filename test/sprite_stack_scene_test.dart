@@ -497,9 +497,11 @@ void main() {
             position: basis.forward * 300 + basis.right * 20000,
             scale: 4,
           ),
+          // The eye sits `distance` behind the target, so anything closer to
+          // the camera than -distance along forward is behind it.
           SpriteStackSceneObject(
             stack: stack,
-            position: basis.forward * -100,
+            position: basis.forward * -400,
             scale: 4,
           ),
           SpriteStackSceneObject(
