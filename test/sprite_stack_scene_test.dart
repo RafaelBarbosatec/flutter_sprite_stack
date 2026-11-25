@@ -572,11 +572,12 @@ void main() {
         zoom: 3,
         background: const ui.Color(0xFF000000),
       );
-      // Unrotated bounds end just past the right edge (x ~210 of 200); the
-      // rolled body reaches back into the canvas, so it must not be culled.
+      // Unrotated bounds end just past the right edge (x ~211 of 200). Rolling
+      // left swings the body back into the canvas, so the rotated bounds must
+      // keep it alive.
       final object = objectAt(stack, 0)
         ..position = const SpriteStackPoint(20.5, 0, 0)
-        ..roll = math.pi / 2;
+        ..roll = -math.pi / 2;
       scene.objects.add(object);
 
       await _render(scene);
