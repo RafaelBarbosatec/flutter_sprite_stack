@@ -367,8 +367,8 @@ void main() {
         radius: 2,
       );
 
-      expect(result.position.dy, closeTo(18, 1e-9));
-      expect(result.position.dx, closeTo(0, 1e-9));
+      expect(result.position.y, closeTo(18, 1e-9));
+      expect(result.position.x, closeTo(0, 1e-9));
       expect(result.collided, isTrue);
       expect(result.hits, hasLength(1));
       expect(result.applied.dy, closeTo(18, 1e-9));
@@ -383,8 +383,8 @@ void main() {
       );
 
       // The normal component is removed, the tangent survives.
-      expect(result.position.dx, closeTo(20, 1e-9));
-      expect(result.position.dy, closeTo(18, 1e-9));
+      expect(result.position.x, closeTo(20, 1e-9));
+      expect(result.position.y, closeTo(18, 1e-9));
     });
 
     test('a fast move does not tunnel through the prop', () {
@@ -395,7 +395,7 @@ void main() {
         radius: 2,
       );
 
-      expect(result.position.dy, closeTo(18, 1e-9));
+      expect(result.position.y, closeTo(18, 1e-9));
       expect(result.collided, isTrue);
     });
 
@@ -420,7 +420,7 @@ void main() {
         stepHeight: 10,
       );
 
-      expect(result.position.dy, closeTo(60, 1e-9));
+      expect(result.position.y, closeTo(60, 1e-9));
       expect(result.collided, isFalse);
     });
 
@@ -439,7 +439,7 @@ void main() {
         radius: 2,
         ignore: player,
       );
-      expect(result.position.dy, closeTo(30, 1e-9));
+      expect(result.position.y, closeTo(30, 1e-9));
       expect(result.collided, isFalse);
     });
 
