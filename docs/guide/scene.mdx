@@ -123,7 +123,7 @@ The floor is drawn as projected cells clipped against the near plane:
 | --- | --- |
 | `fill` | Solid base color for every cell |
 | `checker` | Two colors alternating by `(ix + iy)` |
-| `colorAt(x, y)` | Color per cell centre, for procedural floors |
+| `colorAt(x, y)` | Color per cell centre, for procedural floors. Called only for cells that survive the near-plane and off-canvas reject |
 | `fadeColor` + `fadeDistance` | Blend distant cells into the horizon |
 | `step: 0` | Hides the grid lines |
 | `cellSize` | Size of each painted cell, world units |

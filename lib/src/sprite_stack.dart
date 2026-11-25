@@ -489,6 +489,54 @@ class SpriteStack {
   // Software rasterizer (matches viewer.html): 1x art-pixel buffer, nearest
   // inverse sampling, one outline pass, then integer scale-up.
   // ---------------------------------------------------------------------
+
+  /// Tight opaque rectangle of each slice, as `[minX, minY, maxX, maxY]`
+  /// quadruples indexed by `frame * sliceCount + slice`.
+  ///
+  /// The rasterizer rotates and squashes a whole slice rectangle, but a
+  /// cross-section is mostly transparent around the art. Projecting this
+  /// sub-rectangle gives the destination area that can actually receive a
+  /// pixel, so the inner loop skips the empty margin instead of sampling it.
+  ///
+  /// Built on first use from [pixels]; `maxX < minX` marks an empty slice.
+  Int32List? get _opaqueBounds {
+    final cached = _opaqueBoundsCache;
+    if (cached != null) return cached;
+    final pixels = _pixels;
+    if (pixels == null) return null;
+
+    final w = sliceWidth;
+    final h = sliceHeight;
+    final stripWidth = sliceCount * w;
+    final bounds = Int32List(frameCount * sliceCount * 4);
+    for (var frame = 0; frame < frameCount; frame++) {
+      for (var slice = 0; slice < sliceCount; slice++) {
+        var minX = w;
+        var minY = h;
+        var maxX = -1;
+        var maxY = -1;
+        for (var y = 0; y < h; y++) {
+          final row = (frame * h + y) * stripWidth + slice * w;
+          for (var x = 0; x < w; x++) {
+            if (pixels[(row + x) * 4 + 3] == 0) continue;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+        final at = (frame * sliceCount + slice) * 4;
+        bounds[at] = minX;
+        bounds[at + 1] = minY;
+        bounds[at + 2] = maxX;
+        bounds[at + 3] = maxY;
+      }
+    }
+    return _opaqueBoundsCache = bounds;
+  }
+
+  Int32List? _opaqueBoundsCache;
+
   void _renderSoftware(
     Canvas canvas, {
     required Offset position,
@@ -530,11 +578,22 @@ class SpriteStack {
     final out = Uint8List(cw * ch * 4); // RGBA
     final alpha = Uint8List(cw * ch); // body occupancy
 
+    // Bounds of everything actually written into the buffer. The draw and
+    // outline passes only need to visit this region; the rest is padding.
+    var bodyMinX = cw;
+    var bodyMinY = ch;
+    var bodyMaxX = -1;
+    var bodyMaxY = -1;
+    var shadowMinX = cw;
+    var shadowMinY = ch;
+    var shadowMaxX = -1;
+    var shadowMaxY = -1;
+
     // 1. Projected ground shadow: the union footprint rendered like one slice,
     // offset +2,+3 art px from the ground slice centre.
     if (shadow && _footprintMasks != null) {
       final shadowArgb = shadowColor.toARGB32();
-      _rasterFootprint(
+      final box = _rasterFootprint(
         out,
         cw,
         ch,
@@ -549,27 +608,72 @@ class SpriteStack {
         shadowArgb & 0xFF,
         (shadowArgb >> 24) & 0xFF,
       );
+      shadowMinX = box.$1;
+      shadowMinY = box.$2;
+      shadowMaxX = box.$3;
+      shadowMaxY = box.$4;
     }
 
     // 2. Body slices, bottom to top, overwriting.
     final invSquash = 1 / math.max(squash, 0.1);
+    // The rotated slice rectangle depends only on yaw and pitch; the tight
+    // opaque sub-rectangle of each slice then decides how much of it can
+    // actually receive a pixel.
+    final halfW = (w * ca.abs() + h * sa.abs()) / 2;
+    final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
+    final stripWidth = n * w;
+    final opaque = _opaqueBounds;
     for (var z = 0; z < n; z++) {
       final visibility = cut?.visibilityAt(z) ?? 1.0;
       if (visibility <= 0) continue;
+      final zBase = z * w;
       final lift = (z * spacing).round();
       // Motion is applied in whole art pixels: the buffer is 1x, so a fraction
       // of a pixel cannot be represented without blurring the pixel grid.
       final shift = motion?.offsetAt(z, n, time) ?? Offset.zero;
       final sliceCx = cx + shift.dx.round();
       final yCenter = baseY - lift + shift.dy.round();
-      final halfW = (w * ca.abs() + h * sa.abs()) / 2;
-      final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
-      final xMin = math.max(0, (sliceCx - halfW).floor() - 1);
-      final xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
-      final yMin = math.max(0, (yCenter - halfH).floor() - 1);
-      final yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
-      final stripWidth = n * w;
-      final zBase = z * w;
+
+      final int xMin;
+      final int xMax;
+      final int yMin;
+      final int yMax;
+      if (opaque == null) {
+        xMin = math.max(0, (sliceCx - halfW).floor() - 1);
+        xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
+        yMin = math.max(0, (yCenter - halfH).floor() - 1);
+        yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
+      } else {
+        final at = (frame * n + z) * 4;
+        final bx0 = opaque[at];
+        final by0 = opaque[at + 1];
+        final bx1 = opaque[at + 2];
+        final by1 = opaque[at + 3];
+        if (bx1 < bx0) continue; // fully transparent slice
+
+        // Forward-project the four corners of the opaque rectangle with the
+        // inverse of the mapping used in the loop below.
+        final u0 = bx0 - w * 0.5;
+        final u1 = bx1 + 1 - w * 0.5;
+        final v0 = by0 - h * 0.5;
+        final v1 = by1 + 1 - h * 0.5;
+        final p0x = sliceCx + u0 * ca - v0 * sa;
+        final p1x = sliceCx + u1 * ca - v0 * sa;
+        final p2x = sliceCx + u1 * ca - v1 * sa;
+        final p3x = sliceCx + u0 * ca - v1 * sa;
+        final p0y = yCenter + (u0 * sa + v0 * ca) * squash;
+        final p1y = yCenter + (u1 * sa + v0 * ca) * squash;
+        final p2y = yCenter + (u1 * sa + v1 * ca) * squash;
+        final p3y = yCenter + (u0 * sa + v1 * ca) * squash;
+        xMin = math.max(
+            0, math.min(math.min(p0x, p1x), math.min(p2x, p3x)).floor() - 1);
+        xMax = math.min(cw - 1,
+            math.max(math.max(p0x, p1x), math.max(p2x, p3x)).ceil() + 1);
+        yMin = math.max(
+            0, math.min(math.min(p0y, p1y), math.min(p2y, p3y)).floor() - 1);
+        yMax = math.min(ch - 1,
+            math.max(math.max(p0y, p1y), math.max(p2y, p3y)).ceil() + 1);
+      }
 
       for (var y = yMin; y <= yMax; y++) {
         final dy = (y - yCenter) * invSquash;
@@ -578,8 +682,10 @@ class SpriteStack {
         var idx = y * cw + xMin;
         for (var x = xMin; x <= xMax; x++, idx++, sx += ca, sy -= sa) {
           if (sx < 0 || sy < 0) continue;
-          final ix = sx.floor();
-          final iy = sy.floor();
+          // `sx`/`sy` are non-negative here, so truncation is the same as
+          // flooring and skips a libm call per pixel.
+          final ix = sx.toInt();
+          final iy = sy.toInt();
           if (ix >= w || iy >= h) continue;
           final sp = ((rowOffset + iy) * stripWidth + zBase + ix) * 4;
           if (pixels[sp + 3] == 0) continue;
@@ -590,6 +696,10 @@ class SpriteStack {
           out[dp + 2] = pixels[sp + 2];
           out[dp + 3] = pixels[sp + 3];
           alpha[idx] = 1;
+          if (x < bodyMinX) bodyMinX = x;
+          if (x > bodyMaxX) bodyMaxX = x;
+          if (y < bodyMinY) bodyMinY = y;
+          if (y > bodyMaxY) bodyMaxY = y;
         }
       }
     }
@@ -601,9 +711,13 @@ class SpriteStack {
       final og = (outlineArgb >> 8) & 0xFF;
       final ob = outlineArgb & 0xFF;
       final oa = (outlineArgb >> 24) & 0xFF;
-      for (var y = 1; y < ch - 1; y++) {
-        var idx = y * cw + 1;
-        for (var x = 1; x < cw - 1; x++, idx++) {
+      final ox0 = math.max(1, bodyMinX - 1);
+      final ox1 = math.min(cw - 2, bodyMaxX + 1);
+      final oy0 = math.max(1, bodyMinY - 1);
+      final oy1 = math.min(ch - 2, bodyMaxY + 1);
+      for (var y = oy0; y <= oy1; y++) {
+        var idx = y * cw + ox0;
+        for (var x = ox0; x <= ox1; x++, idx++) {
           if (alpha[idx] != 0) continue;
           if (alpha[idx - 1] != 0 ||
               alpha[idx + 1] != 0 ||
@@ -626,6 +740,13 @@ class SpriteStack {
     final rawAnchorY = position.dy - h * squash * scale / 2;
     final anchorX = pixelSnap ? position.dx.roundToDouble() : position.dx;
     final anchorY = pixelSnap ? rawAnchorY.roundToDouble() : rawAnchorY;
+
+    // Union of the body and the shadow, one pixel out for the outline ring.
+    final drawMinX = math.min(bodyMinX, shadowMinX);
+    final drawMinY = math.min(bodyMinY, shadowMinY);
+    final drawMaxX = math.max(bodyMaxX, shadowMaxX);
+    final drawMaxY = math.max(bodyMaxY, shadowMaxY);
+    if (drawMaxX < drawMinX || drawMaxY < drawMinY) return;
     _drawBuffer(
       canvas,
       out,
@@ -633,13 +754,17 @@ class SpriteStack {
       ch,
       cx,
       baseY,
+      x0: math.max(0, drawMinX - 1),
+      y0: math.max(0, drawMinY - 1),
+      x1: math.min(cw - 1, drawMaxX + 1),
+      y1: math.min(ch - 1, drawMaxY + 1),
       anchorX: anchorX,
       anchorY: anchorY,
       scale: scale,
     );
   }
 
-  void _rasterFootprint(
+  (int, int, int, int) _rasterFootprint(
     Uint8List out,
     int cw,
     int ch,
@@ -683,6 +808,7 @@ class SpriteStack {
         out[dp + 3] = a;
       }
     }
+    return (xMin, yMin, xMax, yMax);
   }
 
   void _drawBuffer(
@@ -692,15 +818,19 @@ class SpriteStack {
     int ch,
     int cx,
     int baseY, {
+    required int x0,
+    required int y0,
+    required int x1,
+    required int y1,
     required double anchorX,
     required double anchorY,
     required double scale,
   }) {
     final strokeWidth = math.max(scale, 0.01);
     final pointsByColor = <int, List<Offset>>{};
-    for (var y = 0; y < ch; y++) {
-      var idx = y * cw * 4;
-      for (var x = 0; x < cw; x++, idx += 4) {
+    for (var y = y0; y <= y1; y++) {
+      var idx = (y * cw + x0) * 4;
+      for (var x = x0; x <= x1; x++, idx += 4) {
         if (out[idx + 3] == 0) continue;
         final color = (out[idx + 3] << 24) |
             (out[idx] << 16) |

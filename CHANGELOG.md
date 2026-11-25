@@ -1,3 +1,21 @@
+## Unreleased
+
+### Performance
+
+- `SpriteStackScene` ground painting skips cells that are fully behind the
+  near plane or far enough outside the canvas that they cannot contribute a
+  pixel, before building and clipping their polygon. `colorAt` is now called
+  only for cells that survive that check. Measured 4.4x faster on a 400-cell
+  floor.
+- The software rasterizer restricts the inverse-mapping pass to each slice's
+  tight opaque rectangle instead of the whole rotated slice, and the draw and
+  outline passes only visit the region the body and shadow actually wrote.
+  Measured 1.7x faster for a 13-prop scene.
+- `SpriteStackSky` reuses its gradient paint while the size, horizon and sky
+  are unchanged.
+- Added `test/performance_test.dart` (`PERF=1`) and a CI step that reports the
+  spread of three rounds, so perf changes are measured instead of guessed.
+
 ## 0.4.0
 
 - `SpriteStackSceneObject` props are world-aligned by default: the scene

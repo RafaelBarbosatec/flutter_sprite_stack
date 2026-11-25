@@ -215,7 +215,8 @@ top-down-ish orbit fills the screen with ground, and there is no sky to see.
 **Painting the ground.** The floor is drawn as projected cells clipped against
 the near plane: `fill` paints a solid base, `checker` alternates colors by
 `(ix + iy)`, and `colorAt(x, y)` returns a color per cell centre for procedural
-floors (roads, grass, water, noise). `fadeColor` + `fadeDistance` blend distant
+floors (roads, grass, water, noise) — it is only called for cells that survive
+the near-plane and off-canvas reject. `fadeColor` + `fadeDistance` blend distant
 cells into the horizon, and `step: 0` hides the grid lines. Cells are flat
 colors, not textures — a texture would need subdivision or a textured
 rasterizer to be perspective-correct.

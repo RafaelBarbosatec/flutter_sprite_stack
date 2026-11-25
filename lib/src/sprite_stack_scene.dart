@@ -280,6 +280,14 @@ class SpriteStackScene {
   /// saves the software rasterizer's full pass.
   double minimumProjectedPixels = 0.5;
 
+  // Cached backdrop paint. The gradient only changes when the sky, the canvas
+  // size or the horizon move, so an orbit keeps reusing the same shader.
+  Paint? _skyPaint;
+  SpriteStackSky? _skyPaintKey;
+  Size? _skyPaintSize;
+  double? _skyPaintHorizon;
+  final Paint _skyBottomPaint = Paint();
+
   /// Counters from the last [paint], updated in place.
   SpriteStackSceneStats stats = const SpriteStackSceneStats();
 
@@ -476,20 +484,30 @@ class SpriteStackScene {
     // as a gradient instead of a single haze tone.
     final skyBottom = horizon.clamp(0.0, size.height).toDouble();
     if (skyBottom > 0) {
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.width, skyBottom),
-        Paint()
+      final cached = _skyPaint;
+      if (cached == null ||
+          _skyPaintKey != sky ||
+          _skyPaintSize != size ||
+          _skyPaintHorizon != horizon) {
+        _skyPaint = Paint()
           ..shader = Gradient.linear(
             Offset.zero,
             Offset(0, horizon),
             <Color>[sky.top, sky.horizon],
-          ),
+          );
+        _skyPaintKey = sky;
+        _skyPaintSize = size;
+        _skyPaintHorizon = horizon;
+      }
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, skyBottom),
+        _skyPaint!,
       );
     }
     if (skyBottom < size.height) {
       canvas.drawRect(
         Rect.fromLTRB(0, skyBottom, size.width, size.height),
-        Paint()..color = below,
+        _skyBottomPaint..color = below,
       );
     }
   }
@@ -545,6 +563,17 @@ class SpriteStackScene {
       // Adjacent cells share edges; anti-aliasing them shows hairline seams.
       ..isAntiAlias = false;
 
+    // Per-frame constants for the cheap reject below.
+    final eye = basis.eye;
+    final forward = basis.forward;
+    final right = basis.right;
+    final up = basis.up;
+    final focal = zoom * camera.distance;
+    final near = camera.near;
+    final halfDiag = cellSize * 0.7071067811865476; // half the cell diagonal
+    final halfWidth = size.width / 2;
+    final halfHeight = size.height / 2;
+
     for (var iy = 0; iy < count; iy++) {
       final y0 = -ground.extent + iy * cellSize;
       final y1 = math.min(y0 + cellSize, ground.extent);
@@ -554,6 +583,29 @@ class SpriteStackScene {
         final centerX = (x0 + x1) / 2;
         final centerY = (y0 + y1) / 2;
 
+        // Cells fully behind the near plane, or whose projected centre is
+        // farther outside the canvas than the cell's own projected radius,
+        // cannot contribute a pixel. Skipping them here avoids building and
+        // clipping a polygon (and four projected points) per hidden cell —
+        // most of a large floor when the camera looks at one corner.
+        final rx = centerX - eye.x;
+        final ry = centerY - eye.y;
+        final rz = -eye.z;
+        final depth = rx * forward.x + ry * forward.y + rz * forward.z;
+        if (depth + halfDiag <= near) continue;
+        final scale = focal / math.max(depth, near);
+        final screenX =
+            halfWidth + (rx * right.x + ry * right.y + rz * right.z) * scale;
+        final screenY =
+            halfHeight - (rx * up.x + ry * up.y + rz * up.z) * scale;
+        final radius = halfDiag * focal / math.max(depth - halfDiag, near) + 2;
+        if (screenX < -radius ||
+            screenX > size.width + radius ||
+            screenY < -radius ||
+            screenY > size.height + radius) {
+          continue;
+        }
+
         var color = ground.colorAt?.call(centerX, centerY);
         color ??= ground.checker.isNotEmpty
             ? ground.checker[(ix + iy) % ground.checker.length]
@@ -562,10 +614,8 @@ class SpriteStackScene {
 
         final fadeColor = ground.fadeColor;
         if (fadeColor != null && ground.fadeDistance > 0) {
-          final depth = (SpriteStackPoint(centerX, centerY, 0) - basis.eye)
-              .dot(basis.forward);
           final t = (depth / ground.fadeDistance).clamp(0.0, 1.0).toDouble();
-          color = Color.lerp(color, fadeColor, t)!;
+          if (t > 0) color = Color.lerp(color, fadeColor, t)!;
         }
 
         paint.color = color;

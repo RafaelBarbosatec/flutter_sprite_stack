@@ -28,6 +28,9 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Benchmark hot paths
+        run: PERF=1 flutter test test/performance_test.dart
+
       - name: Lint agent skills
         run: dart run skills_lint
 
