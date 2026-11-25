@@ -1,6 +1,6 @@
 ---
 title: API
-description: SpriteStack, SpriteStackPainter and SpriteStackAnimation reference.
+description: SpriteStack, SpriteStackPainter, SpriteStackAnimation and SpriteStackScene reference.
 ---
 
 # API
@@ -10,11 +10,11 @@ description: SpriteStack, SpriteStackPainter and SpriteStackAnimation reference.
 | `SpriteStack.load(path, sliceCount:)` | Loads a strip from a Flutter asset |
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
-| `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
+| `render(canvas, position:, yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
-| `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected bounds: `size` + `ground` point |
-| `bake(yaw:, pitch:, scale:, spacing:, frame:, ...)` | Renders once into a `BakedSpriteStack` |
+| `boundsFor(yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, outline:, shadow:)` | Projected bounds: `size` + `ground` point; the envelope is rotated by `roll` |
+| `bake(yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, frame:, ...)` | Renders once into a `BakedSpriteStack` |
 | `frameCount` | Frames stored in the atlas (vertical rows) |
 | `SpriteStack.defaultPitch` | `asin(0.75)` rad (~49°) |
 | `dispose()` | Releases the decoded image |
@@ -35,6 +35,8 @@ collapses to nothing.
 | `position` | required | Bottom-centre ground contact point |
 | `yaw` | `0` | Rotation around the vertical axis, radians |
 | `pitch` | `defaultPitch` | Camera tilt, `0` (edge-on) to `π/2` (top-down) |
+| `roll` | `0` | Screen-space tilt of the finished sprite, radians. A drawing effect, not a re-projection: it does not reveal a new side — turn `yaw` for that |
+| `rollPivot` | `0` | Pivot of `roll` as a fraction of the body height above the anchor (`0` = feet planted, `0.5` = body middle) |
 | `scale` | `1` | Uniform scale; keep it integer for crisp pixels |
 | `spacing` | `1` | Lift between slices, source pixels |
 | `outline` | `true` | Crisp 1 px outer outline around the finished stack |
@@ -47,6 +49,26 @@ collapses to nothing.
 | `motion` | `null` | `StackMotion` applied per slice |
 | `time` | `0` | Clock fed to `motion`, in seconds |
 | `cut` | `null` | `SliceCut` hiding slices above/below a frontier |
+
+## Scene
+
+| Member | Meaning |
+| --- | --- |
+| `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
+| `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:, near:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
+| `SpriteStackSceneObject(stack:, position:, yaw:, roll:, rollPivot:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point, `yaw` its world facing, `roll` the screen-space bank |
+| `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
+| `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
+| `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
+| `scene.paint(canvas, size)` | Projects and draws every object, far to near |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
+| `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `total` from the last paint |
+| `scene.minimumProjectedPixels` | Props whose scaled bounds are smaller than this many pixels are skipped (default `0.5`) |
+| `SpriteStackFollowCamera.update(camera, subject:, yaw:, velocity:, dt:)` | Moves the camera target and yaw towards a subject |
+| `SpriteStackFollowCamera.forwardOf(yaw)` | World direction a prop faces (front is `+Y`) |
+| `SpriteStackFollowCamera.smoothing(rate, dt)` | `1 - exp(-rate * dt)`, the frame-rate independent factor |
+| `SpriteStackFollowCamera.approachAngle(from, to, factor)` | Turns by the shortest arc |
 
 ## Animation
 

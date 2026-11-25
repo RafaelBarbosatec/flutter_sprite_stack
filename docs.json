@@ -28,6 +28,7 @@
       "pages": [
         { "title": "Plain Flutter", "href": "/guide/flutter" },
         { "title": "Game Engines", "href": "/guide/flame" },
+        { "title": "3D Scene", "href": "/guide/scene" },
         { "title": "Animation & Cutaways", "href": "/guide/animation" },
         { "title": "Asset Format", "href": "/guide/asset-format" },
         { "title": "Creating Assets", "href": "/guide/creating-assets" },

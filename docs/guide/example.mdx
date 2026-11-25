@@ -28,6 +28,21 @@ The **Helicopter demo** button in the app bar showcases real-time rotor animatio
 effects, and landing pad graphics. It is phone-first: the stage auto-fits the
 projected bounds and the control sheet is compact and scrollable.
 
+## 3D scene demos
+
+Three buttons in the app bar show the scene layer:
+
+| Button | Screen | Shows |
+| --- | --- | --- |
+| Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient |
+| Chase camera (follow with lag) | `ChaseCameraScreen` | A car lapping a superellipse with a live culling readout and a slider for the follow lag |
+| Banked flight (roll) | `FlightScreen` | A spaceship banking into its turns: `roll` is derived from the yaw rate and smoothed, with the ground and sky behind it |
+
+The chase demo prints `scene.stats` (`drawn` / `culled` / `behindCamera` /
+`tooSmall`) so you can see culling react as the car drives away from the camera.
+Sliding `yawRate` to `0` freezes the camera yaw and makes the car appear to spin
+in place — that is the lag doing its job.
+
 The `example/sprites/torch/` folder still ships an 8-frame atlas generator
 (`make_frames.py`) as a minimal frame-atlas reference.
 

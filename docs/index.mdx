@@ -35,6 +35,11 @@ slices (ground slice on the left)
 - **Flutter and any canvas-based engine**: `CustomPainter` for plain canvases;
   in Flame, Bonfire or a custom loop, call `render` from your own component.
 - **No 3D engine, no shaders, no platform channels** — it is just `Canvas`.
+- **3D scene layer, still engine-free**: `SpriteStackScene` projects props in a
+  world with an orbiting camera, painted ground, sky gradient, follow camera
+  and culling — see [3D Scene](/guide/scene).
+- **Motion effects in the renderer**: `pitch`, screen-space `roll` for banking
+  aircraft, per-slice `StackMotion` sway and slice cutaways.
 
 ## How it works
 
@@ -48,3 +53,14 @@ The renderer draws every slice from the ground up. For each slice it:
 A 1 px outline is traced around the finished stack once, so the silhouette stays
 clean instead of reading as individual slices, and the union of all slices is
 projected as a ground shadow before the stack is drawn.
+
+## Where to go next
+
+| Page | What it covers |
+| --- | --- |
+| [Quick Start](/quick-start) | Load a strip and draw it in one file |
+| [3D Scene](/guide/scene) | Orbit camera, ground, sky, follow camera, culling, roll |
+| [Plain Flutter](/guide/flutter) | `CustomPainter`, tickers and hit testing |
+| [Game Engines](/guide/flame) | Flame / Bonfire without an engine dependency |
+| [Animation & Cutaways](/guide/animation) | Frame atlases, sway, roofs coming off |
+| [Performance](/reference/performance) | Bake, cull and keep pixels crisp |
