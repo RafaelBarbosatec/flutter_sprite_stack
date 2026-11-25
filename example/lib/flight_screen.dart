@@ -8,9 +8,8 @@ import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 /// and the hull rolls into every turn.
 ///
 /// The roll comes from the heading change: `roll = k * dYaw/dt`, clamped and
-/// smoothed. The scene paints it as a screen-space rotation weighted by
-/// `cos(renderYaw)`, which is exact from behind — the chase view — and fades
-/// out towards a side view.
+/// smoothed. The ship is world-aligned and viewed from behind, so a left turn
+/// banks the hull left on screen (a negative screen-space roll).
 class FlightScreen extends StatefulWidget {
   const FlightScreen({super.key});
 
@@ -92,6 +91,9 @@ class _FlightScreenState extends State<FlightScreen>
         stack: ship,
         position: const SpriteStackPoint(0, 0, _cruiseAltitude),
         scale: 1,
+        // The ship is world-aligned so it turns and banks on its heading; the
+        // ground props below keep the default billboard facing.
+        billboard: false,
         // An airborne prop should not carry the ground shadow baked under its
         // feet; the shadow would float with it.
         shadow: false,
@@ -164,11 +166,12 @@ class _FlightScreenState extends State<FlightScreen>
     final pose = _poseAt(_distance);
 
     if (!_paused) {
-      // Bank into the turn: a positive heading rate is a clockwise (right) turn
-      // as seen from above, which is a positive roll on screen from behind.
+      // Bank into the turn. The ship is drawn from behind (billboard: false +
+      // the follow camera), so a left turn (positive heading rate) banks the
+      // hull left on screen — a negative roll in Flutter's screen space.
       final turnRate = _wrap(pose.yaw - _lastYaw) / dt;
       final wanted =
-          (turnRate * _bankGain).clamp(-_maxBank, _maxBank).toDouble();
+          (-turnRate * _bankGain).clamp(-_maxBank, _maxBank).toDouble();
       _roll += (wanted - _roll) * (1 - math.exp(-4 * dt));
       _lastYaw = pose.yaw;
     }

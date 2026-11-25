@@ -1,10 +1,11 @@
 ## 0.3.0
 
-- Scene props now derive their sprite yaw from the camera basis
-  (`camera.yaw - object.yaw + π`), so they stay aligned with the projected
-  ground grid as the camera orbits instead of turning against it.
-- `SpriteStackSceneObject.billboard`: when `true`, the prop skips that
-  alignment and keeps its `yaw` as a fixed screen angle.
+- `SpriteStackSceneObject.billboard` now defaults to `true`: props keep a
+  fixed screen facing while the camera moves, so scenery reads as a stable
+  landscape you fly or drive past. Set `billboard: false` for world-aligned
+  props (vehicles turning on their heading); those derive their sprite yaw
+  from the camera basis (`camera.yaw - object.yaw + π`) so they follow the
+  projected ground grid.
 - **Engine-free orbit scene**: `SpriteStackScene`, `SpriteStackCamera.orbit`,
   `SpriteStackSceneObject`, `SpriteStackGround` and
   `SpriteStackSceneProjection`. The camera projects each prop's ground point

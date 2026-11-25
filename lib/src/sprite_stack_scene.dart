@@ -80,14 +80,14 @@ class SpriteStackGround {
 /// A prop placed in a [SpriteStackScene].
 ///
 /// [position] is the ground contact point in world space. [yaw] is the prop's
-/// rotation in world space. The scene derives the visible sprite yaw from the
-/// camera basis so the prop's world axes stay aligned with the projected
-/// ground plane: as the camera orbits, the prop rotates on screen exactly like
-/// the ground grid does instead of turning against it.
+/// rotation: with the default `billboard: true` it is a fixed screen-space
+/// angle, so the prop keeps one facing while the camera moves. Scenery reads as
+/// a stable landscape you fly or drive past.
 ///
-/// When [billboard] is `true` that alignment is skipped: the prop is drawn with
-/// its [yaw] as a fixed screen-space angle, so it never spins on screen. Use it
-/// for stylised scenery that must keep one facing in a fly-over.
+/// Set [billboard] to `false` for props that must stay aligned with the world
+/// (a vehicle turning on its heading): the scene then derives the visible
+/// sprite yaw from the camera basis so the prop's world axes follow the
+/// projected ground plane.
 ///
 /// [scale] is a multiplier on the projected art scale. The scene does not own
 /// the [stack]; dispose it yourself when no scene uses it.
@@ -96,7 +96,7 @@ class SpriteStackSceneObject {
     required this.stack,
     this.position = SpriteStackPoint.zero,
     this.yaw = 0,
-    this.billboard = false,
+    this.billboard = true,
     this.scale = 1,
     this.spacing = 1,
     this.frame = 0,
@@ -116,9 +116,9 @@ class SpriteStackSceneObject {
   SpriteStackPoint position;
   double yaw;
 
-  /// When `true`, [yaw] is a fixed screen-space angle and the camera orbit does
-  /// not rotate the prop. Scenery keeps one facing on screen while the camera
-  /// moves, like a billboard in a classic 2.5D game.
+  /// When `true` (the default), [yaw] is a fixed screen-space angle and the
+  /// camera orbit does not rotate the prop. Set it to `false` for world-aligned
+  /// props such as a vehicle that turns with its heading.
   bool billboard;
 
   double scale;

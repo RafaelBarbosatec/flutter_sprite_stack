@@ -107,7 +107,7 @@ void main() {
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0, distance: 100),
       );
-      final object = SpriteStackSceneObject(stack: stack);
+      final object = SpriteStackSceneObject(stack: stack, billboard: false);
 
       final projection = scene.projectObject(object, const ui.Size(200, 200))!;
 
@@ -171,7 +171,11 @@ void main() {
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0.1),
       );
-      final object = SpriteStackSceneObject(stack: stack, yaw: 0.3);
+      final object = SpriteStackSceneObject(
+        stack: stack,
+        yaw: 0.3,
+        billboard: false,
+      );
 
       final projection = scene.projectObject(object, const ui.Size(200, 200))!;
 
@@ -188,7 +192,11 @@ void main() {
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 100),
       );
-      final object = SpriteStackSceneObject(stack: stack, yaw: 0);
+      final object = SpriteStackSceneObject(
+        stack: stack,
+        yaw: 0,
+        billboard: false,
+      );
 
       final projection = scene.projectObject(object, const ui.Size(200, 200))!;
 
@@ -199,17 +207,12 @@ void main() {
       stack.dispose();
     });
 
-    test('billboard props keep a fixed screen yaw while the camera orbits',
-        () async {
+    test('props default to billboard and keep a fixed screen yaw', () async {
       final stack = await _solidStack(0xFFFF0000);
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0.1),
       );
-      final object = SpriteStackSceneObject(
-        stack: stack,
-        yaw: 0.3,
-        billboard: true,
-      );
+      final object = SpriteStackSceneObject(stack: stack, yaw: 0.3);
 
       expect(
         scene.projectObject(object, const ui.Size(200, 200))!.yaw,

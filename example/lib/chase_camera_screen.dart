@@ -89,6 +89,9 @@ class _ChaseCameraScreenState extends State<ChaseCameraScreen>
         stack: car,
         position: const SpriteStackPoint(0, 0, 0),
         scale: 1,
+        // The subject is world-aligned so its body turns with the heading;
+        // the scenery around it keeps the default billboard facing.
+        billboard: false,
       );
       _scene.objects.add(_car);
 
