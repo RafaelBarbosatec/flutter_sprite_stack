@@ -149,6 +149,38 @@ class SpriteStackSceneProjection {
   bool isVisibleIn(Size size) => bounds.overlaps(Offset.zero & size);
 }
 
+/// Counters from the last [SpriteStackScene.paint].
+///
+/// Useful to see culling at work: a scene with 200 props spread over a big
+/// world should draw only the ones on screen.
+class SpriteStackSceneStats {
+  const SpriteStackSceneStats({
+    this.drawn = 0,
+    this.culled = 0,
+    this.behindCamera = 0,
+    this.tooSmall = 0,
+  });
+
+  /// Props that reached `SpriteStack.render`.
+  final int drawn;
+
+  /// Props whose projected bounds miss the canvas.
+  final int culled;
+
+  /// Props behind the camera's near plane.
+  final int behindCamera;
+
+  /// Props smaller than [SpriteStackScene.minimumProjectedPixels].
+  final int tooSmall;
+
+  /// Every prop in the scene.
+  int get total => drawn + culled + behindCamera + tooSmall;
+
+  @override
+  String toString() =>
+      'drawn $drawn, culled $culled, behind $behindCamera, tiny $tooSmall';
+}
+
 /// A set of sprite stacks drawn with an orbiting 3D camera.
 ///
 /// The renderer stays [SpriteStack] itself: the scene only projects each prop's
@@ -205,6 +237,16 @@ class SpriteStackScene {
 
   /// Props in the scene. Order only breaks depth ties.
   List<SpriteStackSceneObject> objects;
+
+  /// Props whose projected bounds are smaller than this many pixels on **both**
+  /// axes are skipped: at that size they cannot add a visible pixel.
+  ///
+  /// `0` disables the check. Culling runs before the stack is rendered, so it
+  /// saves the software rasterizer's full pass.
+  double minimumProjectedPixels = 0.5;
+
+  /// Counters from the last [paint], updated in place.
+  SpriteStackSceneStats stats = const SpriteStackSceneStats();
 
   /// Projects [object] for [size], or returns `null` when it is behind the
   /// camera.
@@ -276,12 +318,35 @@ class SpriteStackScene {
     _paintGround(canvas, size, basis);
 
     final drawables = <_Drawable>[];
+    var behindCamera = 0;
+    var culled = 0;
+    var tooSmall = 0;
+    final minPixels = minimumProjectedPixels;
     for (var index = 0; index < objects.length; index++) {
       final object = objects[index];
       final projection = _projectObject(object, size, basis);
-      if (projection == null || !projection.isVisibleIn(size)) continue;
+      if (projection == null) {
+        behindCamera++;
+        continue;
+      }
+      if (!projection.isVisibleIn(size)) {
+        culled++;
+        continue;
+      }
+      if (minPixels > 0 &&
+          projection.bounds.width < minPixels &&
+          projection.bounds.height < minPixels) {
+        tooSmall++;
+        continue;
+      }
       drawables.add(_Drawable(index, object, projection));
     }
+    stats = SpriteStackSceneStats(
+      drawn: drawables.length,
+      culled: culled,
+      behindCamera: behindCamera,
+      tooSmall: tooSmall,
+    );
     drawables.sort((a, b) {
       final byDepth = b.projection.depth.compareTo(a.projection.depth);
       return byDepth != 0 ? byDepth : a.index.compareTo(b.index);

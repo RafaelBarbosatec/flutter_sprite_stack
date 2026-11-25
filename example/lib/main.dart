@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
+import 'chase_camera_screen.dart';
 import 'f1_game/f1_game_screen.dart';
 import 'helicopter_screen.dart';
 import 'orbit_scene_screen.dart';
@@ -212,6 +213,14 @@ class _DemoScreenState extends State<DemoScreen>
             icon: const Icon(Icons.view_in_ar),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const OrbitSceneScreen()),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Chase camera (follow with lag)',
+            icon: const Icon(Icons.navigation),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                  builder: (_) => const ChaseCameraScreen()),
             ),
           ),
           IconButton(

@@ -483,6 +483,62 @@ void main() {
   });
 
   group('SpriteStackScene paint', () {
+    test('counts drawn, culled, behind and tiny props', () async {
+      final stack = await _solidStack(0xFFFF0000, sliceCount: 4);
+      final camera = SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300);
+      final basis = camera.basis;
+
+      final scene = SpriteStackScene(
+        camera: camera,
+        objects: [
+          SpriteStackSceneObject(stack: stack, scale: 4),
+          SpriteStackSceneObject(
+            stack: stack,
+            position: basis.forward * 300 + basis.right * 20000,
+            scale: 4,
+          ),
+          SpriteStackSceneObject(
+            stack: stack,
+            position: basis.forward * -100,
+            scale: 4,
+          ),
+          SpriteStackSceneObject(
+            stack: stack,
+            position: basis.forward * 1000000,
+            scale: 4,
+          ),
+        ],
+      );
+
+      await _render(scene);
+
+      expect(scene.stats.drawn, 1);
+      expect(scene.stats.culled, 1);
+      expect(scene.stats.behindCamera, 1);
+      expect(scene.stats.tooSmall, 1);
+      expect(scene.stats.total, 4);
+    });
+
+    test('minimumProjectedPixels can be disabled', () async {
+      final stack = await _solidStack(0xFFFF0000, sliceCount: 4);
+      final camera = SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300);
+      final scene = SpriteStackScene(
+        camera: camera,
+        objects: [
+          SpriteStackSceneObject(
+            stack: stack,
+            position: camera.basis.forward * 1000000,
+            scale: 4,
+          ),
+        ],
+      )..minimumProjectedPixels = 0;
+
+      await _render(scene);
+
+      expect(scene.stats.tooSmall, 0);
+      expect(scene.stats.drawn, 1);
+    });
+
     test('fills the background', () async {
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 300),

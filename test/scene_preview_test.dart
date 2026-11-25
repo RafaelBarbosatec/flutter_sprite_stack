@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -183,6 +184,153 @@ void main() {
     },
     skip: enabled ? false : 'set SCENE_PREVIEW=1 to render previews',
   );
+
+  test(
+    'renders the chase camera around the loop',
+    () async {
+      const size = ui.Size(900, 600);
+      final output = Directory('build/scene_previews')
+        ..createSync(recursive: true);
+
+      final stacks = <SpriteStack>[
+        await _loadFile('example/sprites/car/slices.png', 15),
+        await _loadFile('example/sprites/tree/slices.png', 43),
+        await _loadFile('example/sprites/palmeira/slices.png', 26),
+      ];
+      final carStack = stacks[0];
+
+      const fadeColor = ui.Color(0xFF16232F);
+      final camera = SpriteStackCamera.orbit(
+        yaw: 0,
+        pitch: 0.32,
+        distance: 320,
+        target: const SpriteStackPoint(0, 0, 30),
+      );
+      final scene = SpriteStackScene(
+        camera: camera,
+        zoom: 2.4,
+        sky: const SpriteStackSky(
+          top: ui.Color(0xFF070D16),
+          horizon: ui.Color(0xFF27435E),
+          bottom: fadeColor,
+        ),
+        ground: const SpriteStackGround(
+          extent: 900,
+          step: 90,
+          cellSize: 90,
+          checker: [ui.Color(0xFF142430), ui.Color(0xFF1D303D)],
+          fadeColor: fadeColor,
+          fadeDistance: 2400,
+        ),
+      );
+
+      final car = SpriteStackSceneObject(stack: carStack);
+      scene.objects.add(car);
+      for (var i = 0; i < 10; i++) {
+        final angle = i * 2 * math.pi / 10 + 0.4;
+        scene.objects.add(
+          SpriteStackSceneObject(
+            stack: stacks[1 + i % 2],
+            position: SpriteStackPoint(
+              math.cos(angle) * 520,
+              math.sin(angle) * 520,
+              0,
+            ),
+            yaw: i * 0.7,
+            scale: 1.1,
+          ),
+        );
+      }
+
+      final follow = SpriteStackFollowCamera(
+        positionRate: 6,
+        yawRate: 3,
+        lookAhead: 55,
+        height: 30,
+      );
+
+      const dt = 1 / 60;
+      const radius = 330.0;
+      const omega = 0.5;
+      var angle = 0.0;
+      var shot = 0;
+
+      for (var step = 1; step <= 360; step++) {
+        angle += omega * dt;
+        final position = SpriteStackPoint(
+          math.cos(angle) * radius,
+          math.sin(angle) * radius,
+          0,
+        );
+        final velocity = SpriteStackPoint(
+          -math.sin(angle),
+          math.cos(angle),
+          0,
+        );
+        final yaw = math.atan2(velocity.y, velocity.x) - math.pi / 2;
+        car
+          ..position = position
+          ..yaw = yaw;
+        follow.update(
+          camera,
+          subject: position,
+          yaw: yaw,
+          velocity: velocity,
+          dt: dt,
+        );
+
+        if (step % 120 != 0) continue;
+        shot++;
+        final pixels = await _renderPng(
+          scene,
+          size,
+          File('${output.path}/chase_$shot.png'),
+        );
+
+        final projection = scene.projectObject(car, size);
+        expect(projection, isNotNull, reason: 'chase_$shot lost the car');
+        expect(projection!.isVisibleIn(size), isTrue);
+
+        // The camera trails the car through the turn, so the car shows a
+        // sliver of its flank instead of staying locked to one angle.
+        final lag = _wrap(yaw - camera.yaw).abs();
+        expect(lag, greaterThan(0.05), reason: 'no camera lag in chase_$shot');
+        expect(lag, lessThan(0.5), reason: 'camera lag is wild in chase_$shot');
+        expect(
+          projection.yaw.abs(),
+          closeTo(lag, 1e-9),
+          reason: 'render yaw must equal the camera lag',
+        );
+
+        var red = 0;
+        for (var i = 0; i < size.width.toInt() * size.height.toInt(); i++) {
+          final r = pixels[i * 4];
+          final g = pixels[i * 4 + 1];
+          final b = pixels[i * 4 + 2];
+          if (r > 120 && g < 80 && b < 90) red++;
+        }
+        expect(red, greaterThan(500), reason: 'chase_$shot drew no car');
+
+        // Something must be behind the camera or off screen on a 360 degree
+        // loop with props all around it.
+        final stats = scene.stats;
+        expect(stats.drawn, greaterThan(0));
+        expect(stats.culled + stats.behindCamera, greaterThan(0));
+      }
+
+      expect(shot, 3);
+      for (final stack in stacks) {
+        stack.dispose();
+      }
+    },
+    skip: enabled ? false : 'set SCENE_PREVIEW=1 to render previews',
+  );
+}
+
+/// Wraps an angle to `-pi..pi`.
+double _wrap(double angle) {
+  final turn = angle % (2 * math.pi);
+  return turn > math.pi ? turn - 2 * math.pi : turn;
 }
 
 Future<SpriteStack> _loadFile(String path, int sliceCount) async {
