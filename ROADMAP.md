@@ -25,9 +25,9 @@ Shipped:
 
 Polish that makes the environment read as a place (still no gameplay):
 
-- [ ] sky/backdrop beyond a flat `background` colour (vertical gradient, optional
-      horizon) and a distance fade so the ground grid dissolves instead of
-      ending in a hard edge.
+- [x] sky/backdrop beyond a flat `background` colour: `SpriteStackSky` gradient
+      anchored to the camera's horizon, with a `horizonFraction` override, plus
+      `scene.horizonY(size)` for anything else that needs the line.
 - [x] ground surface options: solid `fill`, alternating `checker` cells,
       procedural `colorAt(x, y)` and `fadeColor`/`fadeDistance` for distance
       fade (`step: 0` hides the lines).

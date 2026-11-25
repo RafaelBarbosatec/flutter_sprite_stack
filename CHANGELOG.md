@@ -16,6 +16,12 @@
   cells, a procedural `colorAt(x, y)` callback and `fadeColor`/`fadeDistance`
   for distance fade. Cells are projected and near-clipped like the grid;
   `step: 0` hides the lines.
+- `SpriteStackSky`: vertical gradient backdrop anchored to the horizon, the
+  vanishing line of the ground plane (`scene.horizonY(size)`). `top` blends to
+  `horizon` above the line; `bottom` fills below it, so setting it to the
+  ground's `fadeColor` dissolves the floor edge into the backdrop.
+  `horizonFraction` pins the horizon for stylised backdrops. It takes
+  precedence over the flat `SpriteStackScene.background`.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
 - **Breaking:** removed the `flame` dependency and the engine components

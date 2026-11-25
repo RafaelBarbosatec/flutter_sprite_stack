@@ -6,6 +6,7 @@ import 'sprite_stack.dart';
 import 'sprite_stack_camera.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_point.dart';
+import 'sprite_stack_sky.dart';
 
 /// Optional ground plane painted under the objects of a `SpriteStackScene`.
 ///
@@ -159,6 +160,7 @@ class SpriteStackSceneProjection {
 /// final scene = SpriteStackScene(
 ///   camera: SpriteStackCamera.orbit(yaw: 0.6, pitch: 0.5, distance: 700),
 ///   zoom: 1.5,
+///   sky: const SpriteStackSky(),
 ///   ground: const SpriteStackGround(),
 ///   objects: [
 ///     SpriteStackSceneObject(stack: car, position: SpriteStackPoint(0, 0, 0)),
@@ -175,6 +177,7 @@ class SpriteStackScene {
     SpriteStackCamera? camera,
     this.zoom = 1,
     this.background,
+    this.sky,
     this.ground,
     List<SpriteStackSceneObject>? objects,
   })  : camera = camera ?? SpriteStackCamera.orbit(),
@@ -187,8 +190,15 @@ class SpriteStackScene {
   /// closer to the camera grow above this value, objects farther shrink.
   double zoom;
 
-  /// Painted before anything else when set.
+  /// Flat colour painted before anything else when set. Ignored when [sky] is
+  /// set.
   Color? background;
+
+  /// Gradient backdrop painted behind the ground and the objects.
+  ///
+  /// Takes precedence over [background]. Its horizon follows the camera, so
+  /// [horizonY] is the same line both use.
+  SpriteStackSky? sky;
 
   /// Optional ground grid painted before the objects.
   SpriteStackGround? ground;
@@ -237,14 +247,32 @@ class SpriteStackScene {
     );
   }
 
-  /// Draws the background, the ground grid and every visible prop, far to near.
-  void paint(Canvas canvas, Size size) {
-    final backgroundColor = background;
-    if (backgroundColor != null) {
-      canvas.drawRect(Offset.zero & size, Paint()..color = backgroundColor);
-    }
-
+  /// Screen y of the horizon for [size]: the vanishing line of the ground
+  /// plane at `z = 0`.
+  ///
+  /// The value follows the camera pitch and can fall outside `0..size.height`
+  /// — a top-down-ish orbit view pushes it far above the viewport — so clamp it
+  /// before using it as a canvas coordinate. Same line the [sky] gradient and
+  /// the [ground] fade are built around.
+  double horizonY(Size size) {
     final basis = camera.basis;
+    // Every horizontal direction lies on the ground plane; project the camera's
+    // horizontal heading and take the depth → infinity limit.
+    final heading = SpriteStackPoint(basis.forward.x, basis.forward.y, 0);
+    if (heading.length < 1e-9) return -size.height;
+    final unit = heading.normalized;
+    final along = unit.dot(basis.forward);
+    if (along < 1e-9) return -size.height;
+
+    final focal = zoom * camera.distance;
+    return size.height / 2 - (unit.dot(basis.up) / along) * focal;
+  }
+
+  /// Draws the backdrop, the ground grid and every visible prop, far to near.
+  void paint(Canvas canvas, Size size) {
+    final basis = camera.basis;
+    _paintBackdrop(canvas, size);
+
     _paintGround(canvas, size, basis);
 
     final drawables = <_Drawable>[];
@@ -278,6 +306,47 @@ class SpriteStackScene {
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
+      );
+    }
+  }
+
+  void _paintBackdrop(Canvas canvas, Size size) {
+    final sky = this.sky;
+    if (sky != null) {
+      _paintSky(canvas, size, sky);
+      return;
+    }
+
+    final backgroundColor = background;
+    if (backgroundColor != null) {
+      canvas.drawRect(Offset.zero & size, Paint()..color = backgroundColor);
+    }
+  }
+
+  void _paintSky(Canvas canvas, Size size, SpriteStackSky sky) {
+    final horizon = sky.horizonFraction == null
+        ? horizonY(size)
+        : sky.horizonFraction! * size.height;
+    final below = sky.bottom ?? sky.horizon;
+
+    // The gradient spans the visible sky band, so a sliver of sky still reads
+    // as a gradient instead of a single haze tone.
+    final skyBottom = horizon.clamp(0.0, size.height).toDouble();
+    if (skyBottom > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, skyBottom),
+        Paint()
+          ..shader = Gradient.linear(
+            Offset.zero,
+            Offset(0, horizon),
+            <Color>[sky.top, sky.horizon],
+          ),
+      );
+    }
+    if (skyBottom < size.height) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, skyBottom, size.width, size.height),
+        Paint()..color = below,
       );
     }
   }

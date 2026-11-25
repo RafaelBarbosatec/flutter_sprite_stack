@@ -39,7 +39,11 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
         target: const SpriteStackPoint(0, 0, 30),
       ),
       zoom: 2.4,
-      background: const Color(0xFF0B1118),
+      sky: const SpriteStackSky(
+        top: Color(0xFF070D16),
+        horizon: Color(0xFF27435E),
+        bottom: Color(0xFF16232F),
+      ),
       ground: const SpriteStackGround(
         extent: 700,
         step: 70,
@@ -47,7 +51,7 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
         axisColor: Color(0x664E6A84),
         cellSize: 70,
         checker: [Color(0xFF142430), Color(0xFF1D303D)],
-        fadeColor: Color(0xFF0B1118),
+        fadeColor: Color(0xFF16232F),
         fadeDistance: 2400,
       ),
     );
@@ -138,7 +142,7 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
         onPanStart: (_) => _dragging = true,
         onPanUpdate: (details) {
           _yaw -= details.delta.dx * 0.008;
-          _pitch = (_pitch - details.delta.dy * 0.006).clamp(0.1, 1.35);
+          _pitch = (_pitch - details.delta.dy * 0.006).clamp(0.02, 1.35);
         },
         onPanEnd: (_) => _dragging = false,
         child: Stack(
@@ -179,7 +183,7 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
                     Icon(Icons.view_in_ar, size: 13, color: Colors.white70),
                     SizedBox(width: 6),
                     Text(
-                      'Drag to orbit · props keep their yaw',
+                      'Drag to orbit · tilt down for the sky',
                       style: TextStyle(fontSize: 10, color: Colors.white70),
                     ),
                   ],

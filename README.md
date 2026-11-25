@@ -145,13 +145,17 @@ side of their cross-sections becomes visible.
 final scene = SpriteStackScene(
   camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
   zoom: 2.4,                       // art pixels per world unit at the target
-  background: const Color(0xFF0B1118),
+  sky: const SpriteStackSky(
+    top: Color(0xFF070D16),
+    horizon: Color(0xFF27435E),
+    bottom: Color(0xFF16232F),     // matches the ground's fadeColor
+  ),
   ground: const SpriteStackGround(
     extent: 700,
     step: 70,
     cellSize: 70,
-    checker: [Color(0xFF13202A), Color(0xFF162430)],
-    fadeColor: Color(0xFF0B1118),
+    checker: [Color(0xFF142430), Color(0xFF1D303D)],
+    fadeColor: Color(0xFF16232F),
     fadeDistance: 2400,
   ),
   objects: [
@@ -177,10 +181,24 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | Piece | Meaning |
 | --- | --- |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
-| `SpriteStackScene(camera:, zoom:, background:, ground:, objects:)` | Projects, depth-sorts and draws the props |
+| `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
 | `SpriteStackSceneObject(stack:, position:, yaw:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point and `yaw` its world facing |
+| `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
+
+**Sky and horizon.** `SpriteStackSky` paints a vertical gradient behind
+everything, anchored to the horizon — the vanishing line of the ground plane,
+the same line `scene.horizonY(size)` reports. It follows the camera pitch, so
+orbiting leaves it still and only tilting moves it. Above the horizon it blends
+`top` → `horizon`; below it, `bottom` shows wherever the ground does not reach.
+Set the ground's `fadeColor` to `bottom` so distant cells dissolve into the
+backdrop instead of ending on a hard edge. `horizonFraction` pins the horizon to
+a fraction of the canvas instead of deriving it from the camera.
+
+With this projection the horizon only enters the frame at a shallow pitch: a
+top-down-ish orbit fills the screen with ground, and there is no sky to see.
 
 **Painting the ground.** The floor is drawn as projected cells clipped against
 the near plane: `fill` paints a solid base, `checker` alternates colors by
@@ -563,7 +581,9 @@ produces.
 | `SpriteStackCamera.orbit(...)` / `eye` / `basis` | 3D camera; `pitch` is clamped just short of top-down |
 | `SpriteStackSceneObject(...)` | Stack + world position, yaw, scale, frame, cut and motion |
 | `projectObject(object, size)` | Screen point, depth, scale, relative yaw and projected bounds |
-| `SpriteStackGround(...)` | Optional ground grid on `z = 0` |
+| `horizonY(size)` | Screen y of the ground plane's vanishing line |
+| `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
+| `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
 | `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |
 | `bake(yaw:, pitch:, scale:, spacing:, ...)` | Renders once into a `BakedSpriteStack` |
 | `SpriteStackTurntable(stack, buckets:, ...)` | Lazily baked yaw frames |

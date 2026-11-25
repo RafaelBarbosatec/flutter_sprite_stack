@@ -219,10 +219,11 @@ culling, collision and depth sorting. The sprite stack still draws.
 
 | Member | Meaning |
 | --- | --- |
-| `SpriteStackScene({camera, zoom = 1, background, ground, objects})` | Projects, depth-sorts and draws the props |
-| `paint(Canvas, Size)` | Draws background, ground grid and every visible prop, far to near |
+| `SpriteStackScene({camera, zoom = 1, background, sky, ground, objects})` | Projects, depth-sorts and draws the props |
+| `paint(Canvas, Size)` | Draws backdrop, ground and every visible prop, far to near |
 | `projectObject(object, size)` | `SpriteStackSceneProjection?` — null when behind the camera |
-| `camera`, `zoom`, `background`, `ground`, `objects` | Mutable scene state |
+| `horizonY(size)` | Screen y of the ground plane's vanishing line; may be off-canvas |
+| `camera`, `zoom`, `background`, `sky`, `ground`, `objects` | Mutable scene state |
 
 `SpriteStackSceneProjection` exposes `position` (screen ground point), `depth`
 (camera-space, smaller is closer), `scale`, `yaw` (prop yaw minus camera yaw),
@@ -246,6 +247,21 @@ spacing = 1, frame = 0, time = 0, motion, cut, outline = true, shadow = true,
 pixelSnap = true, outlineColor, shadowColor})`. `position` is the ground point
 in world space; `yaw` is the world facing (the camera yaw is subtracted when
 drawing). The scene does not own the stack.
+
+### SpriteStackSky
+
+`SpriteStackSky({top, horizon, bottom, horizonFraction})` — vertical gradient
+painted before the ground and the props. Takes precedence over `background`.
+
+- The horizon is the ground plane's vanishing line, derived from the camera
+  (same value as `scene.horizonY(size)`); it follows `pitch`, not `yaw`.
+- Above the line the gradient runs `top` → `horizon`; below it `bottom` fills,
+  defaulting to `horizon`.
+- Set `bottom` to the ground's `fadeColor` so the floor edge is invisible.
+- `horizonFraction` (`0..1`) pins the line to the canvas instead of using the
+  camera, for stylised backdrops.
+- The horizon only enters the frame at a shallow pitch; a top-down-ish orbit
+  sees ground only. `horizonFraction` is the escape hatch for that case.
 
 ### SpriteStackGround
 
