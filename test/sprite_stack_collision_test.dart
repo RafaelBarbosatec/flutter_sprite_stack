@@ -271,12 +271,21 @@ void main() {
     });
 
     test('the proxy lands where the ground slice is drawn', () async {
-      // One solid pixel, off-centre in both axes, so a wrong mirror or a wrong
-      // yaw shows up as a large offset instead of hiding in the symmetry.
+      // A small solid block, off-centre in both axes, so a wrong mirror or a
+      // wrong yaw shows up as a large offset instead of hiding in the
+      // symmetry. One pixel is too thin: nearest-neighbour sampling can miss
+      // it entirely at a quarter turn.
       for (final yaw in <double>[0, math.pi / 2]) {
         final stack = await _stackFromSlices(
           [
-            _pixelMask(width: 8, depth: 8, x: 1, y: 2),
+            _rectMask(
+              width: 8,
+              depth: 8,
+              minX: 1,
+              minY: 1,
+              maxX: 3,
+              maxY: 3,
+            ),
           ],
           width: 8,
           depth: 8,
@@ -476,15 +485,22 @@ void main() {
   });
 }
 
-/// Mask with a single opaque pixel at ([x], [y]).
-List<int> _pixelMask({
+/// Mask with an opaque rectangle spanning [minX]..[maxX] × [minY]..[maxY]
+/// (inclusive).
+List<int> _rectMask({
   required int width,
   required int depth,
-  required int x,
-  required int y,
+  required int minX,
+  required int minY,
+  required int maxX,
+  required int maxY,
 }) {
   final mask = List<int>.filled(width * depth, 0);
-  mask[y * width + x] = 255;
+  for (var y = minY; y <= maxY; y++) {
+    for (var x = minX; x <= maxX; x++) {
+      mask[y * width + x] = 255;
+    }
+  }
   return mask;
 }
 
