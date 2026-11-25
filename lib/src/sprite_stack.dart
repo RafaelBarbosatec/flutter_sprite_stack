@@ -489,6 +489,15 @@ class SpriteStack {
   // Software rasterizer (matches viewer.html): 1x art-pixel buffer, nearest
   // inverse sampling, one outline pass, then integer scale-up.
   // ---------------------------------------------------------------------
+
+  /// Reusable per-colour point buffers for [_drawBuffer].
+  ///
+  /// Pixel art keeps a small, stable palette and the visible colours repeat
+  /// every frame, so the buckets are kept between renders. That turns the
+  /// per-pixel `Offset` allocations (thousands per prop per frame) into a
+  /// couple of typed arrays that are reused.
+  final Map<int, _PointBucket> _pointBuckets = <int, _PointBucket>{};
+
   void _renderSoftware(
     Canvas canvas, {
     required Offset position,
@@ -553,23 +562,25 @@ class SpriteStack {
 
     // 2. Body slices, bottom to top, overwriting.
     final invSquash = 1 / math.max(squash, 0.1);
+    // The rotated slice rectangle only depends on yaw and pitch, so its
+    // extents are the same for every slice; only the centre moves.
+    final halfW = (w * ca.abs() + h * sa.abs()) / 2;
+    final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
+    final stripWidth = n * w;
     for (var z = 0; z < n; z++) {
       final visibility = cut?.visibilityAt(z) ?? 1.0;
       if (visibility <= 0) continue;
+      final zBase = z * w;
       final lift = (z * spacing).round();
       // Motion is applied in whole art pixels: the buffer is 1x, so a fraction
       // of a pixel cannot be represented without blurring the pixel grid.
       final shift = motion?.offsetAt(z, n, time) ?? Offset.zero;
       final sliceCx = cx + shift.dx.round();
       final yCenter = baseY - lift + shift.dy.round();
-      final halfW = (w * ca.abs() + h * sa.abs()) / 2;
-      final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
       final xMin = math.max(0, (sliceCx - halfW).floor() - 1);
       final xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
       final yMin = math.max(0, (yCenter - halfH).floor() - 1);
       final yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
-      final stripWidth = n * w;
-      final zBase = z * w;
 
       for (var y = yMin; y <= yMax; y++) {
         final dy = (y - yCenter) * invSquash;
@@ -578,8 +589,10 @@ class SpriteStack {
         var idx = y * cw + xMin;
         for (var x = xMin; x <= xMax; x++, idx++, sx += ca, sy -= sa) {
           if (sx < 0 || sy < 0) continue;
-          final ix = sx.floor();
-          final iy = sy.floor();
+          // `sx`/`sy` are non-negative here, so truncation is the same as
+          // flooring and skips a libm call per pixel.
+          final ix = sx.toInt();
+          final iy = sy.toInt();
           if (ix >= w || iy >= h) continue;
           final sp = ((rowOffset + iy) * stripWidth + zBase + ix) * 4;
           if (pixels[sp + 3] == 0) continue;
@@ -697,30 +710,70 @@ class SpriteStack {
     required double scale,
   }) {
     final strokeWidth = math.max(scale, 0.01);
-    final pointsByColor = <int, List<Offset>>{};
+
+    // Pass 1: count how many pixels each colour needs. The palette of a pixel
+    // art prop is stable across frames, so the buckets are kept between
+    // renders and only their counters are reset.
+    for (final bucket in _pointBuckets.values) {
+      bucket.count = 0;
+      bucket.cursor = 0;
+    }
     for (var y = 0; y < ch; y++) {
       var idx = y * cw * 4;
       for (var x = 0; x < cw; x++, idx += 4) {
-        if (out[idx + 3] == 0) continue;
-        final color = (out[idx + 3] << 24) |
-            (out[idx] << 16) |
-            (out[idx + 1] << 8) |
-            out[idx + 2];
-        final point = Offset(
-          anchorX + (x - cx) * scale + strokeWidth / 2,
-          anchorY + (y - baseY) * scale + strokeWidth / 2,
-        );
-        pointsByColor.putIfAbsent(color, () => <Offset>[]).add(point);
+        final a = out[idx + 3];
+        if (a == 0) continue;
+        final color =
+            (a << 24) | (out[idx] << 16) | (out[idx + 1] << 8) | out[idx + 2];
+        final bucket = _pointBuckets.putIfAbsent(color, _PointBucket.new);
+        bucket.count++;
       }
     }
 
-    for (final entry in pointsByColor.entries) {
-      final paint = Paint()
-        ..color = Color(entry.key)
-        ..strokeWidth = strokeWidth
-        ..isAntiAlias = false
-        ..strokeCap = StrokeCap.butt;
-      canvas.drawPoints(PointMode.points, entry.value, paint);
+    for (final bucket in _pointBuckets.values) {
+      if (bucket.count == 0) continue;
+      final needed = bucket.count * 2;
+      final data = bucket.data;
+      if (data == null || data.length < needed) {
+        bucket.data = Float32List(needed);
+      }
+    }
+
+    // Pass 2: write coordinates into typed arrays. `drawRawPoints` consumes a
+    // Float32List, so no `Offset` is allocated per pixel — this was the bulk
+    // of the garbage the rasterizer produced.
+    for (var y = 0; y < ch; y++) {
+      var idx = y * cw * 4;
+      final py = anchorY + (y - baseY) * scale + strokeWidth / 2;
+      for (var x = 0; x < cw; x++, idx += 4) {
+        final a = out[idx + 3];
+        if (a == 0) continue;
+        final color =
+            (a << 24) | (out[idx] << 16) | (out[idx + 1] << 8) | out[idx + 2];
+        final bucket = _pointBuckets[color]!;
+        final data = bucket.data!;
+        final at = bucket.cursor;
+        data[at] = anchorX + (x - cx) * scale + strokeWidth / 2;
+        data[at + 1] = py;
+        bucket.cursor = at + 2;
+      }
+    }
+
+    for (final entry in _pointBuckets.entries) {
+      final bucket = entry.value;
+      if (bucket.count == 0) continue;
+      final data = bucket.data!;
+      canvas.drawRawPoints(
+        PointMode.points,
+        bucket.cursor == data.length
+            ? data
+            : Float32List.sublistView(data, 0, bucket.cursor),
+        Paint()
+          ..color = Color(entry.key)
+          ..strokeWidth = strokeWidth
+          ..isAntiAlias = false
+          ..strokeCap = StrokeCap.butt,
+      );
     }
   }
 
@@ -904,4 +957,15 @@ Uint8List _buildFootprintMasks(
     }
   }
   return mask;
+}
+
+/// One colour's pixel coordinates for a single `_drawBuffer` pass.
+///
+/// The buffer is reused between renders: [count] is reset, [data] is only
+/// reallocated when the colour needs more room, and [cursor] tracks how much
+/// of it the current pass filled.
+class _PointBucket {
+  int count = 0;
+  int cursor = 0;
+  Float32List? data;
 }
