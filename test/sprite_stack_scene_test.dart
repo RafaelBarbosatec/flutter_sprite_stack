@@ -330,6 +330,159 @@ void main() {
     });
   });
 
+  group('SpriteStackSky', () {
+    // Black to white so the gradient can be checked by channel value.
+    const sky = SpriteStackSky(
+      top: ui.Color(0xFF000000),
+      horizon: ui.Color(0xFFFFFFFF),
+    );
+
+    SpriteStackScene scene({
+      double pitch = 0,
+      double zoom = 1,
+      SpriteStackSky? backdrop = sky,
+      SpriteStackGround? ground,
+      ui.Color? background,
+    }) =>
+        SpriteStackScene(
+          camera: SpriteStackCamera.orbit(
+            yaw: 0.4,
+            pitch: pitch,
+            distance: 100,
+          ),
+          zoom: zoom,
+          sky: backdrop,
+          ground: ground,
+          background: background,
+        );
+
+    test('puts the horizon on the centre line at a level pitch', () async {
+      final scene = scene();
+
+      expect(scene.horizonY(const ui.Size(200, 200)), closeTo(100, 1e-9));
+    });
+
+    test('raises the horizon by tan(pitch) times the focal length', () async {
+      // focal = zoom * distance = 200; tan(pi / 4) = 1.
+      final scene = scene(pitch: math.pi / 4, zoom: 2);
+
+      expect(
+        scene.horizonY(const ui.Size(200, 200)),
+        closeTo(-100, 1e-6),
+      );
+    });
+
+    test('keeps the horizon independent of yaw', () async {
+      final scene = scene();
+      final first = scene.horizonY(const ui.Size(200, 200));
+      scene.camera.yaw = 2.7;
+
+      expect(scene.horizonY(const ui.Size(200, 200)), closeTo(first, 1e-9));
+    });
+
+    test('paints a gradient above the horizon', () async {
+      final pixels = await _render(scene());
+
+      final top = _red(pixels, 200, 10, 0);
+      final middle = _red(pixels, 200, 10, 50);
+      final low = _red(pixels, 200, 10, 99);
+
+      // The band spans one screen height above the horizon, so row 0 sits
+      // half-way between the two colours.
+      expect(top, inInclusiveRange(110, 145));
+      expect(middle, greaterThan(top));
+      expect(low, greaterThan(middle));
+      expect(low, greaterThan(240));
+    });
+
+    test('fills below the horizon with bottom, defaulting to horizon',
+        () async {
+      final pixels = await _render(scene());
+
+      // The default `bottom` is the horizon colour.
+      expect(_pixelAt(pixels, 200, 10, 150), 0xFFFFFFFF);
+      expect(_pixelAt(pixels, 200, 10, 199), 0xFFFFFFFF);
+
+      final withBottom = await _render(
+        scene(
+          backdrop: const SpriteStackSky(
+            top: ui.Color(0xFF000000),
+            horizon: ui.Color(0xFFFFFFFF),
+            bottom: ui.Color(0xFF00FF00),
+          ),
+        ),
+      );
+      expect(_pixelAt(withBottom, 200, 10, 150), 0xFF00FF00);
+    });
+
+    test('follows the camera pitch', () async {
+      // focal = 100, tan(0.5) ~ 0.5463 -> horizon at ~45.4.
+      final pixels = await _render(scene(pitch: 0.5));
+
+      expect(_red(pixels, 200, 10, 10), lessThan(250));
+      expect(_pixelAt(pixels, 200, 10, 60), 0xFFFFFFFF);
+    });
+
+    test('pins the horizon with horizonFraction', () async {
+      final pixels = await _render(
+        scene(
+          // A steep pitch would push the camera horizon off-screen; the
+          // fraction keeps it at 25% of the canvas.
+          pitch: 0.9,
+          backdrop: const SpriteStackSky(
+            horizon: ui.Color(0xFFFFFFFF),
+            bottom: ui.Color(0xFF00FF00),
+            horizonFraction: 0.25,
+          ),
+        ),
+      );
+
+      expect(_pixelAt(pixels, 200, 10, 10), isNot(0xFF00FF00));
+      expect(_pixelAt(pixels, 200, 10, 60), 0xFF00FF00);
+    });
+
+    test('wins over a flat background colour', () async {
+      final pixels = await _render(
+        scene(background: const ui.Color(0xFFFF0000)),
+      );
+
+      expect(_countColor(pixels, 0xFFFF0000), 0);
+      expect(_pixelAt(pixels, 200, 10, 150), 0xFFFFFFFF);
+    });
+
+    test('stays behind the ground', () async {
+      final pixels = await _render(
+        scene(
+          pitch: 0.7,
+          ground: const SpriteStackGround(
+            extent: 400,
+            step: 0,
+            fill: ui.Color(0xFF203040),
+          ),
+        ),
+      );
+
+      expect(_pixelAt(pixels, 200, 100, 100), 0xFF203040);
+      expect(_pixelAt(pixels, 200, 100, 150), 0xFF203040);
+    });
+
+    test('degrades to a flat fill when the camera looks straight down',
+        () async {
+      final pixels = await _render(
+        scene(
+          pitch: SpriteStackCamera.maxPitch,
+          backdrop: const SpriteStackSky(
+            top: ui.Color(0xFF000000),
+            horizon: ui.Color(0xFFFFFFFF),
+            bottom: ui.Color(0xFF00FF00),
+          ),
+        ),
+      );
+
+      expect(_pixelAt(pixels, 200, 10, 10), 0xFF00FF00);
+    });
+  });
+
   group('SpriteStackScene paint', () {
     test('fills the background', () async {
       final scene = SpriteStackScene(
@@ -500,6 +653,9 @@ int _pixelAt(Uint8List pixels, int width, int x, int y) {
   final a = pixels[offset + 3];
   return (a << 24) | (r << 16) | (g << 8) | b;
 }
+
+int _red(Uint8List pixels, int width, int x, int y) =>
+    pixels[(y * width + x) * 4];
 
 int _countColor(Uint8List pixels, int argb) {
   var count = 0;

@@ -97,7 +97,11 @@ camera yaw from the prop yaw, scales by depth and paints far to near.
 final scene = SpriteStackScene(
   camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
   zoom: 2.4,                     // art pixels per world unit at the target
-  background: const Color(0xFF0B1118),
+  sky: const SpriteStackSky(
+    top: Color(0xFF070D16),
+    horizon: Color(0xFF27435E),
+    bottom: Color(0xFF16232F),   // match the ground's fadeColor
+  ),
   ground: const SpriteStackGround(extent: 700, step: 70),
   objects: [
     SpriteStackSceneObject(
@@ -119,6 +123,12 @@ just short of straight down.
 
 - `scene.projectObject(object, size)` → `position`, `depth`, `scale`, `yaw`,
   `bounds`; use `isVisibleIn(size)` to cull.
+- `SpriteStackSky` paints a gradient backdrop anchored to the ground plane's
+  vanishing line (`scene.horizonY(size)`): `top` → `horizon` above the line,
+  `bottom` below it. It follows the camera pitch, so orbiting keeps it still.
+  Set `bottom` to the ground's `fadeColor` to hide the edge of the floor;
+  `horizonFraction` pins the line for stylised backdrops. It wins over the flat
+  `background`.
 - `SpriteStackGround` paints the floor as near-clipped projected cells: `fill`,
   `checker` (alternates by `(ix + iy)`), `colorAt(x, y)` for procedural floors,
   and `fadeColor`/`fadeDistance` to blend into the horizon. `step: 0` hides the

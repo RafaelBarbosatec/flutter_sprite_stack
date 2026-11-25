@@ -24,7 +24,6 @@ void main() {
   test(
     'renders the orbit scene with the example assets',
     () async {
-      const background = ui.Color(0xFF0B1118);
       const size = ui.Size(900, 600);
       final output = Directory('build/scene_previews')
         ..createSync(recursive: true);
@@ -40,6 +39,7 @@ void main() {
       final tree = stacks[2];
       final palm = stacks[3];
 
+      const fadeColor = ui.Color(0xFF16232F);
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(
           yaw: 0.85,
@@ -48,7 +48,11 @@ void main() {
           target: const SpriteStackPoint(0, 0, 30),
         ),
         zoom: 2.4,
-        background: background,
+        sky: const SpriteStackSky(
+          top: ui.Color(0xFF070D16),
+          horizon: ui.Color(0xFF27435E),
+          bottom: fadeColor,
+        ),
         ground: const SpriteStackGround(
           extent: 700,
           step: 70,
@@ -56,7 +60,7 @@ void main() {
           axisColor: ui.Color(0x664E6A84),
           cellSize: 70,
           checker: [ui.Color(0xFF142430), ui.Color(0xFF1D303D)],
-          fadeColor: ui.Color(0xFF0B1118),
+          fadeColor: fadeColor,
           fadeDistance: 2400,
         ),
         objects: [
@@ -91,49 +95,77 @@ void main() {
         ],
       );
 
-      for (final yaw in [0.85, 2.95, 5.05]) {
-        scene.camera.yaw = yaw;
+      // Three orbit angles at the diorama pitch, plus one wide, shallow shot
+      // that brings the horizon (and therefore the sky) into the frame. A
+      // shorter orbit distance widens the field of view without shrinking the
+      // props: the projection scale at the target is ~zoom either way.
+      const shots = <(String, double, double, double)>[
+        ('orbit_0.85', 0.85, 0.6, 900),
+        ('orbit_2.95', 2.95, 0.6, 900),
+        ('orbit_5.05', 5.05, 0.6, 900),
+        ('horizon', 0.85, 0.2, 400),
+      ];
+
+      for (final (name, yaw, pitch, distance) in shots) {
+        scene.camera
+          ..yaw = yaw
+          ..pitch = pitch
+          ..distance = distance;
         final pixels = await _renderPng(
           scene,
           size,
-          File('${output.path}/orbit_${yaw.toStringAsFixed(2)}.png'),
+          File('${output.path}/$name.png'),
         );
 
-        var painted = 0;
+        var red = 0;
         final colors = <int>{};
         final pixelCount = size.width.toInt() * size.height.toInt();
         for (var i = 0; i < pixelCount; i++) {
-          final rgba = (pixels[i * 4 + 3] << 24) |
-              (pixels[i * 4] << 16) |
-              (pixels[i * 4 + 1] << 8) |
-              pixels[i * 4 + 2];
-          if (rgba == 0xFF0B1118) continue;
-          painted++;
-          colors.add(rgba);
+          final r = pixels[i * 4];
+          final g = pixels[i * 4 + 1];
+          final b = pixels[i * 4 + 2];
+          colors.add(
+            (pixels[i * 4 + 3] << 24) | (r << 16) | (g << 8) | b,
+          );
+          // The car body is (208, 32, 40) in the asset palette.
+          if (r > 120 && g < 80 && b < 90) red++;
         }
 
-        // A blank or single-colour frame means the scene did not draw.
-        expect(
-          painted,
-          greaterThan(5000),
-          reason: 'yaw $yaw painted only $painted pixels',
-        );
+        // A blank or flat-gradient frame means the scene did not draw.
         expect(
           colors.length,
-          greaterThan(50),
-          reason: 'yaw $yaw produced only ${colors.length} colours',
+          greaterThan(200),
+          reason: '$name produced only ${colors.length} colours',
+        );
+        expect(
+          red,
+          greaterThan(500),
+          reason: '$name drew only $red car-body pixels',
         );
 
-        var visible = 0;
-        for (final object in scene.objects) {
-          final projection = scene.projectObject(object, size);
-          if (projection != null && projection.isVisibleIn(size)) visible++;
+        if (name == 'horizon') {
+          // Sky above, ground below: the top row must be bluer than the
+          // bottom row, and the horizon must sit inside the frame.
+          final horizon = scene.horizonY(size);
+          expect(horizon, inInclusiveRange(1, size.height - 1));
+          expect(
+            pixels[0 * 4 + 2],
+            greaterThan(
+                pixels[(size.height.toInt() - 1) * size.width.toInt() * 4 + 2]),
+            reason: 'the horizon shot has no sky above the ground',
+          );
+        } else {
+          var visible = 0;
+          for (final object in scene.objects) {
+            final projection = scene.projectObject(object, size);
+            if (projection != null && projection.isVisibleIn(size)) visible++;
+          }
+          expect(
+            visible,
+            greaterThanOrEqualTo(3),
+            reason: '$name framed only $visible props',
+          );
         }
-        expect(
-          visible,
-          greaterThanOrEqualTo(3),
-          reason: 'yaw $yaw framed only $visible props',
-        );
       }
 
       for (final stack in stacks) {
