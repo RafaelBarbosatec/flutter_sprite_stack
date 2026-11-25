@@ -78,22 +78,30 @@ void main() {
       final groundOnly = buildScene()..objects.clear();
 
       // Warm up the JIT and the image cache.
-      final warm = _measure(scene, size, frames: 12);
+      _measure(scene, size, frames: 12);
       _measure(groundOnly, size, frames: 12);
 
-      final full = _measure(scene, size, frames: 60);
-      final ground = _measure(groundOnly, size, frames: 60);
-      final single = _measureProp(car, size, frames: 120);
+      // Three rounds in the same process: shared CI runners vary a lot between
+      // jobs, so the spread matters as much as the median.
+      final full = <_Stats>[];
+      final ground = <_Stats>[];
+      final single = <_Stats>[];
+      for (var round = 0; round < 3; round++) {
+        full.add(_measure(scene, size, frames: 40));
+        ground.add(_measure(groundOnly, size, frames: 40));
+        single.add(_measureProp(car, size, frames: 80));
+      }
 
       _report('scene_paint_13_props_400_cells', full);
       _report('ground_400_cells', ground);
       _report('single_prop_render', single);
-      _report('warmup_scene', warm);
 
       // Loose sanity checks so a catastrophic regression fails the build
       // instead of only printing a slow number.
-      expect(full.medianMs, lessThan(80), reason: 'scene paint is 10x slower');
-      expect(ground.medianMs, lessThan(40), reason: 'ground paint regressed');
+      expect(full.first.medianMs, lessThan(80),
+          reason: 'scene paint is 10x slower');
+      expect(ground.first.medianMs, lessThan(40),
+          reason: 'ground paint regressed');
     },
     skip: !enabled,
   );
@@ -156,10 +164,17 @@ _Stats _stats(List<double> samples) {
   return _Stats(median, p90, sorted.length);
 }
 
-void _report(String label, _Stats stats) {
-  // Printed so CI logs carry the numbers, one per line and easy to grep.
+void _report(String label, List<_Stats> rounds) {
+  final medians = rounds.map((r) => r.medianMs).toList()..sort();
+  // Printed so CI logs carry the numbers, one per line and easy to grep. The
+  // minimum is the least noisy estimate; the spread shows the runner's mood.
   // ignore: avoid_print
-  print('PERF $label: ${stats.line}');
+  print(
+    'PERF $label: best ${medians.first.toStringAsFixed(2)} ms · '
+    'median ${medians[medians.length ~/ 2].toStringAsFixed(2)} ms · '
+    'worst ${medians.last.toStringAsFixed(2)} ms · '
+    '${rounds.first.frames} frames x ${rounds.length} rounds',
+  );
 }
 
 Future<SpriteStack> _loadFile(String path, int sliceCount) async {
