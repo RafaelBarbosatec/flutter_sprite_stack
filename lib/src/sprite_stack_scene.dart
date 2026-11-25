@@ -559,9 +559,10 @@ class SpriteStackScene {
   /// * [ignore] skips one object, normally the character itself.
   /// * [stepHeight] ignores bodies no taller than this, so a curb can be
   ///   walked over.
-  /// * [maxSubsteps] caps the sweep cost. Raise it for very fast movers or
-  ///   very thin props; the default handles a move of up to
-  ///   `32 * radius` world units per frame.
+  /// * [maxSubsteps] caps the sweep cost. The substep is always at most
+  ///   [radius], so a move longer than `maxSubsteps × radius` is **truncated**
+  ///   instead of taking a long step through a prop. The default covers
+  ///   `32 × radius` world units per frame.
   ///
   /// The returned position keeps the requested `z`. Nothing here mutates the
   /// object: move it yourself with the result.
@@ -619,8 +620,15 @@ class SpriteStackScene {
     final stride = radius > 1e-6 ? radius : 4.0;
     var steps = (delta.distance / stride).ceil();
     if (steps < 1) steps = 1;
-    if (steps > maxSubsteps) steps = maxSubsteps;
-    final step = delta / steps.toDouble();
+    // Never lengthen a substep to fit the budget: truncate the sweep instead.
+    // A substep longer than the radius could land the circle deep inside a
+    // prop and resolve out through its far face, which is tunnelling.
+    var sweep = delta;
+    if (steps > maxSubsteps) {
+      steps = maxSubsteps;
+      sweep = delta / delta.distance * (maxSubsteps * stride);
+    }
+    final step = sweep / steps.toDouble();
 
     var current = start;
     final hits = <SpriteStackCollisionBody>[];

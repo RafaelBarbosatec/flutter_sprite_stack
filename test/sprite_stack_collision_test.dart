@@ -298,19 +298,27 @@ void main() {
         );
 
         final body = scene.collisionBodyOf(object)!;
+        final projection = scene.projectObject(object, size)!;
         final expected = _projectGroundOffset(scene, object, body.center, size);
         final pixels = await _render(scene, size);
         final centroid = _opaqueCentroid(pixels, size);
 
+        // The rasterizer samples the top-left corner of each art pixel, so a
+        // nearest-neighbour upscale can land up to one art pixel off. This
+        // test is about the mirror and the rotation of the footprint, not
+        // sub-pixel sampling: a wrong mirror or a rotation around the ground
+        // anchor is off by many art pixels.
+        final slack = projection.scale * 1.1;
+
         expect(centroid, isNotNull, reason: 'yaw $yaw drew nothing');
         expect(
           centroid!.dx,
-          closeTo(expected.dx, 2),
+          closeTo(expected.dx, slack),
           reason: 'yaw $yaw misses in x',
         );
         expect(
           centroid.dy,
-          closeTo(expected.dy, 2),
+          closeTo(expected.dy, slack),
           reason: 'yaw $yaw misses in y',
         );
 
@@ -378,12 +386,14 @@ void main() {
       final scene = sceneWithWall();
       final result = scene.move(
         SpriteStackPoint.zero,
-        delta: const Offset(20, 60),
+        // Stop short of the prop's right edge (x = 10) so this checks sliding
+        // along the face, not rounding its corner.
+        delta: const Offset(6, 60),
         radius: 2,
       );
 
       // The normal component is removed, the tangent survives.
-      expect(result.position.x, closeTo(20, 1e-9));
+      expect(result.position.x, closeTo(6, 1e-9));
       expect(result.position.y, closeTo(18, 1e-9));
     });
 
