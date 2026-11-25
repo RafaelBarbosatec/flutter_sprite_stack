@@ -21,7 +21,6 @@ class _FlightScreenState extends State<FlightScreen>
     with SingleTickerProviderStateMixin {
   static const double _speed = 280; // world units per second
   static const double _cruiseAltitude = 170;
-  static const double _bankGain = 1.15;
   static const double _maxBank = 0.85; // ~49 degrees
 
   final SpriteStackCache _cache = SpriteStackCache();
@@ -35,6 +34,10 @@ class _FlightScreenState extends State<FlightScreen>
 
   double _distance = 0;
   double _roll = 0;
+
+  /// Multiplier on the bank derived from the turn rate. The slider drives it,
+  /// so `0` flies level and `2.5` banks past the clamp as soon as it turns.
+  double _bankGain = 1.15;
   double _lastYaw = 0;
   Duration _lastElapsed = Duration.zero;
   bool _paused = false;
@@ -249,34 +252,65 @@ class _FlightScreenState extends State<FlightScreen>
             right: 12,
             bottom: 12,
             child: _Pill(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    onPressed: () => setState(() => _paused = !_paused),
-                    icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
-                    color: Colors.white70,
-                    iconSize: 20,
-                  ),
-                  const Text(
-                    'lag',
-                    style: TextStyle(fontSize: 11, color: Colors.white70),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: _follow.yawRate,
-                      min: 0.4,
-                      max: 8,
-                      onChanged: (value) => setState(
-                        () => _follow.yawRate = value,
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => setState(() => _paused = !_paused),
+                        icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+                        color: Colors.white70,
+                        iconSize: 20,
                       ),
-                    ),
+                      const Text(
+                        'lag',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _follow.yawRate,
+                          min: 0.4,
+                          max: 8,
+                          onChanged: (value) => setState(
+                            () => _follow.yawRate = value,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${(1 / _follow.yawRate).toStringAsFixed(2)} s',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${(1 / _follow.yawRate).toStringAsFixed(2)} s',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white70,
-                    ),
+                  Row(
+                    children: [
+                      const SizedBox(width: 48),
+                      const Text(
+                        'roll',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _bankGain,
+                          min: 0,
+                          max: 2.5,
+                          onChanged: (value) => setState(
+                            () => _bankGain = value,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${_bankGain.toStringAsFixed(2)}×',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
