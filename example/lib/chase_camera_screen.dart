@@ -277,9 +277,12 @@ class _Pose {
 
 /// A closed superellipse loop, sampled by arc length.
 class _Loop {
-  _Loop({this.a = 330, this.b = 300, this.exponent = 0.72, int samples = 720})
+  _Loop({int samples = 720})
       : _points = List<Offset>.filled(samples, Offset.zero),
         _turns = List<double>.filled(samples + 1, 0) {
+    const a = 330.0;
+    const b = 300.0;
+    const exponent = 0.72;
     for (var i = 0; i < samples; i++) {
       final t = 2 * math.pi * i / samples;
       final c = math.cos(t);
@@ -296,9 +299,6 @@ class _Loop {
     length = _turns[samples];
   }
 
-  final double a;
-  final double b;
-  final double exponent;
   final List<Offset> _points;
 
   /// Cumulative arc length at each sample; the last entry is [length].

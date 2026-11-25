@@ -297,7 +297,7 @@ void main() {
         expect(lag, greaterThan(0.05), reason: 'no camera lag in chase_$shot');
         expect(lag, lessThan(0.5), reason: 'camera lag is wild in chase_$shot');
         expect(
-          projection.yaw.abs(),
+          _wrap(projection.yaw).abs(),
           closeTo(lag, 1e-9),
           reason: 'render yaw must equal the camera lag',
         );
