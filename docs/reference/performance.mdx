@@ -34,3 +34,9 @@ description: Draw budgets, outline cost, culling and when to bake sprites.
   returns the rotated envelope so culling stays exact. Because the art-pixel
   squares are no longer axis-aligned at fractional angles, edges are resampled
   slightly; the pixel grid is crispest at `roll == 0`.
+- **Collision is cheap and lazy.** The expensive part — rebuilding the stack
+  volume — happens once per object and is cached; `scene.collisionBodies()`
+  afterwards only costs a few products per blocking prop. `scene.move` first
+  rejects the whole sweep against the bodies' world AABBs and only then runs
+  substeps, so walking in open space allocates nothing per body and does one
+  pass. Keep `maxSubsteps` as low as your fastest movement allows.

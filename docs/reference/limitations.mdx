@@ -31,3 +31,14 @@ description: What flutter_sprite_stack does not do.
   `rollPivot`, like the pitch squash, so it cannot reveal a side the current
   `yaw` does not show. A true 3D roll would need the volume re-sliced along
   tilted planes, which voxelises and loses the pixel-art edges.
+- **Collision is a box on the ground plane.** The proxy is the volume's tight
+  bounds projected down, so an L-shaped or diagonal prop collides as one
+  rectangle and can block empty corners. Add a smaller explicit `size` for a
+  better fit. There are no slopes, ramps, step-up onto props or vertical
+  movement — `stepHeight` only ignores short bodies entirely.
+- **Only the moved circle collides.** Props never push each other; `scene.move`
+  tests one circle against every blocking body. Player-vs-player needs a second
+  circle test with `blocks`.
+- **`SpriteStack.fromImage` cannot derive a footprint**, because it has no raw
+  pixels to read. Give it an explicit `SpriteStackCollider.size` (and `height`
+  if `stepHeight` matters) instead.

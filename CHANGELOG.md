@@ -1,5 +1,27 @@
 ## Unreleased
 
+### Collision
+
+- `SpriteStackCollider` on `SpriteStackSceneObject`: a prop with a collider
+  blocks movement, a prop without one is walk-through. The proxy is a box on
+  the ground plane sized from `SpriteStackVolume.bounds` by default, so
+  collision follows the geometry and not the sprite pixels, stays independent
+  of the camera, and rotates with `object.yaw`. `padding`, `offset` and
+  `height` tune it; `size` replaces the volume for stacks built with
+  `SpriteStack.fromImage`, which have no raw pixels. The volume is built once
+  per object and cached.
+- `SpriteStackScene.move(position, delta:, radius:, ignore:, stepHeight:,
+  maxSubsteps:)`: sweeps a ground circle in substeps no longer than `radius`,
+  pushes it out along the contact normal and returns a `SpriteStackMoveResult`
+  (`position`, `applied`, `hits`, `collided`). Sliding falls out of the normal
+  resolution, and a broad-phase AABB reject skips the substeps in open space.
+- `SpriteStackScene.blocks(...)` and `collisionBodies(...)` expose the same
+  test for spawn checks and debug drawing; `SpriteStackCollisionBody` has
+  `overlaps`, `resolve` and a world `bounds` AABB.
+- `stepHeight` ignores bodies no taller than it, so a curb can be walked over.
+- New `CollisionScreen` example: drag a robot between the props, with a switch
+  to turn collision off and walk through them.
+
 ### Performance
 
 - `SpriteStackScene` ground painting skips cells that are fully behind the

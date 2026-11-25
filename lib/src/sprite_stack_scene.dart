@@ -4,9 +4,11 @@ import 'dart:ui';
 import 'slice_cut.dart';
 import 'sprite_stack.dart';
 import 'sprite_stack_camera.dart';
+import 'sprite_stack_collision.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_point.dart';
 import 'sprite_stack_sky.dart';
+import 'sprite_stack_volume.dart';
 
 /// Optional ground plane painted under the objects of a `SpriteStackScene`.
 ///
@@ -109,6 +111,7 @@ class SpriteStackSceneObject {
     this.shadowColor = const Color(0xFFBAC6D4),
     this.roll = 0,
     this.rollPivot = 0,
+    this.collider,
   });
 
   final SpriteStack stack;
@@ -145,6 +148,35 @@ class SpriteStackSceneObject {
   /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
   /// `1` the top.
   double rollPivot;
+
+  /// Collision proxy for this prop, or `null` for a walk-through prop.
+  ///
+  /// A plain `const SpriteStackCollider()` derives the footprint from the
+  /// stack volume (see [SpriteStack.toVolume]); give it an explicit `size` for
+  /// stacks built with `SpriteStack.fromImage`, which cannot be read back.
+  ///
+  /// The volume is built once and cached on this object, so a scene can query
+  /// [SpriteStackScene.collisionBodies] every frame without re-scanning the
+  /// atlas.
+  SpriteStackCollider? collider;
+
+  SpriteStackVolume? _collisionVolume;
+  int? _collisionVolumeThreshold;
+
+  /// Volume backing [collider], built on first use and reused afterwards.
+  ///
+  /// Throws [StateError] when the stack has no raw pixels and the collider
+  /// does not provide an explicit [SpriteStackCollider.size].
+  SpriteStackVolume collisionVolume(int alphaThreshold) {
+    final cached = _collisionVolume;
+    if (cached != null && _collisionVolumeThreshold == alphaThreshold) {
+      return cached;
+    }
+    final volume = stack.toVolume(alphaThreshold: alphaThreshold);
+    _collisionVolume = volume;
+    _collisionVolumeThreshold = alphaThreshold;
+    return volume;
+  }
 }
 
 /// Where a [SpriteStackSceneObject] lands on screen.
@@ -392,6 +424,229 @@ class SpriteStackScene {
 
     final focal = zoom * camera.distance;
     return size.height / 2 - (unit.dot(basis.up) / along) * focal;
+  }
+
+  /// Resolves [object]'s [SpriteStackSceneObject.collider] to a world-space
+  /// body, or `null` when the prop is walk-through or has an empty footprint.
+  ///
+  /// The box faces are derived from the volume bounds, which are in source
+  /// pixels, and placed with the same anchor the renderer uses: the source
+  /// row `0` sits at the prop's ground point, and the slice centre sits half a
+  /// slice depth forward of it, rotating in place as the prop turns. Sizes are
+  /// scaled by the object's `scale`; the height also takes `spacing` into
+  /// account.
+  SpriteStackCollisionBody? collisionBodyOf(SpriteStackSceneObject object) {
+    final collider = object.collider;
+    if (collider == null) return null;
+    final scale = object.scale;
+    if (scale <= 0) return null;
+
+    final double halfWidth;
+    final double halfDepth;
+    final double centerSide;
+    final double centerForward;
+    final double sliceDepth;
+    final double height;
+
+    final size = collider.size;
+    if (size != null) {
+      halfWidth = size.width / 2;
+      halfDepth = size.height / 2;
+      centerSide = collider.offset.dx;
+      centerForward = collider.offset.dy;
+      sliceDepth = size.height / 2;
+      height = collider.height ?? double.infinity;
+    } else {
+      final volume = object.collisionVolume(collider.alphaThreshold);
+      final bounds = volume.bounds;
+      if (bounds == null) return null;
+      // Centre of the tight voxel bounds in source pixels, relative to the
+      // slice centre. The renderer anchors a stack at the ground slice's
+      // bottom-centre and keeps that slice centre at `depth / 2` forward of
+      // the anchor; the slice content rotates around it.
+      final centerX = (bounds.minX + bounds.maxX + 1) / 2;
+      final centerY = (bounds.minY + bounds.maxY + 1) / 2;
+      halfWidth = bounds.width / 2;
+      halfDepth = bounds.depth / 2;
+      centerSide = volume.width / 2 - centerX;
+      centerForward = centerY - volume.depth / 2;
+      sliceDepth = volume.depth / 2;
+      height = collider.height ?? (bounds.maxZ + 1) * object.spacing;
+    }
+
+    final padding = collider.padding;
+    final boxHalfWidth = (halfWidth + padding) * scale;
+    final boxHalfDepth = (halfDepth + padding) * scale;
+    if (boxHalfWidth <= 0 || boxHalfDepth <= 0) return null;
+
+    final yaw = object.yaw;
+    final cosYaw = math.cos(yaw);
+    final sinYaw = math.sin(yaw);
+    // Prop-local to world. The slice centre stays `sliceDepth` forward of the
+    // anchor as the prop turns; only the footprint rotates around it.
+    final offsetX = (centerSide * cosYaw - centerForward * sinYaw) * scale;
+    final offsetY =
+        (sliceDepth + centerSide * sinYaw + centerForward * cosYaw) * scale;
+
+    return SpriteStackCollisionBody(
+      center: Offset(
+        object.position.x + offsetX,
+        object.position.y + offsetY,
+      ),
+      halfWidth: boxHalfWidth,
+      halfDepth: boxHalfDepth,
+      // The mirror above is a rotation by `yaw + pi` on the rectangle; a
+      // footprint is centrally symmetric, so the same box comes out.
+      yaw: yaw + math.pi,
+      height: height * scale,
+    );
+  }
+
+  /// Resolves every blocking prop to a world-space body.
+  ///
+  /// [ignore] skips one object, normally the character being moved (pass the
+  /// same object to [move]). Bodies no taller than [stepHeight] are left out,
+  /// so a character can step over curbs and low props.
+  ///
+  /// Objects without a [SpriteStackSceneObject.collider] are walk-through and
+  /// cost nothing. Volume resolution is cached per object, so repeated calls
+  /// only redo the projection maths.
+  List<SpriteStackCollisionBody> collisionBodies({
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+  }) {
+    final bodies = <SpriteStackCollisionBody>[];
+    for (final object in objects) {
+      if (identical(object, ignore)) continue;
+      final body = collisionBodyOf(object);
+      if (body == null) continue;
+      if (body.height <= stepHeight) continue;
+      bodies.add(body);
+    }
+    return bodies;
+  }
+
+  /// Whether a circle at [position] with [radius] overlaps any blocking prop.
+  ///
+  /// A cheap query for "can I stand here?"; [move] uses the same bodies.
+  bool blocks(
+    SpriteStackPoint position, {
+    double radius = 0,
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+  }) {
+    final point = Offset(position.x, position.y);
+    for (final body in collisionBodies(
+      ignore: ignore,
+      stepHeight: stepHeight,
+    )) {
+      if (body.overlaps(point, radius)) return true;
+    }
+    return false;
+  }
+
+  /// Moves a circle from [position] by [delta], sliding along blocking props.
+  ///
+  /// The move is swept in substeps no longer than [radius] (or four world
+  /// units when [radius] is `0`) so a fast character cannot tunnel through a
+  /// prop between frames, and every substep is pushed out of contact along
+  /// the contact normal. Pushing along the normal is what keeps the tangential
+  /// part of the movement: walking diagonally into a wall slides along it
+  /// instead of stopping dead.
+  ///
+  /// * [radius] is the character's ground radius in world units. `0` is a
+  ///   point.
+  /// * [ignore] skips one object, normally the character itself.
+  /// * [stepHeight] ignores bodies no taller than this, so a curb can be
+  ///   walked over.
+  /// * [maxSubsteps] caps the sweep cost. Raise it for very fast movers or
+  ///   very thin props; the default handles a move of up to
+  ///   `32 * radius` world units per frame.
+  ///
+  /// The returned position keeps the requested `z`. Nothing here mutates the
+  /// object: move it yourself with the result.
+  ///
+  /// ```dart
+  /// final result = scene.move(
+  ///   player.position,
+  ///   delta: Offset(vx * dt, vy * dt),
+  ///   radius: 12,
+  ///   ignore: player,
+  /// );
+  /// player.position = result.position;
+  /// ```
+  SpriteStackMoveResult move(
+    SpriteStackPoint position, {
+    required Offset delta,
+    double radius = 0,
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+    int maxSubsteps = 32,
+  }) {
+    final start = Offset(position.x, position.y);
+    final end = start + delta;
+    final bodies = collisionBodies(ignore: ignore, stepHeight: stepHeight);
+    if (bodies.isEmpty || (delta.dx == 0 && delta.dy == 0)) {
+      return SpriteStackMoveResult(
+        position: SpriteStackPoint(end.dx, end.dy, position.z),
+        applied: delta,
+      );
+    }
+
+    // Broad phase: nothing whose world AABB misses the swept box (inflated by
+    // the character radius) can be touched, so open-space movement skips the
+    // substep loop entirely.
+    final swept = Rect.fromLTRB(
+      math.min(start.dx, end.dx) - radius,
+      math.min(start.dy, end.dy) - radius,
+      math.max(start.dx, end.dx) + radius,
+      math.max(start.dy, end.dy) + radius,
+    );
+    var blockedCandidate = false;
+    for (final body in bodies) {
+      if (body.bounds.overlaps(swept)) {
+        blockedCandidate = true;
+        break;
+      }
+    }
+    if (!blockedCandidate) {
+      return SpriteStackMoveResult(
+        position: SpriteStackPoint(end.dx, end.dy, position.z),
+        applied: delta,
+      );
+    }
+
+    final stride = radius > 1e-6 ? radius : 4.0;
+    var steps = (delta.distance / stride).ceil();
+    if (steps < 1) steps = 1;
+    if (steps > maxSubsteps) steps = maxSubsteps;
+    final step = delta / steps.toDouble();
+
+    var current = start;
+    final hits = <SpriteStackCollisionBody>[];
+    for (var i = 0; i < steps; i++) {
+      var next = current + step;
+      // Settle corners where one body pushes the circle into another; more
+      // passes than this tend to fight between two overlapping props.
+      for (var pass = 0; pass < 4; pass++) {
+        var pushed = false;
+        for (final body in bodies) {
+          final resolved = body.resolve(next, radius);
+          if (resolved == null) continue;
+          next = resolved;
+          if (!hits.contains(body)) hits.add(body);
+          pushed = true;
+        }
+        if (!pushed) break;
+      }
+      current = next;
+    }
+
+    return SpriteStackMoveResult(
+      position: SpriteStackPoint(current.dx, current.dy, position.z),
+      applied: current - start,
+      hits: hits,
+    );
   }
 
   /// Draws the backdrop, the ground grid and every visible prop, far to near.

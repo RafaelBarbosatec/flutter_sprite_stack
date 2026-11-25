@@ -5,6 +5,7 @@ export 'src/sprite_stack_animation.dart';
 export 'src/sprite_stack_bounds.dart';
 export 'src/sprite_stack_cache.dart';
 export 'src/sprite_stack_camera.dart';
+export 'src/sprite_stack_collision.dart';
 export 'src/sprite_stack_follow_camera.dart';
 export 'src/sprite_stack_mesher.dart';
 export 'src/sprite_stack_motion.dart';
