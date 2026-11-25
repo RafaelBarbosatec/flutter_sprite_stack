@@ -313,9 +313,8 @@ class SpriteStackScene {
     final toCamera = basis.eye - object.position;
     final horizontal =
         math.sqrt(toCamera.x * toCamera.x + toCamera.y * toCamera.y);
-    final pitch = horizontal < 1e-9
-        ? math.pi / 2
-        : math.atan2(toCamera.z, horizontal);
+    final pitch =
+        horizontal < 1e-9 ? math.pi / 2 : math.atan2(toCamera.z, horizontal);
 
     final double yaw;
     if (object.billboard) {
