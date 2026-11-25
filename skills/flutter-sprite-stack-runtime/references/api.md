@@ -240,6 +240,23 @@ culling, collision and depth sorting. The sprite stack still draws.
 
 `maxPitch = pi / 2 - 0.001`; at exactly `pi / 2` the basis would degenerate.
 
+### SpriteStackFollowCamera
+
+`SpriteStackFollowCamera({positionRate = 6, yawRate = 3, lookAhead = 60,
+height = 25, deadZone = 0})` — third-person follow for a `SpriteStackCamera`.
+
+| Member | Meaning |
+| --- | --- |
+| `update(camera, {subject, yaw, dt, velocity})` | Move `camera.target` towards `subject + forward*lookAhead + (0,0,height)` and swing `camera.yaw` towards `yaw`; both exponential with `1 - exp(-rate*dt)` |
+| `positionRate` / `yawRate` | Per-second rates; `0` freezes that channel |
+| `lookAhead`, `height`, `deadZone` | Aim point offset, aim height and the radius where the target stops moving |
+| `SpriteStackFollowCamera.smoothing(rate, dt)` | The smoothing factor |
+| `SpriteStackFollowCamera.approachAngle(from, to, factor)` | Shortest-arc interpolation |
+| `SpriteStackFollowCamera.forwardOf(yaw)` | `(-sin yaw, cos yaw, 0)` — the asset's `+Y` front |
+
+The camera yaw lag is what makes a turn readable: the scene draws each prop at
+`object.yaw - camera.yaw`, which stays `0` if the camera copies the yaw.
+
 ### SpriteStackSceneObject
 
 `SpriteStackSceneObject({required stack, position = zero, yaw = 0, scale = 1,

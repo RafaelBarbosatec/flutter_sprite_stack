@@ -22,6 +22,17 @@
   ground's `fadeColor` dissolves the floor edge into the backdrop.
   `horizonFraction` pins the horizon for stylised backdrops. It takes
   precedence over the flat `SpriteStackScene.background`.
+- `SpriteStackFollowCamera`: third-person follow with frame-rate independent
+  exponential smoothing (`1 - exp(-rate * dt)`), shortest-arc yaw, a
+  `lookAhead` point and an optional `deadZone`. The camera lags the subject on
+  purpose: `object.yaw - camera.yaw` only becomes non-zero if it does, which is
+  what makes a turn readable on screen.
+- Visibility counters: `SpriteStackScene.stats` reports `drawn`, `culled`,
+  `behindCamera` and `tooSmall` after each `paint`, and
+  `minimumProjectedPixels` (default `0.5`) skips props too small to show a
+  pixel before they reach the rasterizer.
+- Example: `ChaseCameraScreen`, a car lapping a superellipse with a lag slider
+  and a live culling readout.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
 - **Breaking:** removed the `flame` dependency and the engine components

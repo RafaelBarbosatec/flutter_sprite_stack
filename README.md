@@ -186,6 +186,8 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
+| `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` from the last paint |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 
 **Sky and horizon.** `SpriteStackSky` paints a vertical gradient behind
@@ -211,6 +213,32 @@ rasterizer to be perspective-correct.
 Sorting is per object (painter's algorithm), so two intersecting props cannot
 resolve per pixel. The volume/mesh is not drawn; pair the scene with
 `toVolume()` / `SpriteStackMesher` when you need collision or exact bounds.
+
+**Following a moving prop.** `SpriteStackFollowCamera` aims at a point
+`lookAhead` units in front of a subject and swings the camera yaw towards the
+subject's facing, both with exponential, frame-rate independent smoothing
+(`1 - exp(-rate * dt)`; a rate of `3` is roughly a 330 ms time constant).
+
+```dart
+final follow = SpriteStackFollowCamera(lookAhead: 60, yawRate: 3);
+
+// per frame
+follow.update(scene.camera, subject: car.position, yaw: car.yaw,
+    velocity: velocity, dt: dt);
+```
+
+The lag is the point. The scene draws each prop at `object.yaw - camera.yaw`,
+so a camera that copied the car's yaw instantly would keep that difference at
+zero and the car would never appear to rotate — the world would just spin
+around a locked sprite. Trailing the subject by a fraction of a second exposes
+the turn. `distance` and `pitch` stay in the caller's hands.
+
+**Culling.** Props behind the near plane, props whose projected bounds miss the
+canvas and props smaller than `minimumProjectedPixels` (default `0.5`) never
+reach `SpriteStack.render`. `scene.stats` reports what happened —
+`drawn`, `culled`, `behindCamera`, `tooSmall` — which is the number to watch
+when a scene gets heavy. There is no occlusion culling: a prop hidden behind
+another is still drawn.
 
 ## Animation
 
@@ -582,6 +610,8 @@ produces.
 | `SpriteStackSceneObject(...)` | Stack + world position, yaw, scale, frame, cut and motion |
 | `projectObject(object, size)` | Screen point, depth, scale, relative yaw and projected bounds |
 | `horizonY(size)` | Screen y of the ground plane's vanishing line |
+| `SpriteStackFollowCamera(...)` / `update(camera, subject:, yaw:, velocity:, dt:)` | Third-person follow with exponential lag |
+| `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall` |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
 | `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
 | `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |
