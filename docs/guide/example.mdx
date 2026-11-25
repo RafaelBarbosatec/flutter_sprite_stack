@@ -35,13 +35,20 @@ Three buttons in the app bar show the scene layer:
 | Button | Screen | Shows |
 | --- | --- | --- |
 | Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient |
-| Chase camera (follow with lag) | `ChaseCameraScreen` | A car lapping a superellipse with a live culling readout and a slider for the follow lag |
+| Chase camera (follow with lag) | `ChaseCameraScreen` | A car lapping a stadium-shaped track (two straights, two turns) with a live culling readout and a slider for the follow lag |
 | Banked flight (roll) | `FlightScreen` | A spaceship banking into its turns: `roll` is derived from the yaw rate and smoothed, with the ground and sky behind it. The **roll** slider scales that bank (0 = level flight, 2.5 = banks hard into every turn) and the lag slider tunes the chase |
 
 The chase demo prints `scene.stats` (`drawn` / `culled` / `behindCamera` /
 `tooSmall`) so you can see culling react as the car drives away from the camera.
 Sliding `yawRate` to `0` freezes the camera yaw and makes the car appear to spin
 in place — that is the lag doing its job.
+
+The track is a stadium rather than a continuously-curving loop on purpose: on
+the straights the camera's yaw stays constant, so the ground grid and the
+scenery glide past in a straight line the way roadside objects do, and the
+sweep that follows every turn is confined to the turns. A loop that never
+straightens out keeps the camera rotating for the whole lap, which makes static
+props read as if they were drifting.
 
 The `example/sprites/torch/` folder still ships an 8-frame atlas generator
 (`make_frames.py`) as a minimal frame-atlas reference.
