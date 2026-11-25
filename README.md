@@ -195,7 +195,7 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point. `yaw` is its world facing by default (`billboard: false`); set `billboard: true` for a fixed screen facing |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
-| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
 | `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
 | `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` from the last paint |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
@@ -619,7 +619,7 @@ produces.
 | `SpriteStackScene(...)` / `paint(canvas, size)` | Projects, depth-sorts and draws stacks with an orbit camera |
 | `SpriteStackCamera.orbit(...)` / `eye` / `basis` | 3D camera; `pitch` is clamped just short of top-down |
 | `SpriteStackSceneObject(...)` | Stack + world position, yaw, scale, frame, cut and motion |
-| `projectObject(object, size)` | Screen point, depth, scale, relative yaw and projected bounds |
+| `projectObject(object, size)` | Screen point, depth, scale, render yaw, render pitch and projected bounds |
 | `horizonY(size)` | Screen y of the ground plane's vanishing line |
 | `SpriteStackFollowCamera(...)` / `update(camera, subject:, yaw:, velocity:, dt:)` | Third-person follow with exponential lag |
 | `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall` |

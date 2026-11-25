@@ -10,10 +10,11 @@ engine-free: it only needs a `Canvas`, and it draws every prop with the same
 `SpriteStack.render` you already use — just with a `yaw`, a scale and a screen
 position derived from the camera.
 
-The scene does **not** draw a mesh. It projects each prop's ground point, derives
-the visible yaw (`object.yaw - camera.yaw`), scales by depth and paints far to
-near. Props keep their world facing while the camera moves, so orbiting reveals
-every side of their cross-sections.
+The scene does **not** draw a mesh. It projects each prop's ground point,
+derives the sprite yaw and pitch from the camera-to-prop vector, scales by depth
+and paints far to near. Props are **world-aligned by default**, so they follow
+the projected ground grid and read as fixed objects on the map while the camera
+moves — orbiting reveals every side of their cross-sections.
 
 ## A minimal scene
 
@@ -58,6 +59,34 @@ and `z` is up. `zoom` is the scale at the camera's target plane; objects closer
 to the camera grow. Keep `zoom` an integer multiple of your pixel scale when you
 want crisp pixels.
 
+## World-aligned props and billboards
+
+`SpriteStackSceneObject.billboard` decides how `yaw` is interpreted:
+
+| `billboard` | `yaw` means | Use for |
+| --- | --- | --- |
+| `false` (default) | A rotation **in the world**. The scene derives the visible sprite yaw and pitch from the camera-to-prop vector, so the prop turns with the ground plane as the camera orbits or follows | Houses, trees, vehicles that turn with their heading |
+| `true` | A fixed **screen-space** angle. The camera orbit does not rotate the prop at all | Stylised scenery that must keep one facing in a fly-over |
+
+World-aligned is the safe default: it keeps props consistent with the painted
+ground cells, which are themselves projected. A prop that must not spin on
+screen — a billboard in the classic 2.5D sense — opts in with `billboard: true`.
+
+```dart
+SpriteStackSceneObject(
+  stack: house,
+  position: const SpriteStackPoint(-230, -40, 0),
+  yaw: 0.5,              // world rotation (default: billboard false)
+);
+
+SpriteStackSceneObject(
+  stack: sign,
+  position: const SpriteStackPoint(120, 60, 0),
+  yaw: 0.1,              // fixed screen facing, ignores the camera
+  billboard: true,
+);
+```
+
 ## Camera
 
 `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` puts the camera on a
@@ -68,7 +97,7 @@ never gimbal-locks.
 | --- | --- |
 | `camera.yaw` / `camera.pitch` / `camera.distance` | Free to mutate every frame |
 | `camera.target` | World point the camera looks at |
-| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 
 ## Sky and horizon
@@ -124,11 +153,12 @@ follow.update(scene.camera, subject: car.position, yaw: car.yaw,
     velocity: velocity, dt: dt);
 ```
 
-The lag is the point. The scene draws each prop at `object.yaw - camera.yaw`, so
-a camera that copied the car's yaw instantly would keep that difference at zero
-and the car would never appear to rotate — the world would just spin around a
-locked sprite. Trailing the subject by a fraction of a second exposes the turn.
-`distance` and `pitch` stay in the caller's hands.
+The lag is the point. The subject is world-aligned (the default), so the scene
+derives its sprite yaw from the camera-to-prop vector: a camera that copied the
+car's yaw instantly would keep that difference at zero and the car would never
+appear to rotate — the world would just spin around a locked sprite. Trailing
+the subject by a fraction of a second exposes the turn. `distance` and `pitch`
+stay in the caller's hands.
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |

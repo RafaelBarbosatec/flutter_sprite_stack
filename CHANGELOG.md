@@ -1,4 +1,4 @@
-## 0.3.0
+## 0.4.0
 
 - `SpriteStackSceneObject` props are world-aligned by default: the scene
   derives each prop's sprite yaw and pitch from the camera-to-prop vector, so
@@ -8,10 +8,10 @@
 - **Engine-free orbit scene**: `SpriteStackScene`, `SpriteStackCamera.orbit`,
   `SpriteStackSceneObject`, `SpriteStackGround` and
   `SpriteStackSceneProjection`. The camera projects each prop's ground point
-  with perspective, derives the visible yaw (`camera.yaw - object.yaw + π`),
-  scales by depth and paints far to near. Props keep their world facing while the
-  camera orbits, and an optional near-clipped ground grid makes the rotation
-  readable.
+  with perspective, derives the visible yaw and pitch from the camera-to-prop
+  vector, scales by depth and paints far to near. Props follow the projected
+  ground grid while the camera orbits, and an optional near-clipped ground grid
+  makes the rotation readable.
 - `SpriteStackPoint` moved to its own library and gained vector operators
   (`+`, `-`, `*`, `dot`, `cross`, `length`, `normalized`). Volume, mesh and
   scene share the same world units: one unit per art pixel and per slice.
@@ -28,8 +28,8 @@
 - `SpriteStackFollowCamera`: third-person follow with frame-rate independent
   exponential smoothing (`1 - exp(-rate * dt)`), shortest-arc yaw, a
   `lookAhead` point and an optional `deadZone`. The camera lags the subject on
-  purpose: `camera.yaw - object.yaw` only becomes non-zero if it does, which is
-  what makes a turn readable on screen.
+  purpose: the camera-to-prop angle only changes if it does, which is what makes
+  a turn readable on screen.
 - Visibility counters: `SpriteStackScene.stats` reports `drawn`, `culled`,
   `behindCamera` and `tooSmall` after each `paint`, and
   `minimumProjectedPixels` (default `0.5`) skips props too small to show a
