@@ -490,12 +490,52 @@ class SpriteStack {
   // inverse sampling, one outline pass, then integer scale-up.
   // ---------------------------------------------------------------------
 
-  /// Reusable per-colour point buffers for [_drawBuffer].
+  /// Tight opaque rectangle of each slice, as `[minX, minY, maxX, maxY]`
+  /// quadruples indexed by `frame * sliceCount + slice`.
   ///
-  /// Pixel art keeps a small, stable palette and the visible colours repeat
-  /// every frame, so the lists are kept between renders and only cleared. That
-  /// removes the per-pixel `Offset` allocations (thousands per prop per frame).
-  final Map<int, List<double>> _pointBuckets = <int, List<double>>{};
+  /// The rasterizer rotates and squashes a whole slice rectangle, but a
+  /// cross-section is mostly transparent around the art. Projecting this
+  /// sub-rectangle gives the destination area that can actually receive a
+  /// pixel, so the inner loop skips the empty margin instead of sampling it.
+  ///
+  /// Built on first use from [pixels]; `maxX < minX` marks an empty slice.
+  Int32List? get _opaqueBounds {
+    final cached = _opaqueBoundsCache;
+    if (cached != null) return cached;
+    final pixels = _pixels;
+    if (pixels == null) return null;
+
+    final w = sliceWidth;
+    final h = sliceHeight;
+    final stripWidth = sliceCount * w;
+    final bounds = Int32List(frameCount * sliceCount * 4);
+    for (var frame = 0; frame < frameCount; frame++) {
+      for (var slice = 0; slice < sliceCount; slice++) {
+        var minX = w;
+        var minY = h;
+        var maxX = -1;
+        var maxY = -1;
+        for (var y = 0; y < h; y++) {
+          final row = (frame * h + y) * stripWidth + slice * w;
+          for (var x = 0; x < w; x++) {
+            if (pixels[(row + x) * 4 + 3] == 0) continue;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+        final at = (frame * sliceCount + slice) * 4;
+        bounds[at] = minX;
+        bounds[at + 1] = minY;
+        bounds[at + 2] = maxX;
+        bounds[at + 3] = maxY;
+      }
+    }
+    return _opaqueBoundsCache = bounds;
+  }
+
+  Int32List? _opaqueBoundsCache;
 
   void _renderSoftware(
     Canvas canvas, {
@@ -561,11 +601,13 @@ class SpriteStack {
 
     // 2. Body slices, bottom to top, overwriting.
     final invSquash = 1 / math.max(squash, 0.1);
-    // The rotated slice rectangle only depends on yaw and pitch, so its
-    // extents are the same for every slice; only the centre moves.
+    // The rotated slice rectangle depends only on yaw and pitch; the tight
+    // opaque sub-rectangle of each slice then decides how much of it can
+    // actually receive a pixel.
     final halfW = (w * ca.abs() + h * sa.abs()) / 2;
     final halfH = (w * sa.abs() + h * ca.abs()) / 2 * squash;
     final stripWidth = n * w;
+    final opaque = _opaqueBounds;
     for (var z = 0; z < n; z++) {
       final visibility = cut?.visibilityAt(z) ?? 1.0;
       if (visibility <= 0) continue;
@@ -576,10 +618,47 @@ class SpriteStack {
       final shift = motion?.offsetAt(z, n, time) ?? Offset.zero;
       final sliceCx = cx + shift.dx.round();
       final yCenter = baseY - lift + shift.dy.round();
-      final xMin = math.max(0, (sliceCx - halfW).floor() - 1);
-      final xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
-      final yMin = math.max(0, (yCenter - halfH).floor() - 1);
-      final yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
+
+      final int xMin;
+      final int xMax;
+      final int yMin;
+      final int yMax;
+      if (opaque == null) {
+        xMin = math.max(0, (sliceCx - halfW).floor() - 1);
+        xMax = math.min(cw - 1, (sliceCx + halfW).ceil() + 1);
+        yMin = math.max(0, (yCenter - halfH).floor() - 1);
+        yMax = math.min(ch - 1, (yCenter + halfH).ceil() + 1);
+      } else {
+        final at = (frame * n + z) * 4;
+        final bx0 = opaque[at];
+        final by0 = opaque[at + 1];
+        final bx1 = opaque[at + 2];
+        final by1 = opaque[at + 3];
+        if (bx1 < bx0) continue; // fully transparent slice
+
+        // Forward-project the four corners of the opaque rectangle with the
+        // inverse of the mapping used in the loop below.
+        final u0 = bx0 - w * 0.5;
+        final u1 = bx1 + 1 - w * 0.5;
+        final v0 = by0 - h * 0.5;
+        final v1 = by1 + 1 - h * 0.5;
+        final p0x = sliceCx + u0 * ca - v0 * sa;
+        final p1x = sliceCx + u1 * ca - v0 * sa;
+        final p2x = sliceCx + u1 * ca - v1 * sa;
+        final p3x = sliceCx + u0 * ca - v1 * sa;
+        final p0y = yCenter + (u0 * sa + v0 * ca) * squash;
+        final p1y = yCenter + (u1 * sa + v0 * ca) * squash;
+        final p2y = yCenter + (u1 * sa + v1 * ca) * squash;
+        final p3y = yCenter + (u0 * sa + v1 * ca) * squash;
+        xMin = math.max(
+            0, math.min(math.min(p0x, p1x), math.min(p2x, p3x)).floor() - 1);
+        xMax = math.min(cw - 1,
+            math.max(math.max(p0x, p1x), math.max(p2x, p3x)).ceil() + 1);
+        yMin = math.max(
+            0, math.min(math.min(p0y, p1y), math.min(p2y, p3y)).floor() - 1);
+        yMax = math.min(ch - 1,
+            math.max(math.max(p0y, p1y), math.max(p2y, p3y)).ceil() + 1);
+      }
 
       for (var y = yMin; y <= yMax; y++) {
         final dy = (y - yCenter) * invSquash;
@@ -709,41 +788,30 @@ class SpriteStack {
     required double scale,
   }) {
     final strokeWidth = math.max(scale, 0.01);
-
-    // Single pass into reused `List<double>` buckets: one hash lookup per
-    // pixel, same as the old `pointsByColor`, but doubles are unboxed and the
-    // lists keep their capacity between frames — no `Offset` is allocated and
-    // no list grows.
-    for (final bucket in _pointBuckets.values) {
-      bucket.clear();
-    }
+    final pointsByColor = <int, List<Offset>>{};
     for (var y = 0; y < ch; y++) {
       var idx = y * cw * 4;
-      final py = anchorY + (y - baseY) * scale + strokeWidth / 2;
       for (var x = 0; x < cw; x++, idx += 4) {
-        final a = out[idx + 3];
-        if (a == 0) continue;
-        final color =
-            (a << 24) | (out[idx] << 16) | (out[idx + 1] << 8) | out[idx + 2];
-        final bucket = _pointBuckets[color] ??= <double>[];
-        bucket
-          ..add(anchorX + (x - cx) * scale + strokeWidth / 2)
-          ..add(py);
+        if (out[idx + 3] == 0) continue;
+        final color = (out[idx + 3] << 24) |
+            (out[idx] << 16) |
+            (out[idx + 1] << 8) |
+            out[idx + 2];
+        final point = Offset(
+          anchorX + (x - cx) * scale + strokeWidth / 2,
+          anchorY + (y - baseY) * scale + strokeWidth / 2,
+        );
+        pointsByColor.putIfAbsent(color, () => <Offset>[]).add(point);
       }
     }
 
-    for (final entry in _pointBuckets.entries) {
-      final bucket = entry.value;
-      if (bucket.isEmpty) continue;
-      canvas.drawRawPoints(
-        PointMode.points,
-        Float32List.fromList(bucket),
-        Paint()
-          ..color = Color(entry.key)
-          ..strokeWidth = strokeWidth
-          ..isAntiAlias = false
-          ..strokeCap = StrokeCap.butt,
-      );
+    for (final entry in pointsByColor.entries) {
+      final paint = Paint()
+        ..color = Color(entry.key)
+        ..strokeWidth = strokeWidth
+        ..isAntiAlias = false
+        ..strokeCap = StrokeCap.butt;
+      canvas.drawPoints(PointMode.points, entry.value, paint);
     }
   }
 
