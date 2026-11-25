@@ -144,15 +144,24 @@ void main() {
         );
 
         if (name == 'horizon') {
-          // Sky above, ground below: the top row must be bluer than the
-          // bottom row, and the horizon must sit inside the frame.
+          // The sky runs zenith -> horizon haze and stops at the line, where
+          // the flat `bottom` fill takes over. Checked on the blue channel at
+          // a column with no props in the way.
           final horizon = scene.horizonY(size);
           expect(horizon, inInclusiveRange(1, size.height - 1));
+          final line = horizon.floor();
+          int blue(int y) => pixels[(y * size.width.toInt() + 2) * 4 + 2];
+
+          expect(blue(0), closeTo(0x16, 3), reason: 'missing sky at the top');
           expect(
-            pixels[0 * 4 + 2],
-            greaterThan(
-                pixels[(size.height.toInt() - 1) * size.width.toInt() * 4 + 2]),
-            reason: 'the horizon shot has no sky above the ground',
+            blue(line - 3),
+            closeTo(0x5E, 6),
+            reason: 'the sky does not reach the horizon colour',
+          );
+          expect(
+            blue(line + 3),
+            closeTo(0x2F, 3),
+            reason: 'the fill below the horizon is not `bottom`',
           );
         } else {
           var visible = 0;
