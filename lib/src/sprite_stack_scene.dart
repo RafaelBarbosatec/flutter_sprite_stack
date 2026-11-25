@@ -329,15 +329,15 @@ class SpriteStackScene {
         : sky.horizonFraction! * size.height;
     final below = sky.bottom ?? sky.horizon;
 
-    // The sky band spans one screen height above the horizon, so its colour
-    // profile stays stable while the camera tilts instead of stretching.
+    // The gradient spans the visible sky band, so a sliver of sky still reads
+    // as a gradient instead of a single haze tone.
     final skyBottom = horizon.clamp(0.0, size.height).toDouble();
     if (skyBottom > 0) {
       canvas.drawRect(
         Rect.fromLTWH(0, 0, size.width, skyBottom),
         Paint()
           ..shader = Gradient.linear(
-            Offset(0, horizon - size.height),
+            Offset.zero,
             Offset(0, horizon),
             <Color>[sky.top, sky.horizon],
           ),

@@ -387,11 +387,10 @@ void main() {
       final middle = _red(pixels, 200, 10, 50);
       final low = _red(pixels, 200, 10, 99);
 
-      // The band spans one screen height above the horizon, so row 0 sits
-      // half-way between the two colours.
-      expect(top, inInclusiveRange(110, 145));
-      expect(middle, greaterThan(top));
-      expect(low, greaterThan(middle));
+      // The gradient spans the visible band: 0 at the top edge, ~half-way at
+      // the middle and almost the horizon colour just above the line.
+      expect(top, lessThan(10));
+      expect(middle, inInclusiveRange(110, 145));
       expect(low, greaterThan(240));
     });
 
