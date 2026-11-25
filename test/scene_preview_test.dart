@@ -293,13 +293,24 @@ void main() {
 
         // The camera trails the car through the turn, so the car shows a
         // sliver of its flank instead of staying locked to one angle.
+        // World-aligned props render at `camera - object + π` (the sprite
+        // front is +Y), so the lag shows up as a deviation from π. The camera
+        // aims `lookAhead` in front of the car, which adds up to
+        // `atan(lookAhead / distance)` of offset, hence the loose tolerance.
         final lag = _wrap(yaw - camera.yaw).abs();
         expect(lag, greaterThan(0.05), reason: 'no camera lag in chase_$shot');
         expect(lag, lessThan(0.5), reason: 'camera lag is wild in chase_$shot');
+
+        final renderLag = _wrap(projection.yaw - math.pi).abs();
         expect(
-          _wrap(projection.yaw).abs(),
-          closeTo(lag, 1e-9),
-          reason: 'render yaw must equal the camera lag',
+          renderLag,
+          greaterThan(0.03),
+          reason: 'car stays locked to the camera in chase_$shot',
+        );
+        expect(
+          (renderLag - lag).abs(),
+          lessThan(0.35),
+          reason: 'render yaw does not track the camera lag in chase_$shot',
         );
 
         var red = 0;

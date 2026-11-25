@@ -17,11 +17,12 @@ Shipped:
 - [x] `SpriteStackMesher`: greedy-meshed exposed faces, geometry only (no colour,
       no UV).
 - [x] `SpriteStackScene` + `SpriteStackCamera`: orbit camera (yaw/pitch/distance),
-      perspective projection, per-object depth sorting, projected yaw
-      (`object.yaw - camera.yaw`) and culling bounds.
+      perspective projection, per-object depth sorting, projected yaw and pitch
+      from the camera-to-prop vector (world-aligned by default, `billboard`
+      opt-in for a fixed screen facing) and culling bounds.
 - [x] `SpriteStackGround`: near-clipped grid on `z = 0`.
-- [x] `OrbitSceneScreen` example: drag to orbit, auto-rotate, props keep their
-      world facing.
+- [x] `OrbitSceneScreen` example: drag to orbit, auto-rotate, props follow the
+      projected ground grid.
 
 Polish that makes the environment read as a place (still no gameplay):
 
