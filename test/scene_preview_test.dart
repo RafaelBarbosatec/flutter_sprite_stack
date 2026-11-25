@@ -327,6 +327,233 @@ void main() {
   );
 }
 
+  test(
+    'renders banked flight with the hull rolling into the turn',
+    () async {
+      const size = ui.Size(900, 600);
+      final output = Directory('build/scene_previews')
+        ..createSync(recursive: true);
+
+      final stacks = <SpriteStack>[
+        await _loadFile('example/sprites/spaceship/slices.png', 21),
+        await _loadFile('example/sprites/tree/slices.png', 43),
+        await _loadFile('example/sprites/palmeira/slices.png', 26),
+      ];
+      final shipStack = stacks[0];
+
+      const fadeColor = ui.Color(0xFF16232F);
+      final camera = SpriteStackCamera.orbit(
+        yaw: 0,
+        pitch: 0.22,
+        distance: 300,
+        target: const SpriteStackPoint(0, 0, 200),
+      );
+      final scene = SpriteStackScene(
+        camera: camera,
+        zoom: 2.4,
+        sky: const SpriteStackSky(
+          top: ui.Color(0xFF05090F),
+          horizon: ui.Color(0xFF2C4C6B),
+          bottom: fadeColor,
+        ),
+        ground: const SpriteStackGround(
+          extent: 1000,
+          step: 100,
+          cellSize: 100,
+          checker: [ui.Color(0xFF101B26), ui.Color(0xFF16232F)],
+          fadeColor: fadeColor,
+          fadeDistance: 2600,
+        ),
+      );
+
+      final ship = SpriteStackSceneObject(
+        stack: shipStack,
+        position: const SpriteStackPoint(0, 0, 170),
+        shadow: false,
+        rollPivot: 0.45,
+      );
+      scene.objects.add(ship);
+      for (var i = 0; i < 10; i++) {
+        final angle = i * 2 * math.pi / 10;
+        scene.objects.add(
+          SpriteStackSceneObject(
+            stack: stacks[1 + i % 2],
+            position: SpriteStackPoint(
+              math.cos(angle) * 700,
+              math.sin(angle) * 700,
+              0,
+            ),
+            yaw: i * 0.6,
+            scale: 1.2,
+          ),
+        );
+      }
+
+      final follow = SpriteStackFollowCamera(
+        positionRate: 5,
+        yawRate: 2.4,
+        lookAhead: 70,
+        height: 30,
+      );
+
+      const dt = 1 / 60;
+      const speed = 280.0;
+      const radiusX = 470.0;
+      const radiusY = 420.0;
+      var distance = 0.0;
+      var roll = 0.0;
+      var lastYaw = _shipYaw(0, radiusX, radiusY);
+      var shot = 0;
+
+      double poseX(double angle) => radiusX * math.cos(angle);
+      double poseY(double angle) => radiusY * math.sin(angle);
+
+      for (var step = 1; step <= 360; step++) {
+        distance += speed * dt;
+        final angle = distance / 2800 * 2 * math.pi;
+        final position = SpriteStackPoint(
+          poseX(angle),
+          poseY(angle),
+          170 + math.sin(angle * 2) * 45,
+        );
+        final ahead = SpriteStackPoint(
+          poseX(angle + 0.01),
+          poseY(angle + 0.01),
+          0,
+        );
+        final velocity = SpriteStackPoint(
+          ahead.x - position.x,
+          ahead.y - position.y,
+          0,
+        );
+        final yaw = math.atan2(velocity.y, velocity.x) - math.pi / 2;
+
+        final turnRate = _wrap(yaw - lastYaw) / dt;
+        final wanted = (turnRate * 1.15).clamp(-0.85, 0.85).toDouble();
+        roll += (wanted - roll) * (1 - math.exp(-4 * dt));
+        lastYaw = yaw;
+
+        ship
+          ..position = position
+          ..yaw = yaw
+          ..roll = roll;
+        follow.update(
+          camera,
+          subject: position,
+          yaw: yaw,
+          velocity: velocity,
+          dt: dt,
+        );
+
+        if (step % 120 != 0) continue;
+        shot++;
+        await _renderPng(
+          scene,
+          size,
+          File('${output.path}/flight_$shot.png'),
+        );
+
+        final projection = scene.projectObject(ship, size);
+        expect(projection, isNotNull, reason: 'flight_$shot lost the ship');
+        expect(projection!.isVisibleIn(size), isTrue);
+        expect(
+          roll.abs(),
+          greaterThan(0.15),
+          reason: 'flight_$shot is not banking',
+        );
+      }
+      expect(shot, 3);
+
+      // The roll has to reach pixels: an isolated render with the same bank is
+      // taller than the flat one, because the hull turns diagonal.
+      const magenta = ui.Color(0xFFFF00FF);
+      final isolated = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(
+          yaw: 0,
+          pitch: 0.22,
+          distance: 300,
+        ),
+        zoom: 4,
+        background: magenta,
+      );
+      final solo = SpriteStackSceneObject(
+        stack: shipStack,
+        shadow: false,
+        outline: false,
+        rollPivot: 0.45,
+      );
+      isolated.objects.add(solo);
+
+      final flatShot = await _renderPng(
+        isolated,
+        size,
+        File('${output.path}/flight_roll_flat.png'),
+      );
+      solo.roll = 0.6;
+      final bankedShot = await _renderPng(
+        isolated,
+        size,
+        File('${output.path}/flight_roll_banked.png'),
+      );
+
+      final flat = _inkBounds(flatShot, size, magenta)!;
+      final banked = _inkBounds(bankedShot, size, magenta)!;
+      expect(flat.width, greaterThan(flat.height));
+      expect(
+        banked.height,
+        greaterThan(flat.height * 1.3),
+        reason: 'the banked hull should stand up in the frame',
+      );
+
+      for (final stack in stacks) {
+        stack.dispose();
+      }
+    },
+    skip: enabled ? false : 'set SCENE_PREVIEW=1 to render previews',
+  );
+}
+
+/// Yaw of the ship at [angle], with the asset's +Y-front convention.
+double _shipYaw(double angle, double radiusX, double radiusY) {
+  final vx = -radiusX * math.sin(angle);
+  final vy = radiusY * math.cos(angle);
+  return math.atan2(vy, vx) - math.pi / 2;
+}
+
+/// Bounding box of every pixel that is not [background].
+ui.Rect? _inkBounds(Uint8List pixels, ui.Size size, ui.Color background) {
+  final width = size.width.toInt();
+  final height = size.height.toInt();
+  final br = (background.r * 255).round();
+  final bg = (background.g * 255).round();
+  final bb = (background.b * 255).round();
+  var minX = width;
+  var minY = height;
+  var maxX = -1;
+  var maxY = -1;
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final offset = (y * width + x) * 4;
+      if (pixels[offset] == br &&
+          pixels[offset + 1] == bg &&
+          pixels[offset + 2] == bb) {
+        continue;
+      }
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  return ui.Rect.fromLTRB(
+    minX.toDouble(),
+    minY.toDouble(),
+    maxX + 1.0,
+    maxY + 1.0,
+  );
+}
+
 /// Wraps an angle to `-pi..pi`.
 double _wrap(double angle) {
   final turn = angle % (2 * math.pi);
