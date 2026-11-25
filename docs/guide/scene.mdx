@@ -1,0 +1,185 @@
+---
+title: 3D Scene
+description: Place sprite stacks in a projected world with an orbiting camera, painted ground, sky, follow camera and culling.
+---
+
+# 3D Scene
+
+`SpriteStackScene` places props in a world with a perspective camera. It is
+engine-free: it only needs a `Canvas`, and it draws every prop with the same
+`SpriteStack.render` you already use — just with a `yaw`, a scale and a screen
+position derived from the camera.
+
+The scene does **not** draw a mesh. It projects each prop's ground point, derives
+the visible yaw (`object.yaw - camera.yaw`), scales by depth and paints far to
+near. Props keep their world facing while the camera moves, so orbiting reveals
+every side of their cross-sections.
+
+## A minimal scene
+
+```dart
+final scene = SpriteStackScene(
+  camera: SpriteStackCamera.orbit(yaw: 0.8, pitch: 0.6, distance: 900),
+  zoom: 2.4,                       // art pixels per world unit at the target
+  sky: const SpriteStackSky(
+    top: Color(0xFF070D16),
+    horizon: Color(0xFF27435E),
+    bottom: Color(0xFF16232F),     // matches the ground's fadeColor
+  ),
+  ground: const SpriteStackGround(
+    extent: 700,
+    step: 70,
+    cellSize: 70,
+    checker: [Color(0xFF142430), Color(0xFF1D303D)],
+    fadeColor: Color(0xFF16232F),
+    fadeDistance: 2400,
+  ),
+  objects: [
+    SpriteStackSceneObject(
+      stack: house,
+      position: const SpriteStackPoint(-230, -40, 0), // x, y, z (z is up)
+      yaw: 0.5,
+    ),
+  ],
+);
+```
+
+Paint it once per frame from a `Ticker` + `CustomPainter`:
+
+```dart
+scene.camera.yaw += dt * 0.2;
+scene.paint(canvas, size);
+```
+
+## World units
+
+One world unit is one source art pixel, so a 48 px wide house is 48 units wide
+and `z` is up. `zoom` is the scale at the camera's target plane; objects closer
+to the camera grow. Keep `zoom` an integer multiple of your pixel scale when you
+want crisp pixels.
+
+## Camera
+
+`SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` puts the camera on a
+sphere around `target`. `pitch` is clamped just short of top-down so the camera
+never gimbal-locks.
+
+| Member | Meaning |
+| --- | --- |
+| `camera.yaw` / `camera.pitch` / `camera.distance` | Free to mutate every frame |
+| `camera.target` | World point the camera looks at |
+| `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
+
+## Sky and horizon
+
+`SpriteStackSky` paints a vertical gradient behind everything, anchored to the
+horizon — the vanishing line of the ground plane, the same line
+`scene.horizonY(size)` reports. It follows the camera pitch, so orbiting leaves
+it still and only tilting moves it. Above the horizon it blends `top` →
+`horizon`; below it, `bottom` shows wherever the ground does not reach.
+
+Set the ground's `fadeColor` to `bottom` so distant cells dissolve into the
+backdrop instead of ending on a hard edge. `horizonFraction` pins the horizon to
+a fraction of the canvas instead of deriving it from the camera.
+
+With this projection the horizon only enters the frame at a shallow pitch: a
+top-down-ish orbit fills the screen with ground, and there is no sky to see.
+
+## Painting the ground
+
+The floor is drawn as projected cells clipped against the near plane:
+
+| Parameter | Meaning |
+| --- | --- |
+| `fill` | Solid base color for every cell |
+| `checker` | Two colors alternating by `(ix + iy)` |
+| `colorAt(x, y)` | Color per cell centre, for procedural floors |
+| `fadeColor` + `fadeDistance` | Blend distant cells into the horizon |
+| `step: 0` | Hides the grid lines |
+| `cellSize` | Size of each painted cell, world units |
+
+Cells are flat colors, not textures — a texture would need subdivision or a
+textured rasterizer to be perspective-correct.
+
+## Sorting
+
+Sorting is per object (painter's algorithm) by the depth of the ground point, so
+two intersecting props cannot resolve per pixel. The volume/mesh is not drawn;
+pair the scene with `toVolume()` / `SpriteStackMesher` when you need collision or
+exact bounds.
+
+## Following a moving prop
+
+`SpriteStackFollowCamera` aims at a point `lookAhead` units in front of a
+subject and swings the camera yaw towards the subject's facing, both with
+exponential, frame-rate independent smoothing
+(`1 - exp(-rate * dt)`; a rate of `3` is roughly a 330 ms time constant).
+
+```dart
+final follow = SpriteStackFollowCamera(lookAhead: 60, yawRate: 3);
+
+// per frame
+follow.update(scene.camera, subject: car.position, yaw: car.yaw,
+    velocity: velocity, dt: dt);
+```
+
+The lag is the point. The scene draws each prop at `object.yaw - camera.yaw`, so
+a camera that copied the car's yaw instantly would keep that difference at zero
+and the car would never appear to rotate — the world would just spin around a
+locked sprite. Trailing the subject by a fraction of a second exposes the turn.
+`distance` and `pitch` stay in the caller's hands.
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `positionRate` | `6` | How fast the target chases the subject, per second |
+| `yawRate` | `3` | How fast the camera yaw follows the subject, per second |
+| `lookAhead` | `60` | Aim point ahead of the subject, along its velocity |
+| `height` | `25` | Height above the subject the camera aims at |
+| `deadZone` | `0` | Radius inside which the target does not move |
+
+Two statics help you animate a subject yourself:
+`SpriteStackFollowCamera.forwardOf(yaw)` returns the world direction a prop
+faces (front is `+Y`, so `yaw = atan2(vy, vx) - pi / 2` for a velocity), and
+`approachAngle(from, to, factor)` turns by the shortest arc.
+
+## Culling and stats
+
+Props behind the near plane, props whose projected bounds miss the canvas and
+props smaller than `minimumProjectedPixels` (default `0.5`) never reach
+`SpriteStack.render`. `scene.stats` reports what happened after each `paint`:
+
+| Field | Meaning |
+| --- | --- |
+| `drawn` | Props that actually rendered |
+| `culled` | Props whose projected bounds missed the canvas |
+| `behindCamera` | Props behind the near plane |
+| `tooSmall` | Props below `minimumProjectedPixels` |
+
+That is the number to watch when a scene gets heavy. There is no occlusion
+culling: a prop hidden behind another is still drawn.
+
+```dart
+scene.minimumProjectedPixels = 1; // default 0.5
+scene.paint(canvas, size);
+debugPrint('drawn ${scene.stats.drawn} / culled ${scene.stats.culled}');
+```
+
+## Banking an aircraft
+
+`roll` is a **render** parameter, like `pitch` — it is not part of the scene. It
+tilts the finished sprite in screen space around a pivot `rollPivot` of the way
+up the body (`0` = feet planted, `0.5` = body middle):
+
+```dart
+// bank into the turn: derive the target from the yaw rate
+final targetRoll = (turnRate * 0.6).clamp(-0.85, 0.85);
+final f = SpriteStackFollowCamera.smoothing(8, dt);
+bank = SpriteStackFollowCamera.approachAngle(bank, targetRoll, f);
+object.roll = bank;
+object.rollPivot = 0.45;
+```
+
+`roll` rotates the silhouette without revealing a new side of the prop — for
+that, turn `yaw`. `boundsFor` returns the rotated envelope, so culling stays
+exact while the aircraft banks. A flying prop usually wants `shadow: false`.

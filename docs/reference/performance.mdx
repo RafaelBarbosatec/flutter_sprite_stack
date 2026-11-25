@@ -1,6 +1,6 @@
 ---
 title: Performance
-description: Draw budgets, outline cost, and when to bake sprites.
+description: Draw budgets, outline cost, culling and when to bake sprites.
 ---
 
 # Performance
@@ -23,3 +23,14 @@ description: Draw budgets, outline cost, and when to bake sprites.
 - Keep `scale` at an integer value and filtering at nearest for crisp pixels.
 - Y-sort whole stacks by their ground point; never interleave slices of two
   props.
+- **Cull before you render.** `SpriteStackScene` skips props behind the near
+  plane, props whose projected bounds miss the canvas and props smaller than
+  `minimumProjectedPixels` (default `0.5` px) before they reach
+  `SpriteStack.render`. `scene.stats` exposes the split — read `drawn` against
+  `total` when a scene feels heavy. There is no occlusion culling: a prop fully
+  hidden behind another is still drawn.
+- **`roll` costs the same as no roll.** It is one `canvas.rotate` around the
+  pivot before the stack is rasterised, not an extra pass, and `boundsFor`
+  returns the rotated envelope so culling stays exact. Because the art-pixel
+  squares are no longer axis-aligned at fractional angles, edges are resampled
+  slightly; the pixel grid is crispest at `roll == 0`.

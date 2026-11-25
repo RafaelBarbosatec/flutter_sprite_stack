@@ -7,6 +7,9 @@ description: What flutter_sprite_stack does not do.
 
 - **Painter's algorithm**: props that intersect each other cannot resolve per
   voxel. Two overlapping stacks draw in `priority` order.
+- **No occlusion culling.** `SpriteStackScene` culls behind-camera, off-canvas
+  and sub-pixel props, but a prop fully hidden behind another is still drawn —
+  that would need a depth buffer.
 - **No per-voxel lighting or reflections.** The built-in shadow is a flat
   projected ground shadow; shading has to be baked into the slices — the carving
   script does that with `--shade`.
@@ -24,3 +27,7 @@ description: What flutter_sprite_stack does not do.
 - **Slice cuts hide whole slices.** There is no per-slice opacity: the slice at
   the frontier is dissolved with a 4×4 Bayer dither. Cutaways are per stack, so
   the interior has to exist in the strip — the engine cannot invent a room.
+- **`roll` is a 2D drawing effect.** It rotates the finished sprite around
+  `rollPivot`, like the pitch squash, so it cannot reveal a side the current
+  `yaw` does not show. A true 3D roll would need the volume re-sliced along
+  tilted planes, which voxelises and loses the pixel-art edges.
