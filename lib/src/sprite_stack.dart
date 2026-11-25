@@ -384,12 +384,12 @@ class SpriteStack {
     // Outline below the feet plus the projected ground shadow (+3 source px).
     final below = grow + (shadow ? 3 + projectedSliceHeight / 2 : 0.0);
 
-    final w = width * scale;
-    final h = (above + below) * scale;
-    final gx = w / 2;
+    final boxW = width * scale;
+    final boxH = (above + below) * scale;
+    final gx = boxW / 2;
     final gy = above * scale;
     if (roll == 0) {
-      return SpriteStackBounds(size: Size(w, h), ground: Offset(gx, gy));
+      return SpriteStackBounds(size: Size(boxW, boxH), ground: Offset(gx, gy));
     }
 
     // Rotate the box around the roll pivot and return its axis-aligned
@@ -404,9 +404,9 @@ class SpriteStack {
     var maxY = double.negativeInfinity;
     for (final corner in <Offset>[
       Offset.zero,
-      Offset(w, 0),
-      Offset(w, h),
-      Offset(0, h),
+      Offset(boxW, 0),
+      Offset(boxW, boxH),
+      Offset(0, boxH),
     ]) {
       final dx = corner.dx - gx;
       final dy = corner.dy - pivotY;
