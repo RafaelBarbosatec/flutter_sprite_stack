@@ -325,7 +325,6 @@ void main() {
     },
     skip: enabled ? false : 'set SCENE_PREVIEW=1 to render previews',
   );
-}
 
   test(
     'renders banked flight with the hull rolling into the turn',
