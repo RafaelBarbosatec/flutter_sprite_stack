@@ -133,6 +133,14 @@ just short of straight down.
   `checker` (alternates by `(ix + iy)`), `colorAt(x, y)` for procedural floors,
   and `fadeColor`/`fadeDistance` to blend into the horizon. `step: 0` hides the
   grid lines. Cells are flat colours, not textures.
+- `SpriteStackFollowCamera` follows a subject: `target` chases a point
+  `lookAhead` units ahead, `yaw` follows the subject's facing on the shortest
+  arc, both with `1 - exp(-rate * dt)`. The lag is what makes a turn visible:
+  the prop is drawn at `object.yaw - camera.yaw`, so a camera that copies the
+  yaw instantly shows a sprite that never rotates.
+- `scene.stats` counts `drawn` / `culled` / `behindCamera` / `tooSmall` after
+  each paint; `minimumProjectedPixels` (default `0.5`) culls sub-pixel props
+  before the rasterizer. No occlusion culling.
 - Sorting is **per object** (painter's algorithm); intersecting props cannot
   resolve per pixel.
 - The volume/mesh is not drawn — pair it with `toVolume()` for collision or

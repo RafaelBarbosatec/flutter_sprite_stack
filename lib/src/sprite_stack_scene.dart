@@ -101,6 +101,8 @@ class SpriteStackSceneObject {
     this.pixelSnap = true,
     this.outlineColor = const Color(0xFF181C24),
     this.shadowColor = const Color(0xFFBAC6D4),
+    this.roll = 0,
+    this.rollPivot = 0,
   });
 
   final SpriteStack stack;
@@ -117,6 +119,20 @@ class SpriteStackSceneObject {
   bool pixelSnap;
   Color outlineColor;
   Color shadowColor;
+
+  /// Screen-space tilt of the finished sprite, in radians, forwarded to
+  /// `SpriteStack.render`.
+  ///
+  /// Like the pitch squash it is a drawing effect, not a re-projection: the
+  /// silhouette rotates and no new side of the prop is revealed. The baked
+  /// ground shadow tilts with the body, so pair a banked airborne prop with
+  /// `shadow: false`.
+  double roll;
+
+  /// Pivot of [roll], as a fraction of the prop's projected body height above
+  /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
+  /// `1` the top.
+  double rollPivot;
 }
 
 /// Where a [SpriteStackSceneObject] lands on screen.
@@ -147,6 +163,38 @@ class SpriteStackSceneProjection {
 
   /// Whether these bounds touch a canvas of [size].
   bool isVisibleIn(Size size) => bounds.overlaps(Offset.zero & size);
+}
+
+/// Counters from the last [SpriteStackScene.paint].
+///
+/// Useful to see culling at work: a scene with 200 props spread over a big
+/// world should draw only the ones on screen.
+class SpriteStackSceneStats {
+  const SpriteStackSceneStats({
+    this.drawn = 0,
+    this.culled = 0,
+    this.behindCamera = 0,
+    this.tooSmall = 0,
+  });
+
+  /// Props that reached `SpriteStack.render`.
+  final int drawn;
+
+  /// Props whose projected bounds miss the canvas.
+  final int culled;
+
+  /// Props behind the camera's near plane.
+  final int behindCamera;
+
+  /// Props smaller than [SpriteStackScene.minimumProjectedPixels].
+  final int tooSmall;
+
+  /// Every prop in the scene.
+  int get total => drawn + culled + behindCamera + tooSmall;
+
+  @override
+  String toString() =>
+      'drawn $drawn, culled $culled, behind $behindCamera, tiny $tooSmall';
 }
 
 /// A set of sprite stacks drawn with an orbiting 3D camera.
@@ -206,6 +254,16 @@ class SpriteStackScene {
   /// Props in the scene. Order only breaks depth ties.
   List<SpriteStackSceneObject> objects;
 
+  /// Props whose projected bounds are smaller than this many pixels on **both**
+  /// axes are skipped: at that size they cannot add a visible pixel.
+  ///
+  /// `0` disables the check. Culling runs before the stack is rendered, so it
+  /// saves the software rasterizer's full pass.
+  double minimumProjectedPixels = 0.5;
+
+  /// Counters from the last [paint], updated in place.
+  SpriteStackSceneStats stats = const SpriteStackSceneStats();
+
   /// Projects [object] for [size], or returns `null` when it is behind the
   /// camera.
   SpriteStackSceneProjection? projectObject(
@@ -237,6 +295,8 @@ class SpriteStackScene {
       cut: object.cut,
       outline: object.outline,
       shadow: object.shadow,
+      roll: object.roll,
+      rollPivot: object.rollPivot,
     );
     return SpriteStackSceneProjection(
       position: screen,
@@ -276,12 +336,35 @@ class SpriteStackScene {
     _paintGround(canvas, size, basis);
 
     final drawables = <_Drawable>[];
+    var behindCamera = 0;
+    var culled = 0;
+    var tooSmall = 0;
+    final minPixels = minimumProjectedPixels;
     for (var index = 0; index < objects.length; index++) {
       final object = objects[index];
       final projection = _projectObject(object, size, basis);
-      if (projection == null || !projection.isVisibleIn(size)) continue;
+      if (projection == null) {
+        behindCamera++;
+        continue;
+      }
+      if (!projection.isVisibleIn(size)) {
+        culled++;
+        continue;
+      }
+      if (minPixels > 0 &&
+          projection.bounds.width < minPixels &&
+          projection.bounds.height < minPixels) {
+        tooSmall++;
+        continue;
+      }
       drawables.add(_Drawable(index, object, projection));
     }
+    stats = SpriteStackSceneStats(
+      drawn: drawables.length,
+      culled: culled,
+      behindCamera: behindCamera,
+      tooSmall: tooSmall,
+    );
     drawables.sort((a, b) {
       final byDepth = b.projection.depth.compareTo(a.projection.depth);
       return byDepth != 0 ? byDepth : a.index.compareTo(b.index);
@@ -306,6 +389,8 @@ class SpriteStackScene {
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
+        roll: object.roll,
+        rollPivot: object.rollPivot,
       );
     }
   }

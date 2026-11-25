@@ -22,6 +22,25 @@
   ground's `fadeColor` dissolves the floor edge into the backdrop.
   `horizonFraction` pins the horizon for stylised backdrops. It takes
   precedence over the flat `SpriteStackScene.background`.
+- `SpriteStackFollowCamera`: third-person follow with frame-rate independent
+  exponential smoothing (`1 - exp(-rate * dt)`), shortest-arc yaw, a
+  `lookAhead` point and an optional `deadZone`. The camera lags the subject on
+  purpose: `object.yaw - camera.yaw` only becomes non-zero if it does, which is
+  what makes a turn readable on screen.
+- Visibility counters: `SpriteStackScene.stats` reports `drawn`, `culled`,
+  `behindCamera` and `tooSmall` after each `paint`, and
+  `minimumProjectedPixels` (default `0.5`) skips props too small to show a
+  pixel before they reach the rasterizer.
+- `render(roll:, rollPivot:)`, `boundsFor(roll:, rollPivot:)`,
+  `SpriteStackPainter.roll` and `bake(roll:)`: tilt the finished sprite in
+  screen space, like the pitch squash. `roll` rotates the silhouette around a
+  pivot `rollPivot` of the way up the body (`0` = the ground point, `0.5` = the
+  middle); it is a 2D drawing effect, not a re-projection, so it does not reveal
+  a new side of the prop. `boundsFor` returns the rotated envelope, keeping
+  culling exact.
+- Example: `FlightScreen`, a spaceship banking into its turns over the ground.
+- Example: `ChaseCameraScreen`, a car lapping a superellipse with a lag slider
+  and a live culling readout.
 - Example: `OrbitSceneScreen`, a drag-to-orbit diorama over a ground grid.
 - Docs: orbit scene section in the README and the runtime agent skill.
 - **Breaking:** removed the `flame` dependency and the engine components

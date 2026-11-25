@@ -76,10 +76,18 @@ robot.render(
   pitch: SpriteStack.defaultPitch, // asin(0.75), the reference 0.75 squash
   scale: 6,                        // integer scale keeps pixels crisp
   spacing: 1,                      // lift per slice, in source pixels
+  roll: 0,                         // screen-space tilt (bank/lean), radians
+  rollPivot: 0,                    // 0 = feet planted, 0.5 = body middle
   outline: true,                   // crisp 1 px ink outline around the stack
   shadow: true,                    // projected ground shadow
 );
 ```
+
+`yaw` and `pitch` pick the viewpoint; `roll` tilts the finished sprite in screen
+space, like the pitch squash: a drawing effect, not a re-projection. It rotates
+the silhouette without revealing a new side of the prop — for that, turn `yaw`.
+Pivot it at the feet (`0`, a grounded lean) or at the body middle (`0.5`, a
+banked aircraft). `boundsFor` accounts for it, so culling stays correct.
 
 ### Plain Flutter
 
@@ -186,6 +194,8 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
+| `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
+| `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` from the last paint |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 
 **Sky and horizon.** `SpriteStackSky` paints a vertical gradient behind
@@ -211,6 +221,32 @@ rasterizer to be perspective-correct.
 Sorting is per object (painter's algorithm), so two intersecting props cannot
 resolve per pixel. The volume/mesh is not drawn; pair the scene with
 `toVolume()` / `SpriteStackMesher` when you need collision or exact bounds.
+
+**Following a moving prop.** `SpriteStackFollowCamera` aims at a point
+`lookAhead` units in front of a subject and swings the camera yaw towards the
+subject's facing, both with exponential, frame-rate independent smoothing
+(`1 - exp(-rate * dt)`; a rate of `3` is roughly a 330 ms time constant).
+
+```dart
+final follow = SpriteStackFollowCamera(lookAhead: 60, yawRate: 3);
+
+// per frame
+follow.update(scene.camera, subject: car.position, yaw: car.yaw,
+    velocity: velocity, dt: dt);
+```
+
+The lag is the point. The scene draws each prop at `object.yaw - camera.yaw`,
+so a camera that copied the car's yaw instantly would keep that difference at
+zero and the car would never appear to rotate — the world would just spin
+around a locked sprite. Trailing the subject by a fraction of a second exposes
+the turn. `distance` and `pitch` stay in the caller's hands.
+
+**Culling.** Props behind the near plane, props whose projected bounds miss the
+canvas and props smaller than `minimumProjectedPixels` (default `0.5`) never
+reach `SpriteStack.render`. `scene.stats` reports what happened —
+`drawn`, `culled`, `behindCamera`, `tooSmall` — which is the number to watch
+when a scene gets heavy. There is no occlusion culling: a prop hidden behind
+another is still drawn.
 
 ## Animation
 
@@ -570,8 +606,8 @@ produces.
 | `SpriteStack.load(path, sliceCount:)` | Loads a strip from a Flutter asset |
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
-| `render(canvas, position:, yaw:, pitch:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
-| `boundsFor(yaw:, pitch:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
+| `render(canvas, position:, yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, paint:, outline:, shadow:, pixelSnap:, outlineColor:, shadowColor:)` | Draws the stack |
+| `boundsFor(yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, outline:, shadow:)` | Projected `size` + `ground` point |
 | `toVolume(frame:, alphaThreshold:)` | Rebuilds the voxel volume from the slices |
 | `SpriteStackVolume.fromPixels(...)` / `fromVoxels(...)` | Occupancy grid (`x` column, `y` depth, `z` slice) |
 | `SpriteStackVolume.isSolid(x, y, z)` / `solidVoxelCount` / `bounds` | Occupancy queries and tight occupied box |
@@ -582,6 +618,8 @@ produces.
 | `SpriteStackSceneObject(...)` | Stack + world position, yaw, scale, frame, cut and motion |
 | `projectObject(object, size)` | Screen point, depth, scale, relative yaw and projected bounds |
 | `horizonY(size)` | Screen y of the ground plane's vanishing line |
+| `SpriteStackFollowCamera(...)` / `update(camera, subject:, yaw:, velocity:, dt:)` | Third-person follow with exponential lag |
+| `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall` |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
 | `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
 | `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |

@@ -27,6 +27,8 @@ void render(
   required Offset position,   // ground contact point
   double yaw = 0,             // radians around Y
   double pitch = defaultPitch,// 0 = edge-on, pi/2 = top-down
+  double roll = 0,            // screen-space tilt, radians
+  double rollPivot = 0,       // 0 = feet, 0.5 = body middle
   double scale = 1,           // keep it an integer for crisp pixels
   double spacing = 1,         // lift between slices, source pixels
   int frame = 0,              // atlas row, clamped
@@ -48,6 +50,8 @@ void render(
 SpriteStackBounds boundsFor({
   double yaw = 0,
   double pitch = defaultPitch,
+  double roll = 0,
+  double rollPivot = 0,
   double scale = 1,
   double spacing = 1,
   SliceCut? cut,
@@ -55,6 +59,11 @@ SpriteStackBounds boundsFor({
   bool shadow = true,
 })
 ```
+
+`roll` tilts the finished sprite in screen space around a pivot `rollPivot` of
+the way up the body. Like `pitch` it is a drawing effect, not a re-projection:
+the silhouette rotates, no new side appears. `boundsFor` returns the rotated
+envelope.
 
 `size` is the full projected size; `ground` is where the ground point sits
 inside it. `rectAt(groundPosition)` places the rect in world space,
@@ -239,6 +248,23 @@ culling, collision and depth sorting. The sprite stack still draws.
 | `basis` | `SpriteStackCameraBasis`: `eye`, `forward`, `right`, `up`, `depthOf`, `horizontalOf`, `verticalOf` |
 
 `maxPitch = pi / 2 - 0.001`; at exactly `pi / 2` the basis would degenerate.
+
+### SpriteStackFollowCamera
+
+`SpriteStackFollowCamera({positionRate = 6, yawRate = 3, lookAhead = 60,
+height = 25, deadZone = 0})` — third-person follow for a `SpriteStackCamera`.
+
+| Member | Meaning |
+| --- | --- |
+| `update(camera, {subject, yaw, dt, velocity})` | Move `camera.target` towards `subject + forward*lookAhead + (0,0,height)` and swing `camera.yaw` towards `yaw`; both exponential with `1 - exp(-rate*dt)` |
+| `positionRate` / `yawRate` | Per-second rates; `0` freezes that channel |
+| `lookAhead`, `height`, `deadZone` | Aim point offset, aim height and the radius where the target stops moving |
+| `SpriteStackFollowCamera.smoothing(rate, dt)` | The smoothing factor |
+| `SpriteStackFollowCamera.approachAngle(from, to, factor)` | Shortest-arc interpolation |
+| `SpriteStackFollowCamera.forwardOf(yaw)` | `(-sin yaw, cos yaw, 0)` — the asset's `+Y` front |
+
+The camera yaw lag is what makes a turn readable: the scene draws each prop at
+`object.yaw - camera.yaw`, which stays `0` if the camera copies the yaw.
 
 ### SpriteStackSceneObject
 

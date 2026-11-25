@@ -34,6 +34,12 @@ Polish that makes the environment read as a place (still no gameplay):
 - [ ] textured ground: a tiled image needs subdivision or `drawVertices` for a
       correct perspective mapping; deferred until a flat-colored floor is not
       enough.
+- [x] screen-space `roll` in the renderer (`render(roll:, rollPivot:)`,
+      `boundsFor`, `bake`, painter, turntable) for banking and leaning props.
+      A true 3D roll needs the volume re-sliced along tilted planes — out of
+      scope; `yaw` is what reveals another side.
+- [x] visibility counters (`scene.stats`) and sub-pixel culling
+      (`minimumProjectedPixels`); occlusion culling still needs a depth buffer.
 - [ ] scene composition: groups/named objects and an easy way to place a
       "room", "island" or "street" as a reusable block.
 - [ ] camera helpers: pan the `target`, clamp zoom/distance, and a
@@ -48,11 +54,12 @@ Goal: a controllable character moving on the ground plane with a camera that
 follows it. Props are pass-through **on purpose**; this phase is about movement
 feel and framing, not blockers.
 
-- [ ] a controller that reads input, moves a `SpriteStackSceneObject` on `z = 0`
-      and derives `object.yaw` from velocity
-      (`atan2(vy, vx) - pi / 2`, the convention from the asset format).
-- [ ] third-person follow camera: `target` tracks the avatar with smoothing;
-      yaw/pitch/distance remain user-controlled.
+- [x] a controller that moves a `SpriteStackSceneObject` on `z = 0` and derives
+      `object.yaw` from velocity (`atan2(vy, vx) - pi / 2`, the convention from
+      the asset format) — see the chase and flight demos.
+- [x] third-person follow camera: `SpriteStackFollowCamera` tracks the subject
+      with exponential smoothing (position + shortest-arc yaw + look-ahead);
+      distance/pitch remain user-controlled.
 - [ ] optional first-person toggle and an orbit-while-standing mode.
 - [ ] soft world bounds so the character cannot walk off the ground.
 - [ ] walk demo in `example/`: character stack moving between the props, with
