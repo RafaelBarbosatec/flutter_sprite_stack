@@ -145,6 +145,55 @@ void main() {
       stack.dispose();
     });
 
+    test('art scale never moves the ground point', () async {
+      // object.scale changes how big a prop is drawn, not where it stands. If
+      // it leaks into the projection (as it once did), a prop is drawn away
+      // from the grid cell it occupies, and the error changes as the camera
+      // moves — the prop looks like it slides across the map by itself.
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(
+          yaw: 0.7,
+          pitch: 0.5,
+          distance: 900,
+        ),
+        zoom: 2.4,
+      );
+      const size = ui.Size(800, 600);
+      const position = SpriteStackPoint(180, 130, 0);
+
+      final scales = [0.6, 0.9, 1.0, 1.4, 2.5];
+      ui.Offset? anchor;
+      double? unitScale;
+      for (final scale in scales) {
+        final object = SpriteStackSceneObject(
+          stack: stack,
+          position: position,
+          scale: scale,
+        );
+        final projection = scene.projectObject(object, size)!;
+        if (anchor == null) {
+          anchor = projection.position;
+          unitScale = projection.scale / scale;
+        } else {
+          expect(
+            projection.position.dx,
+            closeTo(anchor.dx, 1e-9),
+            reason: 'scale $scale moved the prop sideways',
+          );
+          expect(
+            projection.position.dy,
+            closeTo(anchor.dy, 1e-9),
+            reason: 'scale $scale moved the prop vertically',
+          );
+        }
+        // ...but it must still change the drawn size.
+        expect(projection.scale, closeTo(unitScale! * scale, 1e-9));
+      }
+
+      stack.dispose();
+    });
+
     test('scales with zoom, object scale and perspective depth', () async {
       final stack = await _solidStack(0xFFFF0000);
       final scene = SpriteStackScene(

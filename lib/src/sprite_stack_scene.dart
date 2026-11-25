@@ -300,11 +300,23 @@ class SpriteStackScene {
     final depth = relative.dot(basis.forward);
     if (depth < camera.near) return null;
 
-    final scale = zoom * object.scale * camera.distance / depth;
+    // Pixels per world unit at this depth, from the camera's focal length
+    // (`zoom` art px per world unit at `camera.distance`).
+    //
+    // This is deliberately *not* multiplied by [SpriteStackSceneObject.scale]:
+    // that is the prop's art scale, which changes how big the sprite is drawn,
+    // never where its ground point lands. Folding it in here (as this code
+    // used to) moved the prop away from screen centre in proportion to its art
+    // scale — a prop with `scale: 1.4` was drawn 40% further out than the grid
+    // cell it actually stands on. Because that error grows and shrinks as the
+    // camera moves, the prop looked like it was sliding across the map instead
+    // of staying in its cell.
+    final perspective = zoom * camera.distance / depth;
     final screen = Offset(
-      size.width / 2 + relative.dot(basis.right) * scale,
-      size.height / 2 - relative.dot(basis.up) * scale,
+      size.width / 2 + relative.dot(basis.right) * perspective,
+      size.height / 2 - relative.dot(basis.up) * perspective,
     );
+    final scale = perspective * object.scale;
 
     // The camera direction from the prop to the eye drives the sprite's own
     // yaw/pitch. Using the global camera yaw/pitch for every prop is only

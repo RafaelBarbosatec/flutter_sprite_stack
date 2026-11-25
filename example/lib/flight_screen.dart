@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
-/// Banked flight: a spaceship laps a loop in the air while the camera chases it
-/// and the hull rolls into every turn.
+/// Banked flight: a spaceship laps a stadium-shaped track (two straights, two
+/// turns) in the air while the camera chases it and the hull rolls into every
+/// turn.
 ///
-/// The roll comes from the heading change: `roll = k * dYaw/dt`, clamped and
-/// smoothed. The ship is world-aligned and viewed from behind, so a left turn
-/// banks the hull left on screen (a negative screen-space roll).
+/// The straights matter: the camera's yaw holds constant while the ship flies
+/// one, so the ground grid and every prop glide past in a predictable
+/// straight line below, instead of sweeping around the way they would on a
+/// track that never stops curving. The roll comes from the heading change:
+/// `roll = k * dYaw/dt`, clamped and smoothed. The ship is world-aligned and
+/// viewed from behind, so a left turn banks the hull left on screen (a
+/// negative screen-space roll).
 class FlightScreen extends StatefulWidget {
   const FlightScreen({super.key});
 
@@ -21,12 +26,11 @@ class _FlightScreenState extends State<FlightScreen>
     with SingleTickerProviderStateMixin {
   static const double _speed = 280; // world units per second
   static const double _cruiseAltitude = 170;
-  static const double _bankGain = 1.15;
   static const double _maxBank = 0.85; // ~49 degrees
 
   final SpriteStackCache _cache = SpriteStackCache();
   final ValueNotifier<int> _frame = ValueNotifier<int>(0);
-  final _Loop _loop = _Loop();
+  final _Track _track = const _Track(straight: 650, radius: 280);
 
   late final SpriteStackScene _scene;
   late final SpriteStackSceneObject _ship;
@@ -35,6 +39,10 @@ class _FlightScreenState extends State<FlightScreen>
 
   double _distance = 0;
   double _roll = 0;
+
+  /// Multiplier on the bank derived from the turn rate. The slider drives it,
+  /// so `0` flies level and `2.5` banks past the clamp as soon as it turns.
+  double _bankGain = 1.15;
   double _lastYaw = 0;
   Duration _lastElapsed = Duration.zero;
   bool _paused = false;
@@ -107,14 +115,26 @@ class _FlightScreenState extends State<FlightScreen>
       final random = math.Random(11);
       final props = <SpriteStack>[tree, palm];
       for (var i = 0; i < 12; i++) {
-        final angle = i * 2 * math.pi / 12 + random.nextDouble() * 0.4;
-        final radius = 600 + random.nextDouble() * 260;
+        // Spread evenly along the lap, offset to either side of the track so
+        // the ship passes near them without flying through them.
+        final distance = (i + random.nextDouble() * 0.7) * _track.length / 12;
+        final point = _track.pointAt(distance);
+        final ahead = _track.pointAt(distance + 4);
+        final headingX = ahead.dx - point.dx;
+        final headingY = ahead.dy - point.dy;
+        final headingLength = math.sqrt(
+          headingX * headingX + headingY * headingY,
+        );
+        final normalX = headingLength > 0 ? -headingY / headingLength : 1.0;
+        final normalY = headingLength > 0 ? headingX / headingLength : 0.0;
+        final side = random.nextBool() ? 1.0 : -1.0;
+        final offset = (220 + random.nextDouble() * 260) * side;
         _scene.objects.add(
           SpriteStackSceneObject(
             stack: props[i % props.length],
             position: SpriteStackPoint(
-              math.cos(angle) * radius,
-              math.sin(angle) * radius,
+              point.dx + normalX * offset,
+              point.dy + normalY * offset,
               0,
             ),
             yaw: random.nextDouble() * math.pi * 2,
@@ -140,12 +160,12 @@ class _FlightScreenState extends State<FlightScreen>
   }
 
   _Pose _poseAt(double distance) {
-    final point = _loop.pointAt(distance);
-    final ahead = _loop.pointAt(distance + 4);
+    final point = _track.pointAt(distance);
+    final ahead = _track.pointAt(distance + 4);
     final vx = ahead.dx - point.dx;
     final vy = ahead.dy - point.dy;
     final altitude = _cruiseAltitude +
-        math.sin(distance / _loop.length * 2 * math.pi * 2) * 45;
+        math.sin(distance / _track.length * 2 * math.pi * 2) * 45;
     return _Pose(
       position: SpriteStackPoint(point.dx, point.dy, altitude),
       velocity: SpriteStackPoint(vx, vy, 0),
@@ -249,34 +269,65 @@ class _FlightScreenState extends State<FlightScreen>
             right: 12,
             bottom: 12,
             child: _Pill(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    onPressed: () => setState(() => _paused = !_paused),
-                    icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
-                    color: Colors.white70,
-                    iconSize: 20,
-                  ),
-                  const Text(
-                    'lag',
-                    style: TextStyle(fontSize: 11, color: Colors.white70),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: _follow.yawRate,
-                      min: 0.4,
-                      max: 8,
-                      onChanged: (value) => setState(
-                        () => _follow.yawRate = value,
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => setState(() => _paused = !_paused),
+                        icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+                        color: Colors.white70,
+                        iconSize: 20,
                       ),
-                    ),
+                      const Text(
+                        'lag',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _follow.yawRate,
+                          min: 0.4,
+                          max: 8,
+                          onChanged: (value) => setState(
+                            () => _follow.yawRate = value,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${(1 / _follow.yawRate).toStringAsFixed(2)} s',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${(1 / _follow.yawRate).toStringAsFixed(2)} s',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white70,
-                    ),
+                  Row(
+                    children: [
+                      const SizedBox(width: 48),
+                      const Text(
+                        'roll',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _bankGain,
+                          min: 0,
+                          max: 2.5,
+                          onChanged: (value) => setState(
+                            () => _bankGain = value,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${_bankGain.toStringAsFixed(2)}×',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -305,52 +356,56 @@ class _Pose {
   final double yaw;
 }
 
-/// A closed superellipse loop, sampled by arc length.
-class _Loop {
-  _Loop({int samples = 720})
-      : _points = List<Offset>.filled(samples, Offset.zero),
-        _turns = List<double>.filled(samples + 1, 0) {
-    const a = 470.0;
-    const b = 420.0;
-    const exponent = 0.8;
-    for (var i = 0; i < samples; i++) {
-      final t = 2 * math.pi * i / samples;
-      final c = math.cos(t);
-      final s = math.sin(t);
-      _points[i] = Offset(
-        a * c.sign * math.pow(c.abs(), exponent).toDouble(),
-        b * s.sign * math.pow(s.abs(), exponent).toDouble(),
-      );
-    }
-    for (var i = 0; i < samples; i++) {
-      final next = (i + 1) % samples;
-      _turns[i + 1] = _turns[i] + (_points[next] - _points[i]).distance;
-    }
-    length = _turns[samples];
-  }
+/// A stadium-shaped track: two straights joined by two semicircular turns.
+///
+/// A continuously-curving closed loop (the previous shape here) never lets
+/// the chase camera stop rotating to stay behind the ship, so the ground
+/// sweeps past for the *entire* lap — every static prop reads as if it were
+/// drifting, because the camera's viewing angle never settles. On the
+/// straights of a stadium track the camera only translates (its yaw is
+/// constant), so the ground grid and every prop glide past in a straight,
+/// predictable line; the sweep is confined to the turns, where the camera has
+/// to swing to stay behind the ship.
+class _Track {
+  const _Track({required this.straight, required this.radius});
 
-  final List<Offset> _points;
-  final List<double> _turns;
+  /// Length of each straight segment, in world units.
+  final double straight;
 
-  late final double length;
+  /// Radius of each semicircular turn, in world units.
+  final double radius;
 
+  double get _turnLength => math.pi * radius;
+
+  /// Total length of one lap.
+  double get length => 2 * straight + 2 * _turnLength;
+
+  /// Point [distance] units along the track, wrapping around.
   Offset pointAt(double distance) {
+    final turnLength = _turnLength;
     var d = distance % length;
     if (d < 0) d += length;
-    var low = 0;
-    var high = _points.length;
-    while (low + 1 < high) {
-      final mid = (low + high) >> 1;
-      if (_turns[mid] <= d) {
-        low = mid;
-      } else {
-        high = mid;
-      }
+    if (d < straight) {
+      return Offset(-straight / 2 + d, -radius);
     }
-    final span = _turns[low + 1] - _turns[low];
-    final t = span <= 0 ? 0.0 : (d - _turns[low]) / span;
-    final next = (low + 1) % _points.length;
-    return Offset.lerp(_points[low], _points[next], t)!;
+    d -= straight;
+    if (d < turnLength) {
+      final angle = -math.pi / 2 + d / radius;
+      return Offset(
+        straight / 2 + radius * math.cos(angle),
+        radius * math.sin(angle),
+      );
+    }
+    d -= turnLength;
+    if (d < straight) {
+      return Offset(straight / 2 - d, radius);
+    }
+    d -= straight;
+    final angle = math.pi / 2 + d / radius;
+    return Offset(
+      -straight / 2 + radius * math.cos(angle),
+      radius * math.sin(angle),
+    );
   }
 }
 
