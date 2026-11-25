@@ -1,12 +1,15 @@
-# Changelog
+## 0.3.0
 
-## Unreleased
-
+- Scene props now derive their sprite yaw from the camera basis
+  (`camera.yaw - object.yaw + π`), so they stay aligned with the projected
+  ground grid as the camera orbits instead of turning against it.
+- `SpriteStackSceneObject.billboard`: when `true`, the prop skips that
+  alignment and keeps its `yaw` as a fixed screen angle.
 - **Engine-free orbit scene**: `SpriteStackScene`, `SpriteStackCamera.orbit`,
   `SpriteStackSceneObject`, `SpriteStackGround` and
   `SpriteStackSceneProjection`. The camera projects each prop's ground point
-  with perspective, derives the visible yaw (`object.yaw - camera.yaw`), scales
-  by depth and paints far to near. Props keep their world facing while the
+  with perspective, derives the visible yaw (`camera.yaw - object.yaw + π`),
+  scales by depth and paints far to near. Props keep their world facing while the
   camera orbits, and an optional near-clipped ground grid makes the rotation
   readable.
 - `SpriteStackPoint` moved to its own library and gained vector operators
@@ -25,7 +28,7 @@
 - `SpriteStackFollowCamera`: third-person follow with frame-rate independent
   exponential smoothing (`1 - exp(-rate * dt)`), shortest-arc yaw, a
   `lookAhead` point and an optional `deadZone`. The camera lags the subject on
-  purpose: `object.yaw - camera.yaw` only becomes non-zero if it does, which is
+  purpose: `camera.yaw - object.yaw` only becomes non-zero if it does, which is
   what makes a turn readable on screen.
 - Visibility counters: `SpriteStackScene.stats` reports `drawn`, `culled`,
   `behindCamera` and `tooSmall` after each `paint`, and

@@ -115,7 +115,8 @@ void main() {
       expect(projection.position.dy, closeTo(100, 1e-9));
       expect(projection.depth, closeTo(100, 1e-9));
       expect(projection.scale, closeTo(1, 1e-9));
-      expect(projection.yaw, 0);
+      // A world-aligned prop with the camera behind it shows its back: ψ = π.
+      expect(projection.yaw, closeTo(math.pi, 1e-9));
 
       stack.dispose();
     });
@@ -164,7 +165,8 @@ void main() {
       stack.dispose();
     });
 
-    test('subtracts the camera yaw from the prop yaw', () async {
+    test('derives the sprite yaw from the camera basis and the prop yaw',
+        () async {
       final stack = await _solidStack(0xFFFF0000);
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0.1),
@@ -173,7 +175,52 @@ void main() {
 
       final projection = scene.projectObject(object, const ui.Size(200, 200))!;
 
-      expect(projection.yaw, closeTo(0.2, 1e-9));
+      // ψ = camera.yaw - object.yaw + π, so a world-aligned prop stays aligned
+      // with the projected ground grid instead of rotating against the orbit.
+      expect(projection.yaw, closeTo(0.1 - 0.3 + math.pi, 1e-9));
+
+      stack.dispose();
+    });
+
+    test('a prop at the orbit target faces away from a camera behind it',
+        () async {
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 100),
+      );
+      final object = SpriteStackSceneObject(stack: stack, yaw: 0);
+
+      final projection = scene.projectObject(object, const ui.Size(200, 200))!;
+
+      // Camera is south of the prop looking north; a north-facing prop shows
+      // its back, which is ψ = π in the sprite's front-points-down convention.
+      expect(projection.yaw, closeTo(math.pi, 1e-9));
+
+      stack.dispose();
+    });
+
+    test('billboard props keep a fixed screen yaw while the camera orbits',
+        () async {
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0.1),
+      );
+      final object = SpriteStackSceneObject(
+        stack: stack,
+        yaw: 0.3,
+        billboard: true,
+      );
+
+      expect(
+        scene.projectObject(object, const ui.Size(200, 200))!.yaw,
+        closeTo(0.3, 1e-9),
+      );
+
+      scene.camera.yaw = 2.0;
+      expect(
+        scene.projectObject(object, const ui.Size(200, 200))!.yaw,
+        closeTo(0.3, 1e-9),
+      );
 
       stack.dispose();
     });

@@ -145,9 +145,11 @@ drawing stays anchored by its feet while the bounds change.
 
 `SpriteStackScene` places stacks in a world with an orbiting camera — no engine
 required. It projects each prop's ground point with perspective, derives the
-visible `yaw` from the camera (`object.yaw - camera.yaw`), scales by depth and
-draws far to near. Props keep their world facing while the camera moves, so every
-side of their cross-sections becomes visible.
+visible `yaw` from the camera basis (`camera.yaw - object.yaw + π`), scales by
+depth and draws far to near. Props keep their world facing while the camera
+moves, so every side of their cross-sections becomes visible and they stay
+aligned with the projected ground grid. For stylised scenery that must keep one
+facing on screen, set `billboard: true` on those props.
 
 ```dart
 final scene = SpriteStackScene(
@@ -190,7 +192,7 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | --- | --- |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
-| `SpriteStackSceneObject(stack:, position:, yaw:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point and `yaw` its world facing |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point and `yaw` its world facing (or screen facing when `billboard: true`) |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, relative yaw and bounds |
@@ -235,9 +237,9 @@ follow.update(scene.camera, subject: car.position, yaw: car.yaw,
     velocity: velocity, dt: dt);
 ```
 
-The lag is the point. The scene draws each prop at `object.yaw - camera.yaw`,
-so a camera that copied the car's yaw instantly would keep that difference at
-zero and the car would never appear to rotate — the world would just spin
+The lag is the point. The scene draws each prop at `camera.yaw - object.yaw +
+π`, so a camera that copied the car's yaw instantly would keep that difference
+at zero and the car would never appear to rotate — the world would just spin
 around a locked sprite. Trailing the subject by a fraction of a second exposes
 the turn. `distance` and `pitch` stay in the caller's hands.
 

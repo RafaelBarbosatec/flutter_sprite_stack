@@ -3,8 +3,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sprite_stack/flutter_sprite_stack.dart';
 
 /// Engine-free 3D diorama: an orbiting camera over sprite stacks placed on a
-/// ground grid. Drag to orbit; the props keep their world yaw while the camera
-/// moves, so every side of their cross-sections is visible.
+/// ground grid. Drag to orbit; the props keep their world orientation and stay
+/// aligned with the ground grid, so the camera feels like it is flying over a
+/// fixed landscape instead of the props spinning against it.
 class OrbitSceneScreen extends StatefulWidget {
   const OrbitSceneScreen({super.key});
 

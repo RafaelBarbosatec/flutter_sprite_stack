@@ -80,8 +80,14 @@ class SpriteStackGround {
 /// A prop placed in a [SpriteStackScene].
 ///
 /// [position] is the ground contact point in world space. [yaw] is the prop's
-/// rotation in world space: the camera orbit is subtracted when drawing, so a
-/// prop that does not change [yaw] keeps its facing while the camera moves.
+/// rotation in world space. The scene derives the visible sprite yaw from the
+/// camera basis so the prop's world axes stay aligned with the projected
+/// ground plane: as the camera orbits, the prop rotates on screen exactly like
+/// the ground grid does instead of turning against it.
+///
+/// When [billboard] is `true` that alignment is skipped: the prop is drawn with
+/// its [yaw] as a fixed screen-space angle, so it never spins on screen. Use it
+/// for stylised scenery that must keep one facing in a fly-over.
 ///
 /// [scale] is a multiplier on the projected art scale. The scene does not own
 /// the [stack]; dispose it yourself when no scene uses it.
@@ -90,6 +96,7 @@ class SpriteStackSceneObject {
     required this.stack,
     this.position = SpriteStackPoint.zero,
     this.yaw = 0,
+    this.billboard = false,
     this.scale = 1,
     this.spacing = 1,
     this.frame = 0,
@@ -108,6 +115,12 @@ class SpriteStackSceneObject {
   final SpriteStack stack;
   SpriteStackPoint position;
   double yaw;
+
+  /// When `true`, [yaw] is a fixed screen-space angle and the camera orbit does
+  /// not rotate the prop. Scenery keeps one facing on screen while the camera
+  /// moves, like a billboard in a classic 2.5D game.
+  bool billboard;
+
   double scale;
   double spacing;
   int frame;
@@ -155,7 +168,8 @@ class SpriteStackSceneProjection {
   /// Art-pixel scale the stack is drawn with.
   final double scale;
 
-  /// Prop yaw relative to the camera, passed to `SpriteStack.render`.
+  /// Prop yaw passed to `SpriteStack.render`: derived from the camera basis
+  /// for world-aligned props, or the fixed screen-space yaw for billboards.
   final double yaw;
 
   /// Projected bounds of the stack at [position].
@@ -286,7 +300,13 @@ class SpriteStackScene {
       size.width / 2 + relative.dot(basis.right) * scale,
       size.height / 2 - relative.dot(basis.up) * scale,
     );
-    final yaw = object.yaw - camera.yaw;
+    // World-aligned props follow the ground grid: the sprite's front must land
+    // on the projected world front (`forwardOf(object.yaw)`). Solving the
+    // sprite's forward mapping `(-sin ψ, cos ψ · squash)` against the camera
+    // basis projection gives `ψ = camera.yaw - object.yaw + π`.
+    final yaw = object.billboard
+        ? object.yaw
+        : camera.yaw - object.yaw + math.pi;
     final bounds = object.stack.boundsFor(
       yaw: yaw,
       pitch: camera.pitch,
