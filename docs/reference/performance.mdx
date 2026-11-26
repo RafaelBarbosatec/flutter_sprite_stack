@@ -40,3 +40,21 @@ description: Draw budgets, outline cost, culling and when to bake sprites.
   rejects the whole sweep against the bodies' world AABBs and only then runs
   substeps, so walking in open space allocates nothing per body and does one
   pass. Keep `maxSubsteps` as low as your fastest movement allows.
+- **Detail tiers.** Ink and shadow are each a full sweep of the rasterizer's
+  buffer, and below a few pixels they read as a blot rather than detail.
+  `outlineMinimumPixels` and `shadowMinimumPixels` skip them when a prop is
+  smaller than the floor on **both** axes; `drawOutlines` / `drawShadows` turn
+  a pass off for the whole scene. `SpriteStackSceneDetail.balanced` is a safe
+  starting point.
+- **A still scene pays almost nothing.** `scene.cacheStillFrames = true`
+  records the frame once and replays a `Picture` while every input stays the
+  same. The key covers the camera, the canvas size, the sky, the ground, every
+  field of every object and the detail switches; a moving scene pays only the
+  hash, and a still one skips the rasterizer entirely.
+- **The governor.** `SpriteStackQualityGovernor` reads frame gaps and returns
+  a `SpriteStackSceneDetail` when the level should move. It judges two-second
+  windows (median frame and the share of long ones), waits for the camera to
+  move before applying a change so it does not pop, drops two levels at once
+  when frames are crawling, and backs off exponentially after a level-up
+  proves slow. It is pure Dart: feed it the gaps from your ticker and call
+  `scene.applyDetail` when it returns one.

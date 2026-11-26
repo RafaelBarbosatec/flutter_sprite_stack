@@ -7,6 +7,7 @@ import 'sprite_stack_camera.dart';
 import 'sprite_stack_collision.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_point.dart';
+import 'sprite_stack_quality.dart';
 import 'sprite_stack_sky.dart';
 import 'sprite_stack_volume.dart';
 
@@ -311,6 +312,68 @@ class SpriteStackScene {
   /// `0` disables the check. Culling runs before the stack is rendered, so it
   /// saves the software rasterizer's full pass.
   double minimumProjectedPixels = 0.5;
+
+  /// Props whose projected bounds are smaller than this many pixels on **both**
+  /// axes skip the 1 px outline pass.
+  ///
+  /// At that size the ink ring is most of the prop, so it reads as a blot and
+  /// costs a full second sweep of the rasterizer's buffer. `0` keeps the
+  /// outline at every size.
+  double outlineMinimumPixels = 0;
+
+  /// Props below this size on both axes skip their ground shadow. `0` keeps
+  /// the shadow at every size.
+  double shadowMinimumPixels = 0;
+
+  /// Whether props draw their outline at all. Turning it off saves one buffer
+  /// sweep per prop; [SpriteStackSceneObject.outline] still applies per object.
+  bool drawOutlines = true;
+
+  /// Whether props draw their ground shadow at all. [SpriteStackSceneObject.shadow]
+  /// still applies per object.
+  bool drawShadows = true;
+
+  /// Replays the last painted frame while nothing that affects it changes.
+  ///
+  /// A still diorama costs one `drawPicture` instead of re-rasterising every
+  /// prop, which is the single biggest saving this renderer has: the software
+  /// rasterizer is CPU-bound per pixel, and a still scene repeats the same
+  /// pixels every frame.
+  ///
+  /// Off by default, because the cache cannot see two things:
+  /// [SpriteStackGround.colorAt] reading state other than its arguments, and a
+  /// stack image changing behind the scene's back. Turn it on when the paint is
+  /// a pure function of the scene's fields, and call [clearStillCache] if you
+  /// dispose a stack that a cached frame still references.
+  bool cacheStillFrames = false;
+
+  /// How many paints replayed a cached still frame. Useful in a demo or a test.
+  int get stillFrameHits => _stillFrameHits;
+  int _stillFrameHits = 0;
+
+  int? _stillKey;
+  Picture? _stillPicture;
+  SpriteStackSceneStats _stillStats = const SpriteStackSceneStats();
+
+  /// Drops the cached still frame and the next paint re-renders everything.
+  void clearStillCache() {
+    _stillPicture?.dispose();
+    _stillPicture = null;
+    _stillKey = null;
+    _stillFrameHits = 0;
+  }
+
+  /// Applies a [SpriteStackSceneDetail]: the culling size, the outline and
+  /// shadow size floors, and the two global passes.
+  ///
+  /// A [SpriteStackQualityGovernor] returns one of these from frame times.
+  void applyDetail(SpriteStackSceneDetail detail) {
+    minimumProjectedPixels = detail.minimumProjectedPixels;
+    outlineMinimumPixels = detail.outlineMinimumPixels;
+    shadowMinimumPixels = detail.shadowMinimumPixels;
+    drawOutlines = detail.outlines;
+    drawShadows = detail.shadows;
+  }
 
   // Cached backdrop paint. The gradient only changes when the sky, the canvas
   // size or the horizon move, so an orbit keeps reusing the same shader.
@@ -658,7 +721,42 @@ class SpriteStackScene {
   }
 
   /// Draws the backdrop, the ground grid and every visible prop, far to near.
+  ///
+  /// With [cacheStillFrames] on, the frame is recorded once and replayed while
+  /// the scene's fields stay the same; see [stillFrameHits].
   void paint(Canvas canvas, Size size) {
+    if (!cacheStillFrames) {
+      _paint(canvas, size);
+      return;
+    }
+
+    final key = _stillKeyFor(size);
+    if (key == _stillKey) {
+      var picture = _stillPicture;
+      if (picture == null) {
+        // The second identical frame: record it once, then replay. Recording
+        // runs the rasterizer exactly like a normal paint; every frame after
+        // this one is a display-list replay.
+        final recorder = PictureRecorder();
+        _paint(Canvas(recorder), size);
+        picture = recorder.endRecording();
+        _stillPicture = picture;
+        _stillStats = stats;
+      } else {
+        stats = _stillStats;
+      }
+      _stillFrameHits++;
+      canvas.drawPicture(picture);
+      return;
+    }
+
+    _stillKey = key;
+    _stillPicture?.dispose();
+    _stillPicture = null;
+    _paint(canvas, size);
+  }
+
+  void _paint(Canvas canvas, Size size) {
     final basis = camera.basis;
     _paintBackdrop(canvas, size);
 
@@ -699,9 +797,25 @@ class SpriteStackScene {
       return byDepth != 0 ? byDepth : a.index.compareTo(b.index);
     });
 
+    final outlineFloor = outlineMinimumPixels;
+    final shadowFloor = shadowMinimumPixels;
     for (final item in drawables) {
       final object = item.object;
       final projection = item.projection;
+      final projectedWidth = projection.bounds.width;
+      final projectedHeight = projection.bounds.height;
+      // Detail tiers: ink and shadow are each a full sweep of the rasterizer's
+      // buffer, and below a few pixels they read as a blot rather than detail.
+      final outline = drawOutlines &&
+          object.outline &&
+          !(outlineFloor > 0 &&
+              projectedWidth < outlineFloor &&
+              projectedHeight < outlineFloor);
+      final shadow = drawShadows &&
+          object.shadow &&
+          !(shadowFloor > 0 &&
+              projectedWidth < shadowFloor &&
+              projectedHeight < shadowFloor);
       object.stack.render(
         canvas,
         position: projection.position,
@@ -713,8 +827,8 @@ class SpriteStackScene {
         motion: object.motion,
         time: object.time,
         cut: object.cut,
-        outline: object.outline,
-        shadow: object.shadow,
+        outline: outline,
+        shadow: shadow,
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
@@ -722,6 +836,119 @@ class SpriteStackScene {
         rollPivot: object.rollPivot,
       );
     }
+  }
+
+  /// A hash of everything [paint] reads. Equal hash means an equal frame.
+  ///
+  /// Written next to the paint code on purpose: a new field that affects the
+  /// picture has to be added here too, or the still-frame cache would replay a
+  /// stale one. The cache tests change each field in turn.
+  int _stillKeyFor(Size size) {
+    var hash = size.width.hashCode;
+    hash = Object.hash(hash, size.height);
+
+    final camera = this.camera;
+    hash = Object.hash(
+      hash,
+      camera.yaw,
+      camera.pitch,
+      camera.distance,
+      camera.near,
+      camera.target.x,
+      camera.target.y,
+      camera.target.z,
+    );
+    hash = Object.hash(hash, zoom, background);
+    hash = Object.hash(
+      hash,
+      minimumProjectedPixels,
+      outlineMinimumPixels,
+      shadowMinimumPixels,
+      drawOutlines,
+      drawShadows,
+    );
+
+    final sky = this.sky;
+    if (sky == null) {
+      hash = Object.hash(hash, 0);
+    } else {
+      hash = Object.hash(
+        hash,
+        1,
+        sky.top,
+        sky.horizon,
+        sky.bottom,
+        sky.horizonFraction,
+      );
+    }
+
+    final ground = this.ground;
+    if (ground == null) {
+      hash = Object.hash(hash, 0);
+    } else {
+      hash = Object.hash(
+        hash,
+        1,
+        ground.extent,
+        ground.step,
+        ground.color,
+        ground.axisColor,
+        ground.strokeWidth,
+        ground.cellSize,
+        ground.fill,
+        ground.colorAt,
+        ground.fadeColor,
+        ground.fadeDistance,
+        Object.hashAll(ground.checker),
+      );
+    }
+
+    final objects = this.objects;
+    hash = Object.hash(hash, objects.length);
+    for (final object in objects) {
+      hash = Object.hash(
+        hash,
+        identityHashCode(object.stack),
+        object.position.x,
+        object.position.y,
+        object.position.z,
+        object.yaw,
+        object.billboard,
+        object.scale,
+        object.spacing,
+        object.frame,
+        object.outline,
+        object.shadow,
+        object.pixelSnap,
+        object.outlineColor,
+        object.shadowColor,
+        object.roll,
+        object.rollPivot,
+      );
+      final motion = object.motion;
+      if (motion == null) {
+        hash = Object.hash(hash, 0);
+      } else {
+        // `time` only affects the picture when a motion reads it.
+        hash = Object.hash(
+          hash,
+          1,
+          object.time,
+          motion.sway,
+          motion.speed,
+          motion.wave,
+          motion.phase,
+          motion.lean,
+        );
+      }
+      final cut = object.cut;
+      if (cut == null) {
+        hash = Object.hash(hash, 0);
+      } else {
+        hash = Object.hash(hash, cut.top, cut.bottom);
+      }
+    }
+    return hash;
   }
 
   void _paintBackdrop(Canvas canvas, Size size) {

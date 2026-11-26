@@ -90,6 +90,29 @@ collapses to nothing.
 | `body.bounds` | World AABB of the rotated box, for debug drawing and broad phase |
 | `SpriteStackMoveResult.position` / `.applied` / `.hits` / `.collided` | Where the move ended, what it applied, bodies touched and whether anything blocked |
 
+## Detail and quality
+
+| Member | Meaning |
+| --- | --- |
+| `SpriteStackSceneDetail(minimumProjectedPixels:, outlineMinimumPixels:, shadowMinimumPixels:, outlines:, shadows:)` | One preset of how much a scene draws |
+| `SpriteStackSceneDetail.sharp` | Current behaviour: every pass on, no size floors |
+| `SpriteStackSceneDetail.balanced` / `.fast` / `.minimal` | Cheaper steps: drop ink and shadow on small props, then no shadows, then no ink |
+| `scene.applyDetail(detail)` | Writes a preset into the scene's switches |
+| `scene.outlineMinimumPixels` / `shadowMinimumPixels` | Props smaller than this on both axes skip that pass (`0` = never) |
+| `scene.drawOutlines` / `drawShadows` | Whole-pass switches |
+| `scene.cacheStillFrames` | Replays the last frame while nothing that affects it changes |
+| `scene.stillFrameHits` | How many paints came from the cache |
+| `scene.clearStillCache()` | Drops the cached frame |
+| `SpriteStackQualityGovernor(levels:, startLevel:, windowMs:, ...)` | Picks a level index from frame gaps |
+| `governor.frame(gapMs, moving:, busy:)` | Returns the new `SpriteStackSceneDetail`, or `null` |
+| `governor.level` / `governor.detail` / `governor.waitingForMotion` | Current state |
+| `governor.reset()` | Back to the start level |
+
+`cacheStillFrames` is off by default: it hashes the scene's fields, so a
+`colorAt` that reads captured state, or a stack image swapped behind its back,
+would not invalidate it. Call `clearStillCache()` when you dispose or replace a
+stack.
+
 ## Animation
 
 | Member | Meaning |

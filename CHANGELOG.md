@@ -24,6 +24,26 @@
 
 ### Performance
 
+- `SpriteStackScene` detail tiers: `outlineMinimumPixels` and
+  `shadowMinimumPixels` skip the ink and the ground shadow for props that are
+  only a few pixels across (each is a full sweep of the rasterizer's buffer,
+  and at that size reads as a blot). `drawOutlines` / `drawShadows` switch a
+  whole pass off. `SpriteStackSceneDetail` bundles them into `sharp`,
+  `balanced`, `fast` and `minimal` presets, applied with `scene.applyDetail`.
+  Measured on CI: 60 tiny props went from 20.45 ms to 17.90 ms median.
+- `SpriteStackScene.cacheStillFrames`: records the frame once and replays a
+  `Picture` while nothing that affects it changes. Moving scenes pay only a
+  hash per frame; a still diorama skips the software rasterizer entirely.
+  `stillFrameHits` counts the replays and `clearStillCache()` drops the frame.
+  Measured on CI: a 13-prop still frame went from 2.27 ms to 0.06 ms median
+  (about 38x).
+- `SpriteStackQualityGovernor`: a pure Dart governor that picks a
+  `SpriteStackSceneDetail` from frame gaps, judging windows (median plus share
+  of long frames), waiting for the camera to move so a change does not pop,
+  dropping two levels at once when frames crawl, and backing off exponentially
+  after a level-up proves slow.
+- The benchmark now reports still frames with and without the cache, and 60
+  tiny props with and without the detail tiers.
 - `SpriteStackScene` ground painting skips cells that are fully behind the
   near plane or far enough outside the canvas that they cannot contribute a
   pixel, before building and clipping their polygon. `colorAt` is now called

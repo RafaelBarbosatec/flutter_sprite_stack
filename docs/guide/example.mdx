@@ -34,7 +34,7 @@ Four buttons in the app bar show the scene layer:
 
 | Button | Screen | Shows |
 | --- | --- | --- |
-| Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient |
+| Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient. Paused, it replays a cached still frame; a quality governor picks the detail level from frame times, both shown in the readout |
 | Walk with collision | `CollisionScreen` | A robot you drag between the props. Every prop carries a volume-derived `SpriteStackCollider`; the robot slides along faces and a switch turns collision off so you can walk through them |
 | Chase camera (follow with lag) | `ChaseCameraScreen` | A car lapping a stadium-shaped track (two straights, two turns) with a live culling readout and a slider for the follow lag |
 | Banked flight (roll) | `FlightScreen` | A spaceship banking into its turns: `roll` is derived from the yaw rate and smoothed, with the ground and sky behind it. The **roll** slider scales that bank (0 = level flight, 2.5 = banks hard into every turn) and the lag slider tunes the chase |

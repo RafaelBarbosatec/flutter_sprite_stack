@@ -663,6 +663,10 @@ produces.
 | `scene.blocks(position, radius:, ignore:, stepHeight:)` | Circle overlap test against the blocking props |
 | `scene.move(position, delta:, radius:, ignore:, stepHeight:, maxSubsteps:)` | Swept, sliding movement; returns `SpriteStackMoveResult` |
 | `SpriteStackCollisionBody` / `SpriteStackMoveResult` | Resolved box (`overlaps`, `resolve`, `bounds`) and move outcome (`position`, `applied`, `hits`) |
+| `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, and the two passes on or off |
+| `scene.applyDetail(detail)` | Applies a preset to the scene |
+| `scene.cacheStillFrames` / `scene.stillFrameHits` | Replays the last frame while nothing changes; `clearStillCache()` drops it |
+| `SpriteStackQualityGovernor` | Picks a detail level from frame gaps, with motion-wait and backoff |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
 | `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
 | `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |
@@ -711,6 +715,23 @@ collapses to nothing.
   per object and cached, and `scene.move` rejects the whole sweep against the
   bodies' world AABBs before running any substep. Walking in open space costs
   one pass over the blocking props.
+- **Detail LOD by size.** Ink and the ground shadow are each a full sweep of
+  the rasterizer's buffer. `outlineMinimumPixels` and `shadowMinimumPixels`
+  drop them for props only a few pixels across, where the 1 px ring is most of
+  the prop and reads as a blot; `drawOutlines` / `drawShadows` turn a pass off
+  for the whole scene. `SpriteStackSceneDetail` has ready presets.
+- **A still frame is one draw call.** With `cacheStillFrames = true` the scene
+  records its frame and replays a `Picture` while nothing that affects the
+  picture changes. A moving camera pays only a hash per frame; a still diorama
+  stops re-rasterising every prop, which is the biggest saving this renderer
+  has. Off by default: the cache cannot see a `colorAt` that reads captured
+  state (call `clearStillCache` if you swap a stack image).
+- **Let the frames pick the detail.** `SpriteStackQualityGovernor` takes the
+  gap between frames and returns a `SpriteStackSceneDetail` when the level
+  should change. It judges windows (median plus share of long frames), waits
+  for the camera to move so the change does not pop, and backs off
+  exponentially so it cannot flicker between two levels. Apply it with
+  `scene.applyDetail`.
 
 ## Limitations
 
