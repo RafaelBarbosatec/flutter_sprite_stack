@@ -11,6 +11,7 @@ export 'src/sprite_stack_mesher.dart';
 export 'src/sprite_stack_motion.dart';
 export 'src/sprite_stack_painter.dart';
 export 'src/sprite_stack_point.dart';
+export 'src/sprite_stack_quality.dart';
 export 'src/sprite_stack_scene.dart';
 export 'src/sprite_stack_sky.dart';
 export 'src/sprite_stack_volume.dart';
