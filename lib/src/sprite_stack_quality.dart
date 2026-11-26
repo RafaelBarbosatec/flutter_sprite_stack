@@ -175,7 +175,7 @@ class SpriteStackQualityGovernor {
     this.fastP90Ms = 20,
     this.fastWindows = 5,
     this.trialMs = 12000,
-  })  : assert(levels.length > 0, 'there must be at least one level'),
+  })  : assert(levels.isNotEmpty, 'there must be at least one level'),
         assert(startLevel >= 0 && startLevel < levels.length,
             'startLevel must be a valid index'),
         assert(fewestFrames > 0, 'fewestFrames must be positive'),
