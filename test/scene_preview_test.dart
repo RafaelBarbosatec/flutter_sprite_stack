@@ -243,6 +243,15 @@ void main() {
         }
         if (projected.length != 4) continue;
         final mid = (projected[0] + projected[1]) / 2;
+        final mx = mid.dx.round().clamp(0, size.width.toInt() - 1);
+        final my = mid.dy.round().clamp(0, size.height.toInt() - 1);
+        final at = (my * size.width.toInt() + mx) * 4;
+        final sample = [
+          overlay[at],
+          overlay[at + 1],
+          overlay[at + 2],
+          overlay[at + 3],
+        ];
         var found = false;
         for (var dy = -2; dy <= 2 && !found; dy++) {
           for (var dx = -2; dx <= 2 && !found; dx++) {
@@ -260,8 +269,8 @@ void main() {
           }
         }
         expect(found, isTrue,
-            reason: 'no overlay ink near the edge of the body at '
-                '${body.center}');
+            reason: 'no overlay ink near $mid (sample rgba $sample) for the '
+                'body at ${body.center}');
         aligned++;
       }
       expect(aligned, greaterThanOrEqualTo(4),
