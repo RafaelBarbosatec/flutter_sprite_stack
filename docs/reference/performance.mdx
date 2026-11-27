@@ -67,4 +67,7 @@ description: Draw budgets, outline cost, culling and when to bake sprites.
   move before applying a change so it does not pop, drops two levels at once
   when frames are crawling, and backs off exponentially after a level-up
   proves slow. It is pure Dart: feed it the gaps from your ticker and call
-  `scene.applyDetail` when it returns one.
+  `scene.applyDetail` when it returns one. Each level also loosens the slice
+  LOD budget — `sharp` keeps `1` device pixel between drawn slices, `balanced`
+  `1.5`, `fast` `2` and `minimal` `3` — so stepping down thins the slices along
+  with the ink and shadows.

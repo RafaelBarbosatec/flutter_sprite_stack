@@ -34,7 +34,13 @@ void main() {
           levels[i].minimumProjectedPixels,
           greaterThanOrEqualTo(levels[i - 1].minimumProjectedPixels),
         );
+        expect(
+          levels[i].sliceLodPixels,
+          greaterThanOrEqualTo(levels[i - 1].sliceLodPixels),
+        );
       }
+      expect(levels.first.sliceLodPixels, 1);
+      expect(SpriteStackSceneDetail.fast.sliceLodPixels, 2);
     });
 
     test('applyDetail writes every switch into the scene', () {
@@ -47,14 +53,26 @@ void main() {
       expect(scene.shadowMinimumPixels, 0);
       expect(scene.drawOutlines, isTrue);
       expect(scene.drawShadows, isFalse);
+      expect(scene.sliceLodPixels, 2);
+    });
+
+    test('applyDetail leaves a manual sliceLod = false alone', () {
+      final scene = SpriteStackScene()..sliceLod = false;
+
+      scene.applyDetail(SpriteStackSceneDetail.minimal);
+
+      expect(scene.sliceLod, isFalse);
+      expect(scene.sliceLodPixels, 3);
     });
 
     test('copyWith replaces only what it is given', () {
       final tuned = SpriteStackSceneDetail.balanced.copyWith(
         outlineMinimumPixels: 4,
+        sliceLodPixels: 2.5,
       );
 
       expect(tuned.outlineMinimumPixels, 4);
+      expect(tuned.sliceLodPixels, 2.5);
       expect(
         tuned.minimumProjectedPixels,
         SpriteStackSceneDetail.balanced.minimumProjectedPixels,
