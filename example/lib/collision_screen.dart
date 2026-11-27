@@ -23,9 +23,11 @@ class CollisionScreen extends StatefulWidget {
 
 class _CollisionScreenState extends State<CollisionScreen>
     with SingleTickerProviderStateMixin {
-  static const double _speed = 260; // world units per second
+  static const double _speed = 180; // world units per second
   static const double _radius = 14; // the robot's ground radius
-  static const double _stickLimit = 48; // drag distance for full speed
+  static const double _stickLimit = 72; // drag distance for full speed
+  static const double _turnRate = 6.5; // 1/s, how fast the body swings round
+  static const double _deadZone = 4; // px of drag ignored near the centre
 
   final SpriteStackCache _cache = SpriteStackCache();
   final ValueNotifier<int> _frame = ValueNotifier<int>(0);
@@ -181,8 +183,15 @@ class _CollisionScreenState extends State<CollisionScreen>
         );
       }
       // Asset convention: the front of the prop is +Y, so the yaw that points
-      // the body along the velocity is `atan2(vy, vx) - pi / 2`.
-      _player.yaw = math.atan2(velocity.dy, velocity.dx) - math.pi / 2;
+      // the body along the velocity is `atan2(vy, vx) - pi / 2`. Ease into it
+      // instead of snapping, so a quick flick of the stick does not spin the
+      // robot in a single frame.
+      final targetYaw = math.atan2(velocity.dy, velocity.dx) - math.pi / 2;
+      _player.yaw = SpriteStackFollowCamera.approachAngle(
+        _player.yaw,
+        targetYaw,
+        SpriteStackFollowCamera.smoothing(_turnRate, dt),
+      );
     } else {
       _blocked = 0;
     }
@@ -201,19 +210,30 @@ class _CollisionScreenState extends State<CollisionScreen>
   /// Maps the drag stick to the camera's ground axes: dragging up walks away
   /// from the camera, dragging right walks to screen right, whatever the orbit.
   Offset _groundDirection() {
-    if (_stick == Offset.zero) return Offset.zero;
-    final forward3 = _scene.camera.basis.forward;
-    final length = math.sqrt(
-      forward3.x * forward3.x + forward3.y * forward3.y,
-    );
-    if (length < 1e-6) return Offset.zero;
-    final forward = Offset(forward3.x / length, forward3.y / length);
-    final right = Offset(-forward.dy, forward.dx);
+    if (_stick.distance < _deadZone) return Offset.zero;
 
+    final basis = _scene.camera.basis;
+    final forward = _groundAxis(basis.forward);
+    final right = _groundAxis(basis.right);
+    if (forward == null || right == null) return Offset.zero;
+
+    // `basis.right` is already the axis that maps to screen +X, so using it
+    // directly keeps the stick aligned with the camera at any yaw. Deriving
+    // "right" by rotating the ground forward by 90 degrees flips the sign and
+    // makes the controls mirror.
     final raw = right * (_stick.dx / _stickLimit) +
         forward * (-_stick.dy / _stickLimit);
     final magnitude = raw.distance;
     return magnitude <= 1 ? raw : raw / magnitude;
+  }
+
+  /// Projects [vector] onto the ground plane and normalises it. Returns `null`
+  /// when the horizontal projection has no length (camera looking straight
+  /// down, where no ground direction is meaningful).
+  static Offset? _groundAxis(SpriteStackPoint vector) {
+    final length = math.sqrt(vector.x * vector.x + vector.y * vector.y);
+    if (length < 1e-6) return null;
+    return Offset(vector.x / length, vector.y / length);
   }
 
   @override
