@@ -394,6 +394,25 @@ class SpriteStackScene {
   ) =>
       _projectObject(object, size, camera.basis);
 
+  /// Projects any world point to screen, or returns `null` when it is behind
+  /// the camera near plane.
+  ///
+  /// [projectObject] is the prop-specific version: it also derives the sprite's
+  /// visible yaw and pitch and returns the projected bounds. This one is the
+  /// raw camera projection, useful for debug overlays, labels and hit testing
+  /// against the ground plane (`z = 0`).
+  Offset? projectPoint(SpriteStackPoint point, Size size) {
+    final basis = camera.basis;
+    final relative = point - basis.eye;
+    final depth = relative.dot(basis.forward);
+    if (depth < camera.near) return null;
+    final perspective = zoom * camera.distance / depth;
+    return Offset(
+      size.width / 2 + relative.dot(basis.right) * perspective,
+      size.height / 2 - relative.dot(basis.up) * perspective,
+    );
+  }
+
   SpriteStackSceneProjection? _projectObject(
     SpriteStackSceneObject object,
     Size size,
@@ -587,6 +606,136 @@ class SpriteStackScene {
       bodies.add(body);
     }
     return bodies;
+  }
+
+  /// Draws the collision proxies over a painted frame, for debugging.
+  ///
+  /// Call it right after [paint], with the same canvas and size. Every prop
+  /// with a [SpriteStackSceneObject.collider] is projected back to the screen
+  /// as a filled, stroked quad — the same oriented box [move] resolves against,
+  /// so what you see is what pushes the character. A vertical post at each
+  /// corner shows the proxy height.
+  ///
+  /// * [ignore] leaves one object out, normally the character.
+  /// * [stepHeight] paints bodies no taller than it in [steppedOverColor],
+  ///   because [move] walks over them.
+  /// * [circle] and [circleRadius] draw a character's ground circle as 24
+  ///   projected segments; a world circle is not a circle on screen under
+  ///   perspective.
+  ///
+  /// Debug only: it rebuilds the bodies on every call, so leave it off in
+  /// release. Objects without a collider draw nothing.
+  void paintCollisionDebug(
+    Canvas canvas,
+    Size size, {
+    Color color = const Color(0xCC39FF88),
+    Color fillColor = const Color(0x1F39FF88),
+    Color steppedOverColor = const Color(0xCCFFB020),
+    Color steppedOverFillColor = const Color(0x29FFB020),
+    double strokeWidth = 1,
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+    SpriteStackPoint? circle,
+    double circleRadius = 0,
+    bool heightPosts = true,
+  }) {
+    final fill = Paint()..style = PaintingStyle.fill;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeJoin = StrokeJoin.miter;
+
+    for (final object in objects) {
+      if (identical(object, ignore)) continue;
+      final body = collisionBodyOf(object);
+      if (body == null || body.isDegenerate) continue;
+
+      final steppedOver = body.height <= stepHeight;
+      final bodyColor = steppedOver ? steppedOverColor : color;
+      stroke.color = bodyColor;
+      fill.color = steppedOver ? steppedOverFillColor : fillColor;
+
+      final corners = _bodyCorners(body);
+      final path = Path();
+      var visible = true;
+      for (var i = 0; i < corners.length; i++) {
+        final screen = projectPoint(
+          SpriteStackPoint(corners[i].dx, corners[i].dy, 0),
+          size,
+        );
+        if (screen == null) {
+          visible = false;
+          break;
+        }
+        if (i == 0) {
+          path.moveTo(screen.dx, screen.dy);
+        } else {
+          path.lineTo(screen.dx, screen.dy);
+        }
+      }
+      if (!visible) continue;
+      path.close();
+      canvas.drawPath(path, fill);
+      canvas.drawPath(path, stroke);
+
+      if (heightPosts && body.height.isFinite && body.height > 0) {
+        for (final corner in corners) {
+          final bottom = projectPoint(
+            SpriteStackPoint(corner.dx, corner.dy, 0),
+            size,
+          );
+          final top = projectPoint(
+            SpriteStackPoint(corner.dx, corner.dy, body.height),
+            size,
+          );
+          if (bottom != null && top != null) {
+            canvas.drawLine(bottom, top, stroke);
+          }
+        }
+      }
+    }
+
+    if (circle != null && circleRadius > 0) {
+      stroke.color = color;
+      const segments = 24;
+      final path = Path();
+      var visible = true;
+      for (var i = 0; i <= segments; i++) {
+        final angle = i * 2 * math.pi / segments;
+        final screen = projectPoint(
+          SpriteStackPoint(
+            circle.x + math.cos(angle) * circleRadius,
+            circle.y + math.sin(angle) * circleRadius,
+            circle.z,
+          ),
+          size,
+        );
+        if (screen == null) {
+          visible = false;
+          break;
+        }
+        if (i == 0) {
+          path.moveTo(screen.dx, screen.dy);
+        } else {
+          path.lineTo(screen.dx, screen.dy);
+        }
+      }
+      if (visible) canvas.drawPath(path, stroke);
+    }
+  }
+
+  /// The four world corners of a body's footprint, in order around the box.
+  static List<Offset> _bodyCorners(SpriteStackCollisionBody body) {
+    final c = math.cos(body.yaw);
+    final s = math.sin(body.yaw);
+    final ax = Offset(c, s) * body.halfWidth;
+    final ay = Offset(-s, c) * body.halfDepth;
+    return [
+      body.center - ax - ay,
+      body.center + ax - ay,
+      body.center + ax + ay,
+      body.center - ax + ay,
+    ];
   }
 
   /// Whether a circle at [position] with [radius] overlaps any blocking prop.

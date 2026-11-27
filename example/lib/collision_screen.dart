@@ -41,6 +41,7 @@ class _CollisionScreenState extends State<CollisionScreen>
   Offset _stickOrigin = Offset.zero;
   Duration _lastElapsed = Duration.zero;
   bool _collision = true;
+  bool _debug = false;
   int _blocked = 0;
   bool _paused = false;
   bool _loading = true;
@@ -268,7 +269,15 @@ class _CollisionScreenState extends State<CollisionScreen>
           children: [
             Positioned.fill(
               child: RepaintBoundary(
-                child: CustomPaint(painter: _ScenePainter(_scene, _frame)),
+                child: CustomPaint(
+                  painter: _ScenePainter(
+                    _scene,
+                    _frame,
+                    debug: _debug,
+                    player: _loading || _error != null ? null : _player,
+                    circleRadius: _radius,
+                  ),
+                ),
               ),
             ),
             if (_loading)
@@ -320,13 +329,23 @@ class _CollisionScreenState extends State<CollisionScreen>
                       value: _collision,
                       onChanged: (value) => setState(() => _collision = value),
                     ),
-                    const Expanded(
-                      child: Text(
-                        'drag to walk',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(fontSize: 10, color: Colors.white54),
+                    IconButton(
+                      onPressed: () => setState(() => _debug = !_debug),
+                      icon: Icon(
+                        Icons.bug_report,
+                        color: _debug ? Colors.greenAccent : Colors.white70,
+                      ),
+                      iconSize: 20,
+                      tooltip: 'Collision debug',
+                    ),
+                    Text(
+                      'debug',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _debug ? Colors.greenAccent : Colors.white70,
                       ),
                     ),
+                    const Spacer(),
                   ],
                 ),
               ),
@@ -389,14 +408,36 @@ class _Pill extends StatelessWidget {
 }
 
 class _ScenePainter extends CustomPainter {
-  _ScenePainter(this.scene, Listenable repaint) : super(repaint: repaint);
+  _ScenePainter(
+    this.scene,
+    Listenable repaint, {
+    this.debug = false,
+    this.player,
+    this.circleRadius = 0,
+  }) : super(repaint: repaint);
 
   final SpriteStackScene scene;
+  final bool debug;
+  final SpriteStackSceneObject? player;
+  final double circleRadius;
 
   @override
-  void paint(Canvas canvas, Size size) => scene.paint(canvas, size);
+  void paint(Canvas canvas, Size size) {
+    scene.paint(canvas, size);
+    if (!debug) return;
+    scene.paintCollisionDebug(
+      canvas,
+      size,
+      ignore: player,
+      circle: player?.position,
+      circleRadius: circleRadius,
+    );
+  }
 
   @override
   bool shouldRepaint(covariant _ScenePainter oldDelegate) =>
-      oldDelegate.scene != scene;
+      oldDelegate.scene != scene ||
+      oldDelegate.debug != debug ||
+      oldDelegate.player != player ||
+      oldDelegate.circleRadius != circleRadius;
 }

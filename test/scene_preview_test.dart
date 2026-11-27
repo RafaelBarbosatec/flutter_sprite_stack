@@ -69,29 +69,34 @@ void main() {
             stack: house,
             position: const SpriteStackPoint(-230, -40, 0),
             yaw: 0.5,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: tree,
             position: const SpriteStackPoint(180, 130, 0),
             yaw: 0.2,
             scale: 1.1,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: palm,
             position: const SpriteStackPoint(260, -140, 0),
             yaw: 1.2,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: car,
             position: const SpriteStackPoint(-40, 150, 0),
             yaw: 2.4,
             scale: 0.9,
+            collider: const SpriteStackCollider(),
           ),
           SpriteStackSceneObject(
             stack: car,
             position: const SpriteStackPoint(-80, -170, 0),
             yaw: 0.6,
             scale: 0.9,
+            collider: const SpriteStackCollider(),
           ),
         ],
       );
@@ -177,6 +182,106 @@ void main() {
           );
         }
       }
+
+      // Collision overlay: the same diorama with the debug proxies drawn on
+      // top, so a review can see what `paintCollisionDebug` actually draws.
+      scene.camera
+        ..yaw = 0.85
+        ..pitch = 0.6
+        ..distance = 900;
+      final overlay = await _renderPng(
+        scene,
+        size,
+        File('${output.path}/collision_overlay.png'),
+        overdraw: (canvas, canvasSize) => scene.paintCollisionDebug(
+          canvas,
+          canvasSize,
+          color: const ui.Color(0xFF00FF00),
+          fillColor: const ui.Color(0x2600FF00),
+          strokeWidth: 2,
+        ),
+      );
+      var green = 0;
+      for (var i = 0; i < overlay.length; i += 4) {
+        if (overlay[i] == 0 &&
+            overlay[i + 1] == 255 &&
+            overlay[i + 2] == 0 &&
+            overlay[i + 3] != 0) {
+          green++;
+        }
+      }
+      expect(
+        green,
+        greaterThan(400),
+        reason: 'the collision overlay drew only $green outline pixels',
+      );
+
+      // Every body must land where its own projection says it does: sample the
+      // midpoint of one edge of each projected quad and look for overlay ink.
+      var aligned = 0;
+      var bodies = 0;
+      for (final object in scene.objects) {
+        final body = scene.collisionBodyOf(object);
+        if (body == null || body.isDegenerate) continue;
+        bodies++;
+        final cos = math.cos(body.yaw);
+        final sin = math.sin(body.yaw);
+        final ax = ui.Offset(cos, sin) * body.halfWidth;
+        final ay = ui.Offset(-sin, cos) * body.halfDepth;
+        final corners = [
+          body.center - ax - ay,
+          body.center + ax - ay,
+          body.center + ax + ay,
+          body.center - ax + ay,
+        ];
+        final projected = <ui.Offset>[];
+        for (final corner in corners) {
+          final point = scene.projectPoint(
+            SpriteStackPoint(corner.dx, corner.dy, 0),
+            size,
+          );
+          if (point == null) break;
+          projected.add(point);
+        }
+        if (projected.length != 4) continue;
+        // Try every edge midpoint: one of them can fall off-canvas when the
+        // prop sits at the frame edge, which says nothing about the overlay.
+        var sampled = 0;
+        var found = false;
+        var lastMid = projected.first;
+        for (var edge = 0; edge < 4; edge++) {
+          final mid = (projected[edge] + projected[(edge + 1) % 4]) / 2;
+          if (mid.dx < 2 ||
+              mid.dy < 2 ||
+              mid.dx > size.width - 2 ||
+              mid.dy > size.height - 2) {
+            continue;
+          }
+          sampled++;
+          lastMid = mid;
+          for (var dy = -2; dy <= 2 && !found; dy++) {
+            for (var dx = -2; dx <= 2 && !found; dx++) {
+              final x = mid.dx.round() + dx;
+              final y = mid.dy.round() + dy;
+              final i = (y * size.width.toInt() + x) * 4;
+              if (overlay[i + 1] > 150 &&
+                  overlay[i] < 100 &&
+                  overlay[i + 2] < 100) {
+                found = true;
+              }
+            }
+          }
+        }
+        if (sampled == 0) continue;
+        expect(found, isTrue,
+            reason: 'no overlay ink near the edges of the body at '
+                '${body.center} (last sample $lastMid)');
+        aligned++;
+      }
+      expect(bodies, 5, reason: 'expected five colliders in the diorama');
+      expect(aligned, greaterThanOrEqualTo(3),
+          reason: 'only $aligned of $bodies bodies had an on-canvas edge to '
+              'sample');
 
       for (final stack in stacks) {
         stack.dispose();
@@ -579,11 +684,13 @@ Future<SpriteStack> _loadFile(String path, int sliceCount) async {
 Future<Uint8List> _renderPng(
   SpriteStackScene scene,
   ui.Size size,
-  File file,
-) async {
+  File file, {
+  void Function(ui.Canvas canvas, ui.Size size)? overdraw,
+}) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
   scene.paint(canvas, size);
+  overdraw?.call(canvas, size);
   final picture = recorder.endRecording();
   final image = await picture.toImage(
     size.width.toInt(),
