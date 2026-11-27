@@ -27,6 +27,7 @@ class SpriteStackPainter extends CustomPainter {
     this.outlineColor = const Color(0xFF181C24),
     this.shadowColor = const Color(0xFFBAC6D4),
     this.stackPaint,
+    this.sliceStep = 1,
   });
 
   final SpriteStack stack;
@@ -81,6 +82,9 @@ class SpriteStackPainter extends CustomPainter {
   /// Optional paint, e.g. to apply a color filter to the body.
   final Paint? stackPaint;
 
+  /// Draws every `N`th cross-section; see `SpriteStack.render`.
+  final int sliceStep;
+
   @override
   void paint(Canvas canvas, Size size) {
     stack.render(
@@ -102,6 +106,7 @@ class SpriteStackPainter extends CustomPainter {
       shadow: shadow,
       outlineColor: outlineColor,
       shadowColor: shadowColor,
+      sliceStep: sliceStep,
     );
   }
 
@@ -124,5 +129,6 @@ class SpriteStackPainter extends CustomPainter {
       oldDelegate.shadow != shadow ||
       oldDelegate.outlineColor != outlineColor ||
       oldDelegate.shadowColor != shadowColor ||
-      oldDelegate.stackPaint != stackPaint;
+      oldDelegate.stackPaint != stackPaint ||
+      oldDelegate.sliceStep != sliceStep;
 }

@@ -253,6 +253,13 @@ class SpriteStack {
   /// [rollPivot] of the way up the body (`0` = the ground point, `1` = the
   /// top). Like [pitch], it is a drawing effect, not a re-projection: the
   /// silhouette rotates but no new side of the prop is revealed.
+  ///
+  /// [sliceStep] draws every `N`th cross-section instead of all of them, always
+  /// keeping the ground slice and the top one. Each drawn slice stays at its
+  /// true height, so the silhouette and [heightFor] do not change: what goes
+  /// away are cross-sections that sit `N * spacing` art pixels apart, which is
+  /// worth doing when that spacing lands below a device pixel. `1` draws every
+  /// slice. The scene picks this automatically for distant props.
   void render(
     Canvas canvas, {
     required Offset position,
@@ -272,6 +279,7 @@ class SpriteStack {
     Color shadowColor = const Color(0xFFBAC6D4),
     double roll = 0,
     double rollPivot = 0,
+    int sliceStep = 1,
   }) {
     final squash = squashFor(pitch);
 
@@ -313,6 +321,7 @@ class SpriteStack {
         pixelSnap: pixelSnap,
         outlineColor: outlineColor,
         shadowColor: shadowColor,
+        sliceStep: sliceStep,
       );
     } else {
       _renderSlices(
@@ -332,6 +341,7 @@ class SpriteStack {
         pixelSnap: pixelSnap,
         outlineColor: outlineColor,
         shadowColor: shadowColor,
+        sliceStep: sliceStep,
       );
     }
     if (pivot != null) canvas.restore();
@@ -446,6 +456,7 @@ class SpriteStack {
     Color shadowColor = const Color(0xFFBAC6D4),
     double roll = 0,
     double rollPivot = 0,
+    int sliceStep = 1,
   }) {
     final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final recorder = PictureRecorder();
@@ -468,6 +479,7 @@ class SpriteStack {
       shadowColor: shadowColor,
       roll: roll,
       rollPivot: rollPivot,
+      sliceStep: sliceStep,
     );
     return BakedSpriteStack.fromPicture(
       recorder.endRecording(),
@@ -553,12 +565,14 @@ class SpriteStack {
     required bool pixelSnap,
     required Color outlineColor,
     required Color shadowColor,
+    required int sliceStep,
   }) {
     final pixels = _pixels!;
     final w = sliceWidth;
     final h = sliceHeight;
     final n = sliceCount;
     final rowOffset = frame * h;
+    final step = sliceStep < 1 ? 1 : sliceStep;
 
     final ca = math.cos(yaw);
     final sa = math.sin(yaw);
@@ -624,6 +638,11 @@ class SpriteStack {
     final stripWidth = n * w;
     final opaque = _opaqueBounds;
     for (var z = 0; z < n; z++) {
+      // Slice LOD: keep every `step`th cross-section plus the top one. The
+      // lift below is still `z * spacing`, so the drawn slices sit exactly
+      // where they did before — only the in-between sections go away, which
+      // the scene only asks for when they would land under a device pixel.
+      if (step > 1 && z % step != 0 && z != n - 1) continue;
       final visibility = cut?.visibilityAt(z) ?? 1.0;
       if (visibility <= 0) continue;
       final zBase = z * w;
@@ -874,11 +893,13 @@ class SpriteStack {
     required bool pixelSnap,
     required Color outlineColor,
     required Color shadowColor,
+    required int sliceStep,
   }) {
     final effectivePaint = paint ??
         (Paint()
           ..filterQuality = FilterQuality.none
           ..isAntiAlias = false);
+    final step = sliceStep < 1 ? 1 : sliceStep;
 
     final ground = pixelSnap
         ? Offset(position.dx.roundToDouble(), position.dy.roundToDouble())
@@ -920,6 +941,9 @@ class SpriteStack {
         final ox = offset.dx * scale;
         final oy = offset.dy * scale;
         for (var slice = 0; slice < sliceCount; slice++) {
+          if (step > 1 && slice % step != 0 && slice != sliceCount - 1) {
+            continue;
+          }
           if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
           final shift =
               motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
@@ -946,6 +970,7 @@ class SpriteStack {
     }
 
     for (var slice = 0; slice < sliceCount; slice++) {
+      if (step > 1 && slice % step != 0 && slice != sliceCount - 1) continue;
       if (cut != null && cut.visibilityAt(slice) < 0.5) continue;
       final shift = motion?.offsetAt(slice, sliceCount, time) ?? Offset.zero;
       final center = Offset(

@@ -206,7 +206,8 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
                       const SizedBox(width: 6),
                       Text(
                         'q${_governor.level} · '
-                        '${_scene.stillFrameHits} cached · drag to orbit',
+                        '${_scene.stats.slicesDrawn}/${_scene.stats.slicesTotal} '
+                        'slices · ${_scene.stillFrameHits} cached',
                         style: const TextStyle(
                           fontSize: 10,
                           color: Colors.white70,

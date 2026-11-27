@@ -10,7 +10,7 @@ description: SpriteStack, SpriteStackPainter, SpriteStackAnimation and SpriteSta
 | `SpriteStack.load(path, sliceCount:)` | Loads a strip from a Flutter asset |
 | `SpriteStack.decode(bytes, sliceCount:)` | Decodes a strip from memory |
 | `SpriteStack.fromImage(image, sliceCount:)` | Wraps an already decoded `ui.Image` |
-| `render(canvas, position:, yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
+| `render(canvas, position:, yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, sliceStep:, paint:, outline:, shadow:, outlineColor:, shadowColor:)` | Draws the stack |
 | `sliceWidth`, `sliceHeight`, `sliceSize`, `sliceCount` | Strip geometry |
 | `heightFor(pitch:, spacing:)` | Rendered height in source pixels |
 | `boundsFor(yaw:, pitch:, roll:, rollPivot:, scale:, spacing:, outline:, shadow:)` | Projected bounds: `size` + `ground` point; the envelope is rotated by `roll` |
@@ -49,6 +49,7 @@ collapses to nothing.
 | `motion` | `null` | `StackMotion` applied per slice |
 | `time` | `0` | Clock fed to `motion`, in seconds |
 | `cut` | `null` | `SliceCut` hiding slices above/below a frontier |
+| `sliceStep` | `1` | Draws every `N`th cross-section (always keeping the ground and top slices); the scene derives it from distance |
 
 ## Scene
 
@@ -63,8 +64,11 @@ collapses to nothing.
 | `scene.paint(canvas, size)` | Projects and draws every object, far to near |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
-| `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `total` from the last paint |
+| `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `total` / `slicesDrawn` / `slicesTotal` / `sliceLodSaving` from the last paint |
 | `scene.minimumProjectedPixels` | Props whose scaled bounds are smaller than this many pixels are skipped (default `0.5`) |
+| `scene.sliceLod` | Drops cross-sections that land under a device pixel for distant props (default `true`) |
+| `scene.sliceLodPixels` | Maximum screen distance between drawn slices when `sliceLod` is on (default `1`) |
+| `SpriteStackSceneObject.sliceStep` | Manual slice decimation for one prop; `null` lets the scene choose |
 | `scene.collisionBodyOf(object)` | Resolves one prop's `collider` to a world-space body, or `null` |
 | `scene.collisionBodies(ignore:, stepHeight:)` | Every blocking body, skipping `ignore` and bodies no taller than `stepHeight` |
 | `scene.blocks(position, radius:, ignore:, stepHeight:)` | Whether a ground circle overlaps a blocking body |

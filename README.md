@@ -657,7 +657,7 @@ produces.
 | `projectObject(object, size)` | Screen point, depth, scale, render yaw, render pitch and projected bounds |
 | `horizonY(size)` | Screen y of the ground plane's vanishing line |
 | `SpriteStackFollowCamera(...)` / `update(camera, subject:, yaw:, velocity:, dt:)` | Third-person follow with exponential lag |
-| `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall` |
+| `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall`, `slicesDrawn`, `slicesTotal` |
 | `SpriteStackCollider(padding:, size:, offset:, height:, alphaThreshold:)` | Collision proxy on `object.collider`; grows from the volume or an explicit size |
 | `scene.collisionBodyOf(object)` / `collisionBodies(ignore:, stepHeight:)` | Resolve one or every blocking prop to a world-space box |
 | `scene.blocks(position, radius:, ignore:, stepHeight:)` | Circle overlap test against the blocking props |
@@ -666,6 +666,7 @@ produces.
 | `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, and the two passes on or off |
 | `scene.applyDetail(detail)` | Applies a preset to the scene |
 | `scene.cacheStillFrames` / `scene.stillFrameHits` | Replays the last frame while nothing changes; `clearStillCache()` drops it |
+| `scene.sliceLod` / `scene.sliceLodPixels` | Drops cross-sections that land under a device pixel; per-object `sliceStep` overrides it |
 | `SpriteStackQualityGovernor` | Picks a detail level from frame gaps, with motion-wait and backoff |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
 | `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
@@ -691,8 +692,10 @@ collapses to nothing.
 
 - The software rasterizer renders into a 1x art-pixel buffer with nearest
   inverse sampling, then draws the opaque pixels grouped by color as integer
-  squares. Cost scales with the prop's on-screen footprint, not the slice
-  count, so 16-slice and 43-slice props cost about the same.
+  squares. Cost scales with the source art area times the number of slices —
+  **not** with the size on screen, because the buffer is built at 1:1 and only
+  scaled when it is blitted. That is why a prop drawn tiny still costs a full
+  rasterisation pass, and why slice LOD below pays off.
 - The `fromImage` fallback keeps the old per-slice `drawImageRect` path (one
   draw per slice, plus four outline passes when enabled).
 - If a scene gets heavy, bake it: `stack.bake(...)` replays a `Picture` with a
@@ -720,6 +723,15 @@ collapses to nothing.
   drop them for props only a few pixels across, where the 1 px ring is most of
   the prop and reads as a blot; `drawOutlines` / `drawShadows` turn a pass off
   for the whole scene. `SpriteStackSceneDetail` has ready presets.
+- **Slice LOD by distance.** When a prop is drawn below 1:1, its cross-sections
+  land closer together than a device pixel and the downscale merges them.
+  `SpriteStackScene.sliceLod` (on by default) then draws every `N`th slice, each
+  one still at its true height, so the silhouette does not move and the
+  rasterizer skips work the screen could not show. Drawn slices stay within
+  `sliceLodPixels` device pixels of each other (default `1`);
+  `SpriteStackSceneObject.sliceStep` overrides it for one prop and
+  `sliceLod = false` turns it off. `scene.stats.slicesDrawn` / `slicesTotal`
+  report the saving.
 - **A still frame is one draw call.** With `cacheStillFrames = true` the scene
   records its frame and replays a `Picture` while nothing that affects the
   picture changes. A moving camera pays only a hash per frame; a still diorama

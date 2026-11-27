@@ -124,6 +124,10 @@ void main() {
 
       final inkOn = tinyPropsScene(tiers: false);
       final inkOff = tinyPropsScene(tiers: true);
+      // Same tiny props, slice LOD on and off. At this projection scale
+      // (0.22) consecutive slices land a fifth of a pixel apart.
+      final lodOn = tinyPropsScene(tiers: false);
+      final lodOff = tinyPropsScene(tiers: false)..sliceLod = false;
 
       // Warm up the JIT and the image cache.
       _measure(scene, size, frames: 12);
@@ -132,6 +136,8 @@ void main() {
       _measureStill(stillCached, size, frames: 12);
       _measure(inkOn, size, frames: 12);
       _measure(inkOff, size, frames: 12);
+      _measure(lodOn, size, frames: 12);
+      _measure(lodOff, size, frames: 12);
 
       // Three rounds in the same process: shared CI runners vary a lot between
       // jobs, so the spread matters as much as the median.
@@ -142,6 +148,8 @@ void main() {
       final stillOn = <_Stats>[];
       final tiersOff = <_Stats>[];
       final tiersOn = <_Stats>[];
+      final lodWith = <_Stats>[];
+      final lodWithout = <_Stats>[];
       for (var round = 0; round < 3; round++) {
         full.add(_measure(scene, size, frames: 40));
         ground.add(_measure(groundOnly, size, frames: 40));
@@ -150,6 +158,8 @@ void main() {
         stillOn.add(_measureStill(stillCached, size, frames: 40));
         tiersOff.add(_measure(inkOn, size, frames: 40));
         tiersOn.add(_measure(inkOff, size, frames: 40));
+        lodWith.add(_measure(lodOn, size, frames: 40));
+        lodWithout.add(_measure(lodOff, size, frames: 40));
       }
 
       _report('scene_paint_13_props_400_cells', full);
@@ -159,6 +169,8 @@ void main() {
       _report('still_frame_13_props_cached', stillOn);
       _report('tiny_props_60_ink_and_shadow', tiersOff);
       _report('tiny_props_60_detail_tiers', tiersOn);
+      _report('tiny_props_60_slice_lod_off', lodWithout);
+      _report('tiny_props_60_slice_lod_on', lodWith);
 
       // Loose sanity checks so a catastrophic regression fails the build
       // instead of only printing a slow number.
