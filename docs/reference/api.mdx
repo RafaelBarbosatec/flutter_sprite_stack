@@ -58,7 +58,7 @@ collapses to nothing.
 | --- | --- |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:, near:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
-| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, roll:, rollPivot:, scale:, frame:, cut:, motion:, anchor:, collider:)` | A prop; `position` is the centre of its ground footprint (the sprite is pivoted on it with `anchor`, `footprintCentre` by default), `yaw` its world facing (`billboard: false`, the default) or a fixed screen facing (`billboard: true`), `roll` the screen-space bank, `collider` its collision proxy |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, roll:, rollPivot:, scale:, frame:, cut:, motion:, collider:)` | A prop; `position` is the centre of its ground footprint (the sprite is pivoted on it, and the collider is centred on it), `yaw` its world facing (`billboard: false`, the default) or a fixed screen facing (`billboard: true`), `roll` the screen-space bank, `collider` its collision proxy |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |

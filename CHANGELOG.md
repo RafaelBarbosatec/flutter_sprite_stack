@@ -19,8 +19,6 @@
 - `SpriteStack.footprintFor({frame})` exposes the union of the opaque art of a
   frame — the pivot the new anchor uses — and `SpriteStack.anchorOffset(...)`
   reports the screen-space shift it applies.
-- `SpriteStackSceneObject.anchor` restores the old anchoring per prop when set
-  to `SpriteStackAnchor.bottomCentre`.
 
 ### Collision
 

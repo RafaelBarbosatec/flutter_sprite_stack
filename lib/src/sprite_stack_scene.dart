@@ -83,8 +83,9 @@ class SpriteStackGround {
 /// A prop placed in a [SpriteStackScene].
 ///
 /// [position] is the point the prop stands on: the centre of its ground
-/// footprint. The sprite is drawn around it with [anchor], so the prop turns in
-/// place while the camera orbits and its pixels stay inside its collision box.
+/// footprint. The sprite is drawn around it with
+/// [SpriteStackAnchor.footprintCentre], so the prop turns in place while the
+/// camera orbits and its pixels stay inside its collision box.
 /// [yaw] is the prop's world rotation. By default the scene derives the visible
 /// sprite yaw from the camera basis, so the prop stays aligned with the
 /// projected ground plane and reads as a fixed object on the map while the
@@ -115,7 +116,6 @@ class SpriteStackSceneObject {
     this.shadowColor = const Color(0xFFBAC6D4),
     this.roll = 0,
     this.rollPivot = 0,
-    this.anchor = SpriteStackAnchor.footprintCentre,
     this.collider,
   });
 
@@ -153,16 +153,6 @@ class SpriteStackSceneObject {
   /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
   /// `1` the top.
   double rollPivot;
-
-  /// Which point of the sprite lands on [position].
-  ///
-  /// Defaults to [SpriteStackAnchor.footprintCentre]: the centre of what is
-  /// drawn stands on [position], which is also where [collider] is centred, so
-  /// the sprite and its collision box stay together as the camera orbits.
-  /// [SpriteStackAnchor.bottomCentre] restores the old anchoring, where the
-  /// front edge of the footprint sits on [position] and the body extends away
-  /// from the viewer (it drifts across the ground when the camera moves).
-  SpriteStackAnchor anchor;
 
   /// Collision proxy for this prop, or `null` for a walk-through prop.
   ///
@@ -213,7 +203,8 @@ class SpriteStackSceneProjection {
   });
 
   /// Ground point of the prop in screen coordinates: the centre of its
-  /// footprint, ready for `SpriteStack.render(position:, anchor: anchor)`.
+  /// footprint, ready for `SpriteStack.render(position:,
+  /// anchor: SpriteStackAnchor.footprintCentre)`.
   ///
   /// This point does not depend on the camera's yaw: it is the projection of
   /// [SpriteStackSceneObject.position], so it stays on the grid cell the prop
@@ -532,7 +523,7 @@ class SpriteStackScene {
       shadow: object.shadow,
       roll: object.roll,
       rollPivot: object.rollPivot,
-      anchor: object.anchor,
+      anchor: SpriteStackAnchor.footprintCentre,
       frame: object.frame,
     );
     return SpriteStackSceneProjection(
@@ -1062,7 +1053,7 @@ class SpriteStackScene {
         roll: object.roll,
         rollPivot: object.rollPivot,
         sliceStep: item.step,
-        anchor: object.anchor,
+        anchor: SpriteStackAnchor.footprintCentre,
       );
     }
   }
@@ -1156,7 +1147,6 @@ class SpriteStackScene {
         object.roll,
         object.rollPivot,
         object.sliceStep,
-        object.anchor,
       );
       final motion = object.motion;
       if (motion == null) {

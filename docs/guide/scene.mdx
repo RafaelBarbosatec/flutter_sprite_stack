@@ -19,10 +19,9 @@ moves — orbiting reveals every side of their cross-sections.
 `position` is the point the prop stands on: the scene pivots the sprite on the
 centre of its opaque footprint (`SpriteStackAnchor.footprintCentre`), not on the
 edge facing the camera, and a `collider` is centred on the same point. That is
-what keeps the pixels inside the collision box when the camera orbits. Pass
-`anchor: SpriteStackAnchor.bottomCentre` (or set `object.anchor`) to restore the
-classic "feet on the point" anchoring, where the sprite extends away from the
-viewer.
+what keeps the pixels inside the collision box when the camera orbits. The
+`anchor` option on `SpriteStack.render` itself still defaults to the classic
+`bottomCentre`, so a plain sprite outside a scene is unaffected.
 
 ## A minimal scene
 
