@@ -665,7 +665,7 @@ produces.
 | `scene.paintCollisionDebug(canvas, size, ...)` | Outlines every resolved collision box (and a character circle) over the frame |
 | `scene.projectPoint(point, size)` | Projects any world point to screen; `null` behind the camera |
 | `SpriteStackCollisionBody` / `SpriteStackMoveResult` | Resolved box (`overlaps`, `resolve`, `bounds`) and move outcome (`position`, `applied`, `hits`) |
-| `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, and the two passes on or off |
+| `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, the two passes and the slice LOD budget |
 | `scene.applyDetail(detail)` | Applies a preset to the scene |
 | `scene.cacheStillFrames` / `scene.stillFrameHits` | Replays the last frame while nothing changes; `clearStillCache()` drops it |
 | `scene.sliceLod` / `scene.sliceLodPixels` | Drops cross-sections that land under a device pixel; per-object `sliceStep` overrides it |
@@ -745,7 +745,9 @@ collapses to nothing.
   should change. It judges windows (median plus share of long frames), waits
   for the camera to move so the change does not pop, and backs off
   exponentially so it cannot flicker between two levels. Apply it with
-  `scene.applyDetail`.
+  `scene.applyDetail`. Stepping down also loosens the slice LOD budget (`1`,
+  `1.5`, `2`, `3` device pixels), so distant props thin their cross-sections
+  along with the ink and shadows.
 
 ## Limitations
 
