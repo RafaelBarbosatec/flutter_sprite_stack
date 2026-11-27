@@ -353,7 +353,7 @@ void main() {
         shadow: false,
         outline: false,
         pixelSnap: false,
-        collider: const SpriteStackCollider(size: Size(4, 4)),
+        collider: const SpriteStackCollider(size: ui.Size(4, 4)),
       );
       scene.objects.add(object);
       expect(scene.collisionBodyOf(object)!.center, Offset.zero);
