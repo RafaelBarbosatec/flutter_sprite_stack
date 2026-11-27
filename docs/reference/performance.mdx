@@ -46,6 +46,16 @@ description: Draw budgets, outline cost, culling and when to bake sprites.
   smaller than the floor on **both** axes; `drawOutlines` / `drawShadows` turn
   a pass off for the whole scene. `SpriteStackSceneDetail.balanced` is a safe
   starting point.
+- **Slice LOD.** A prop drawn at a projected scale below `1` puts consecutive
+  cross-sections closer together than a device pixel, and the downscale merges
+  them anyway. `scene.sliceLod` (on by default) then draws every `N`th slice,
+  each one still at its true height, so the silhouette does not move and the
+  rasterizer skips work the screen could not show. Drawn slices stay within
+  `sliceLodPixels` device pixels of each other (default `1`); `sliceLod: false`
+  restores the full render, and `SpriteStackSceneObject.sliceStep` overrides the
+  choice for one prop. `scene.stats.slicesDrawn` against `slicesTotal` (and
+  `sliceLodSaving`) shows what it saved. Measured on CI with 60 props at scale
+  `0.22`: see the benchmark output.
 - **A still scene pays almost nothing.** `scene.cacheStillFrames = true`
   records the frame once and replays a `Picture` while every input stays the
   same. The key covers the camera, the canvas size, the sky, the ground, every

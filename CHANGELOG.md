@@ -47,8 +47,17 @@
   of long frames), waiting for the camera to move so a change does not pop,
   dropping two levels at once when frames crawl, and backing off exponentially
   after a level-up proves slow.
-- The benchmark now reports still frames with and without the cache, and 60
-  tiny props with and without the detail tiers.
+- Slice LOD: `SpriteStack.render(sliceStep:)` draws every `N`th cross-section,
+  always keeping the ground slice and the top one, with each drawn slice still
+  at its true height — so the outline of a prop does not move. A scene turns
+  this on by itself through `sliceLod` (default `true`) whenever a prop is
+  drawn below 1:1, keeping drawn slices within `sliceLodPixels` device pixels of
+  each other (default `1`); `SpriteStackSceneObject.sliceStep` overrides it per
+  prop. `scene.stats.slicesDrawn` / `slicesTotal` and `sliceLodSaving` report
+  the saving.
+- The benchmark now reports still frames with and without the cache, 60 tiny
+  props with and without the detail tiers, and the same props with slice LOD
+  off and on.
 - `SpriteStackScene` ground painting skips cells that are fully behind the
   near plane or far enough outside the canvas that they cannot contribute a
   pixel, before building and clipping their polygon. `colorAt` is now called

@@ -161,6 +161,13 @@ class SpriteStackSceneObject {
   /// atlas.
   SpriteStackCollider? collider;
 
+  /// Manual slice decimation for this prop, or `null` to let the scene derive
+  /// one from the projected scale.
+  ///
+  /// `1` draws every cross-section; `N` draws every `N`th one. The scene's
+  /// [SpriteStackScene.sliceLod] controls the automatic choice.
+  int? sliceStep;
+
   SpriteStackVolume? _collisionVolume;
   int? _collisionVolumeThreshold;
 
@@ -227,6 +234,8 @@ class SpriteStackSceneStats {
     this.culled = 0,
     this.behindCamera = 0,
     this.tooSmall = 0,
+    this.slicesDrawn = 0,
+    this.slicesTotal = 0,
   });
 
   /// Props that reached `SpriteStack.render`.
@@ -241,12 +250,23 @@ class SpriteStackSceneStats {
   /// Props smaller than [SpriteStackScene.minimumProjectedPixels].
   final int tooSmall;
 
+  /// Cross-sections the last frame asked the rasterizer to draw, after slice
+  /// LOD. A `SliceCut` can still hide some of them.
+  final int slicesDrawn;
+
+  /// Cross-sections [drawn] props would have asked for without slice LOD.
+  final int slicesTotal;
+
+  /// How much slice LOD saved, as a fraction of [slicesTotal].
+  double get sliceLodSaving =>
+      slicesTotal == 0 ? 0 : 1 - slicesDrawn / slicesTotal;
+
   /// Every prop in the scene.
   int get total => drawn + culled + behindCamera + tooSmall;
 
   @override
-  String toString() =>
-      'drawn $drawn, culled $culled, behind $behindCamera, tiny $tooSmall';
+  String toString() => 'drawn $drawn, culled $culled, behind $behindCamera, '
+      'tiny $tooSmall, slices $slicesDrawn/$slicesTotal';
 }
 
 /// A set of sprite stacks drawn with an orbiting 3D camera.
@@ -332,6 +352,24 @@ class SpriteStackScene {
   /// Whether props draw their ground shadow at all. [SpriteStackSceneObject.shadow]
   /// still applies per object.
   bool drawShadows = true;
+
+  /// Whether distant props drop cross-sections they cannot show.
+  ///
+  /// Consecutive slices are [SpriteStackSceneObject.spacing] art pixels apart,
+  /// so a prop drawn at a scale below 1 puts them closer together than a device
+  /// pixel — the downscale merges them anyway. When this is on, the scene draws
+  /// every `N`th slice for those props, each one still at its true height, so
+  /// the silhouette does not move: only sections that were already
+  /// indistinguishable stop costing a full rasterizer pass.
+  ///
+  /// [sliceLodPixels] sets how far apart drawn slices may land. `false`
+  /// restores the full-slice render for every prop, and
+  /// [SpriteStackSceneObject.sliceStep] overrides the choice per object.
+  bool sliceLod = true;
+
+  /// Maximum distance between drawn slices, in device pixels, when [sliceLod]
+  /// is on. Raising it decimates harder; `1` is the conservative default.
+  double sliceLodPixels = 1;
 
   /// Replays the last painted frame while nothing that affects it changes.
   ///
@@ -485,6 +523,32 @@ class SpriteStackScene {
       pitch: pitch,
       bounds: bounds.rectAt(screen),
     );
+  }
+
+  /// Slice decimation for [object] at its current [projection].
+  ///
+  /// Drawn slices stay at most [sliceLodPixels] device pixels apart: at a
+  /// projected scale of `0.5` with `spacing: 1` every second cross-section
+  /// would land half a pixel from the one below it, so drawing both is work
+  /// the downscale throws away.
+  int _autoSliceStep(
+    SpriteStackSceneObject object,
+    SpriteStackSceneProjection projection,
+  ) {
+    if (!sliceLod) return 1;
+    final gap = object.spacing * projection.scale;
+    if (gap <= 0) return 1;
+    final step = (sliceLodPixels / gap).floor();
+    return step < 1 ? 1 : step;
+  }
+
+  /// How many slices `render(sliceStep: step)` draws out of [sliceCount]:
+  /// every `step`th one, plus the top slice if the stride does not land on it.
+  static int _drawnSliceCount(int sliceCount, int step) {
+    if (step <= 1) return sliceCount;
+    if (sliceCount <= 0) return 0;
+    final multiples = (sliceCount - 1) ~/ step + 1;
+    return (sliceCount - 1) % step == 0 ? multiples : multiples + 1;
   }
 
   /// Screen y of the horizon for [size]: the vanishing line of the ground
@@ -915,6 +979,8 @@ class SpriteStackScene {
     var behindCamera = 0;
     var culled = 0;
     var tooSmall = 0;
+    var slicesDrawn = 0;
+    var slicesTotal = 0;
     final minPixels = minimumProjectedPixels;
     for (var index = 0; index < objects.length; index++) {
       final object = objects[index];
@@ -933,13 +999,19 @@ class SpriteStackScene {
         tooSmall++;
         continue;
       }
-      drawables.add(_Drawable(index, object, projection));
+      final step = object.sliceStep ?? _autoSliceStep(object, projection);
+      final count = object.stack.sliceCount;
+      slicesTotal += count;
+      slicesDrawn += _drawnSliceCount(count, step);
+      drawables.add(_Drawable(index, object, projection, step));
     }
     stats = SpriteStackSceneStats(
       drawn: drawables.length,
       culled: culled,
       behindCamera: behindCamera,
       tooSmall: tooSmall,
+      slicesDrawn: slicesDrawn,
+      slicesTotal: slicesTotal,
     );
     drawables.sort((a, b) {
       final byDepth = b.projection.depth.compareTo(a.projection.depth);
@@ -983,6 +1055,7 @@ class SpriteStackScene {
         shadowColor: object.shadowColor,
         roll: object.roll,
         rollPivot: object.rollPivot,
+        sliceStep: item.step,
       );
     }
   }
@@ -1015,6 +1088,8 @@ class SpriteStackScene {
       shadowMinimumPixels,
       drawOutlines,
       drawShadows,
+      sliceLod,
+      sliceLodPixels,
     );
 
     final sky = this.sky;
@@ -1073,6 +1148,7 @@ class SpriteStackScene {
         object.shadowColor,
         object.roll,
         object.rollPivot,
+        object.sliceStep,
       );
       final motion = object.motion;
       if (motion == null) {
@@ -1370,9 +1446,10 @@ class SpriteStackScene {
 }
 
 class _Drawable {
-  const _Drawable(this.index, this.object, this.projection);
+  const _Drawable(this.index, this.object, this.projection, this.step);
 
   final int index;
   final SpriteStackSceneObject object;
   final SpriteStackSceneProjection projection;
+  final int step;
 }

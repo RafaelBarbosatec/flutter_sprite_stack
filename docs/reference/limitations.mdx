@@ -36,6 +36,12 @@ description: What flutter_sprite_stack does not do.
   rectangle and can block empty corners. Add a smaller explicit `size` for a
   better fit. There are no slopes, ramps, step-up onto props or vertical
   movement — `stepHeight` only ignores short bodies entirely.
+- **Slice LOD drops thin features along with the slices.** It only skips
+  cross-sections that land under a device pixel, so a silhouette (the union of
+  overlapping slices) barely moves — but a one-pixel detail that exists on a
+  single skipped slice, like a gap under a railing, can disappear. Raise
+  `sliceLodPixels` only if you can live with that; set `sliceLod = false` or
+  `object.sliceStep = 1` for a hero prop whose tiny details matter.
 - **Only the moved circle collides.** Props never push each other; `scene.move`
   tests one circle against every blocking body. Player-vs-player needs a second
   circle test with `blocks`.

@@ -296,6 +296,37 @@ scene.paint(canvas, size);
 debugPrint('drawn ${scene.stats.drawn} / culled ${scene.stats.culled}');
 ```
 
+## Slice LOD
+
+A stack is a pile of cross-sections `spacing` apart. Once a prop is drawn small
+enough that consecutive slices land under a device pixel, the downscale merges
+them anyway — so `scene.sliceLod` (on by default) draws every `N`th slice for
+those props. Each drawn slice stays at its true height, so the silhouette does
+not move; only sections that could not be told apart stop costing a rasterizer
+pass.
+
+The rule is geometric: drawn slices stay at most `sliceLodPixels` device pixels
+apart (default `1`). At `scale: 0.25` with `spacing: 1` four slices share a
+pixel, so three of every four are skipped.
+
+```dart
+scene.sliceLod = true;        // default
+scene.sliceLodPixels = 1;     // conservative; raise it to decimate harder
+scene.objects[3].sliceStep = 2; // or force a step for one prop
+```
+
+`scene.stats.slicesDrawn` / `slicesTotal` (and `sliceLodSaving`) report what the
+frame selected:
+
+```dart
+scene.paint(canvas, size);
+debugPrint('slices ${scene.stats.slicesDrawn}/${scene.stats.slicesTotal} '
+    '(${(scene.stats.sliceLodSaving * 100).round()}% saved)');
+```
+
+Set `sliceLod = false`, or use `SpriteStackSceneObject.sliceStep = 1`, when you
+want every cross-section regardless of distance.
+
 ## Banking an aircraft
 
 `roll` is a **render** parameter, like `pitch` — it is not part of the scene. It
