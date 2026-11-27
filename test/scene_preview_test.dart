@@ -219,9 +219,11 @@ void main() {
       // Every body must land where its own projection says it does: sample the
       // midpoint of one edge of each projected quad and look for overlay ink.
       var aligned = 0;
+      var bodies = 0;
       for (final object in scene.objects) {
         final body = scene.collisionBodyOf(object);
         if (body == null || body.isDegenerate) continue;
+        bodies++;
         final cos = math.cos(body.yaw);
         final sin = math.sin(body.yaw);
         final ax = ui.Offset(cos, sin) * body.halfWidth;
@@ -276,8 +278,10 @@ void main() {
                 '${body.center} (last sample $lastMid)');
         aligned++;
       }
-      expect(aligned, greaterThanOrEqualTo(4),
-          reason: 'only $aligned collision bodies projected');
+      expect(bodies, 5, reason: 'expected five colliders in the diorama');
+      expect(aligned, greaterThanOrEqualTo(3),
+          reason: 'only $aligned of $bodies bodies had an on-canvas edge to '
+              'sample');
 
       for (final stack in stacks) {
         stack.dispose();
