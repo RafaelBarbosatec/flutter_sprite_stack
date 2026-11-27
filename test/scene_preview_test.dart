@@ -216,6 +216,57 @@ void main() {
         reason: 'the collision overlay drew only $green outline pixels',
       );
 
+      // Every body must land where its own projection says it does: sample the
+      // midpoint of one edge of each projected quad and look for overlay ink.
+      var aligned = 0;
+      for (final object in scene.objects) {
+        final body = scene.collisionBodyOf(object);
+        if (body == null || body.isDegenerate) continue;
+        final cos = math.cos(body.yaw);
+        final sin = math.sin(body.yaw);
+        final ax = ui.Offset(cos, sin) * body.halfWidth;
+        final ay = ui.Offset(-sin, cos) * body.halfDepth;
+        final corners = [
+          body.center - ax - ay,
+          body.center + ax - ay,
+          body.center + ax + ay,
+          body.center - ax + ay,
+        ];
+        final projected = <ui.Offset>[];
+        for (final corner in corners) {
+          final point = scene.projectPoint(
+            SpriteStackPoint(corner.dx, corner.dy, 0),
+            size,
+          );
+          if (point == null) break;
+          projected.add(point);
+        }
+        if (projected.length != 4) continue;
+        final mid = (projected[0] + projected[1]) / 2;
+        var found = false;
+        for (var dy = -2; dy <= 2 && !found; dy++) {
+          for (var dx = -2; dx <= 2 && !found; dx++) {
+            final x = mid.dx.round() + dx;
+            final y = mid.dy.round() + dy;
+            if (x < 0 || y < 0 || x >= size.width || y >= size.height) {
+              continue;
+            }
+            final i = (y * size.width.toInt() + x) * 4;
+            if (overlay[i + 1] > 150 &&
+                overlay[i] < 100 &&
+                overlay[i + 2] < 100) {
+              found = true;
+            }
+          }
+        }
+        expect(found, isTrue,
+            reason: 'no overlay ink near the edge of the body at '
+                '${body.center}');
+        aligned++;
+      }
+      expect(aligned, greaterThanOrEqualTo(4),
+          reason: 'only $aligned collision bodies projected');
+
       for (final stack in stacks) {
         stack.dispose();
       }
