@@ -205,6 +205,32 @@ point, matching the asset convention where the front of a prop is `+Y`.
 
 The box rotates with `object.yaw`, so turning a prop turns its footprint.
 
+### Seeing the proxy
+
+`paintCollisionDebug` draws the resolved boxes over the scene: the same oriented
+box `move` uses, projected back to the screen, with a post at each corner for
+the height. Call it right after `paint`, with the same canvas and size.
+
+```dart
+@override
+void paint(Canvas canvas, Size size) {
+  scene.paint(canvas, size);
+  if (!debug) return;
+  scene.paintCollisionDebug(
+    canvas,
+    size,
+    ignore: player,          // do not outline the character as a blocker
+    circle: player.position, // the sweep circle, as 24 projected segments
+    circleRadius: 12,
+    stepHeight: 6,           // bodies below this show in orange
+  );
+}
+```
+
+Colours, stroke width and the posts are parameters, so the overlay can match
+your palette. Objects without a collider draw nothing. It rebuilds the bodies
+on every call — leave it behind a debug flag.
+
 ### What it does not do
 
 Collision is confined to the ground plane: there are no slopes, ramps or

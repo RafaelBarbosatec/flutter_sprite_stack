@@ -662,6 +662,8 @@ produces.
 | `scene.collisionBodyOf(object)` / `collisionBodies(ignore:, stepHeight:)` | Resolve one or every blocking prop to a world-space box |
 | `scene.blocks(position, radius:, ignore:, stepHeight:)` | Circle overlap test against the blocking props |
 | `scene.move(position, delta:, radius:, ignore:, stepHeight:, maxSubsteps:)` | Swept, sliding movement; returns `SpriteStackMoveResult` |
+| `scene.paintCollisionDebug(canvas, size, ...)` | Outlines every resolved collision box (and a character circle) over the frame |
+| `scene.projectPoint(point, size)` | Projects any world point to screen; `null` behind the camera |
 | `SpriteStackCollisionBody` / `SpriteStackMoveResult` | Resolved box (`overlaps`, `resolve`, `bounds`) and move outcome (`position`, `applied`, `hits`) |
 | `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, and the two passes on or off |
 | `scene.applyDetail(detail)` | Applies a preset to the scene |

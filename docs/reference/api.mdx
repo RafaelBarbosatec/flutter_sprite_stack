@@ -69,6 +69,8 @@ collapses to nothing.
 | `scene.collisionBodies(ignore:, stepHeight:)` | Every blocking body, skipping `ignore` and bodies no taller than `stepHeight` |
 | `scene.blocks(position, radius:, ignore:, stepHeight:)` | Whether a ground circle overlaps a blocking body |
 | `scene.move(position, delta:, radius:, ignore:, stepHeight:, maxSubsteps:)` | Sweeps a ground circle, sliding along bodies; returns a `SpriteStackMoveResult` |
+| `scene.paintCollisionDebug(canvas, size, ...)` | Draws every resolved collision box (and optionally a character circle) over a painted frame |
+| `scene.projectPoint(point, size)` | Projects any world point to screen, or `null` behind the camera; useful for overlays and hit testing |
 | `SpriteStackFollowCamera.update(camera, subject:, yaw:, velocity:, dt:)` | Moves the camera target and yaw towards a subject |
 | `SpriteStackFollowCamera.forwardOf(yaw)` | World direction a prop faces (front is `+Y`) |
 | `SpriteStackFollowCamera.smoothing(rate, dt)` | `1 - exp(-rate * dt)`, the frame-rate independent factor |

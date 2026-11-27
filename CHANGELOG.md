@@ -19,8 +19,13 @@
   test for spawn checks and debug drawing; `SpriteStackCollisionBody` has
   `overlaps`, `resolve` and a world `bounds` AABB.
 - `stepHeight` ignores bodies no taller than it, so a curb can be walked over.
-- New `CollisionScreen` example: drag a robot between the props, with a switch
-  to turn collision off and walk through them.
+- `scene.paintCollisionDebug(canvas, size, ...)` draws the resolved collision
+  boxes over a painted frame — the same oriented box `move` uses, with a post at
+  each corner for the height — plus an optional character circle. Bodies below
+  `stepHeight` are drawn in a second colour. `scene.projectPoint(point, size)`
+  is the underlying world-to-screen projection, useful for any overlay.
+- New `CollisionScreen` example: drag a robot between the props, with switches
+  to turn collision off and to show the collision boxes.
 
 ### Performance
 
