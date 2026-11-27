@@ -30,13 +30,20 @@ projected bounds and the control sheet is compact and scrollable.
 
 ## 3D scene demos
 
-Three buttons in the app bar show the scene layer:
+Four buttons in the app bar show the scene layer:
 
 | Button | Screen | Shows |
 | --- | --- | --- |
-| Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient |
+| Orbit scene (3D camera) | `OrbitSceneScreen` | Drag-to-orbit diorama: house, car, tree and palm over the painted ground, with the sky gradient. Paused, it replays a cached still frame; a quality governor picks the detail level from frame times, both shown in the readout |
+| Walk with collision | `CollisionScreen` | A robot you drag between the props. Every prop carries a volume-derived `SpriteStackCollider`; the robot slides along faces and a switch turns collision off so you can walk through them |
 | Chase camera (follow with lag) | `ChaseCameraScreen` | A car lapping a stadium-shaped track (two straights, two turns) with a live culling readout and a slider for the follow lag |
 | Banked flight (roll) | `FlightScreen` | A spaceship banking into its turns: `roll` is derived from the yaw rate and smoothed, with the ground and sky behind it. The **roll** slider scales that bank (0 = level flight, 2.5 = banks hard into every turn) and the lag slider tunes the chase |
+
+The walk demo maps the drag to the camera's ground axes (up is always away from
+the camera) and feeds `scene.move(...)` every tick with `radius: 14`,
+`ignore: player`. It uses the zero-configuration collider — no hand-authored
+boxes — which is the quickest way to see what the volume-derived footprint
+looks like in motion.
 
 The chase demo prints `scene.stats` (`drawn` / `culled` / `behindCamera` /
 `tooSmall`) so you can see culling react as the car drives away from the camera.

@@ -192,7 +192,7 @@ the scale at the camera's target plane; objects closer to the camera grow.
 | --- | --- |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
-| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:)` | A prop; `position` is its ground point. `yaw` is its world facing by default (`billboard: false`); set `billboard: true` for a fixed screen facing |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, scale:, frame:, cut:, motion:, collider:)` | A prop; `position` is its ground point. `yaw` is its world facing by default (`billboard: false`); set `billboard: true` for a fixed screen facing. `collider` makes it block movement |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
@@ -222,8 +222,9 @@ colors, not textures — a texture would need subdivision or a textured
 rasterizer to be perspective-correct.
 
 Sorting is per object (painter's algorithm), so two intersecting props cannot
-resolve per pixel. The volume/mesh is not drawn; pair the scene with
-`toVolume()` / `SpriteStackMesher` when you need collision or exact bounds.
+resolve per pixel. The volume/mesh is not drawn; `SpriteStackCollider` uses the
+volume for collision (below), and `SpriteStackMesher` is there when you need the
+exact geometry.
 
 **Following a moving prop.** `SpriteStackFollowCamera` aims at a point
 `lookAhead` units in front of a subject and swings the camera yaw towards the
@@ -251,6 +252,37 @@ reach `SpriteStack.render`. `scene.stats` reports what happened —
 `drawn`, `culled`, `behindCamera`, `tooSmall` — which is the number to watch
 when a scene gets heavy. There is no occlusion culling: a prop hidden behind
 another is still drawn.
+
+**Collision.** Give a prop a `collider` and it blocks movement; leave it `null`
+and it stays walk-through scenery. The proxy is a box on the ground plane sized
+from the stack volume — never from the sprite pixels — so a transparent margin
+in the art does not make a prop passable, and the box turns with `object.yaw`.
+`scene.move` sweeps a ground circle, pushes it out along the contact normal
+(which is what makes it slide along a wall instead of stopping dead) and
+returns where it ended up.
+
+```dart
+final house = SpriteStackSceneObject(
+  stack: houseStack,
+  position: const SpriteStackPoint(120, 40, 0),
+  collider: const SpriteStackCollider(), // footprint from the volume
+);
+
+// per frame
+final result = scene.move(
+  player.position,
+  delta: Offset(vx * dt, vy * dt),
+  radius: 12,
+  ignore: player,
+  stepHeight: 6, // walk over anything shorter than this
+);
+player.position = result.position;
+```
+
+`collisionBodies()` and `blocks(position, radius: 12)` expose the same test for
+spawn checks. Stacks built with `SpriteStack.fromImage` have no pixels to read,
+so give them an explicit `SpriteStackCollider(size: Size(w, d), height: h)`. No
+slopes, ramps or vertical movement: collision is the ground plane only.
 
 ## Animation
 
@@ -422,8 +454,10 @@ slices do not grow a skin of semi-transparent voxels. Volumes are built per
 frame, and only stacks loaded with `load`/`decode` keep the raw pixels —
 `fromImage` throws a `StateError`.
 
-The scene renderer that consumes this geometry is the next milestone; today the
-API ships the volume and the mesher.
+The scene consumes this geometry through `SpriteStackCollider`, which projects
+the volume's tight bounds onto the ground plane for movement (see
+[Orbit scene](#orbit-scene-3d-camera)); the mesh is available for anything that
+needs the surface itself.
 
 ## Asset format
 
@@ -624,6 +658,15 @@ produces.
 | `horizonY(size)` | Screen y of the ground plane's vanishing line |
 | `SpriteStackFollowCamera(...)` / `update(camera, subject:, yaw:, velocity:, dt:)` | Third-person follow with exponential lag |
 | `SpriteStackSceneStats` / `scene.stats` | `drawn`, `culled`, `behindCamera`, `tooSmall` |
+| `SpriteStackCollider(padding:, size:, offset:, height:, alphaThreshold:)` | Collision proxy on `object.collider`; grows from the volume or an explicit size |
+| `scene.collisionBodyOf(object)` / `collisionBodies(ignore:, stepHeight:)` | Resolve one or every blocking prop to a world-space box |
+| `scene.blocks(position, radius:, ignore:, stepHeight:)` | Circle overlap test against the blocking props |
+| `scene.move(position, delta:, radius:, ignore:, stepHeight:, maxSubsteps:)` | Swept, sliding movement; returns `SpriteStackMoveResult` |
+| `SpriteStackCollisionBody` / `SpriteStackMoveResult` | Resolved box (`overlaps`, `resolve`, `bounds`) and move outcome (`position`, `applied`, `hits`) |
+| `SpriteStackSceneDetail` | Detail preset: cull size, ink/shadow size floors, and the two passes on or off |
+| `scene.applyDetail(detail)` | Applies a preset to the scene |
+| `scene.cacheStillFrames` / `scene.stillFrameHits` | Replays the last frame while nothing changes; `clearStillCache()` drops it |
+| `SpriteStackQualityGovernor` | Picks a detail level from frame gaps, with motion-wait and backoff |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the horizon |
 | `SpriteStackGround(...)` | Optional ground plane and grid on `z = 0` |
 | `SpriteStackPoint` | World point/vector; one unit per art pixel and per slice |
@@ -668,6 +711,27 @@ collapses to nothing.
   with the same per-slice cost as a standalone stack. Share decoded stacks via
   `SpriteStackCache`, and `projectObject(...)` already gives you the projected
   bounds for culling.
+- Collision is lazy: the volume behind a `SpriteStackCollider` is built once
+  per object and cached, and `scene.move` rejects the whole sweep against the
+  bodies' world AABBs before running any substep. Walking in open space costs
+  one pass over the blocking props.
+- **Detail LOD by size.** Ink and the ground shadow are each a full sweep of
+  the rasterizer's buffer. `outlineMinimumPixels` and `shadowMinimumPixels`
+  drop them for props only a few pixels across, where the 1 px ring is most of
+  the prop and reads as a blot; `drawOutlines` / `drawShadows` turn a pass off
+  for the whole scene. `SpriteStackSceneDetail` has ready presets.
+- **A still frame is one draw call.** With `cacheStillFrames = true` the scene
+  records its frame and replays a `Picture` while nothing that affects the
+  picture changes. A moving camera pays only a hash per frame; a still diorama
+  stops re-rasterising every prop, which is the biggest saving this renderer
+  has. Off by default: the cache cannot see a `colorAt` that reads captured
+  state (call `clearStillCache` if you swap a stack image).
+- **Let the frames pick the detail.** `SpriteStackQualityGovernor` takes the
+  gap between frames and returns a `SpriteStackSceneDetail` when the level
+  should change. It judges windows (median plus share of long frames), waits
+  for the camera to move so the change does not pop, and backs off
+  exponentially so it cannot flicker between two levels. Apply it with
+  `scene.applyDetail`.
 
 ## Limitations
 
@@ -679,8 +743,12 @@ collapses to nothing.
   projected ground shadow; shading has to be baked into the slices — the
   carving script does that with `--shade`.
 - **The volume/mesh does not render.** It is geometry for sizing, culling,
-  collision and depth sorting; `SpriteStack` still draws every pixel. The scene
-  renderer that consumes it is a separate milestone.
+  collision and depth sorting; `SpriteStack` still draws every pixel.
+- **Collision is a box on the ground plane.** The proxy is the volume's tight
+  bounds projected down, so an L-shaped or diagonal prop collides as one
+  rectangle and can block empty corners. There are no slopes, ramps, step-up
+  onto props or vertical movement; `stepHeight` only ignores short bodies
+  entirely. Props never push each other.
 - **Uniform slices only**: `sliceCount` must match the asset and divide its
   width exactly.
 - A very large `scale` plus many slices costs fill rate; cache or pre-bake if
@@ -699,11 +767,16 @@ with the sprite-stacking skill (`example/sprites/car/slices.png`,
 the generated `robot_stack.png`, with sliders for yaw, pitch, scale and spacing
 plus toggles for auto-spin, the 1 px outline and the ground shadow.
 
+The scene demos are in the app bar: **orbit**, **walk with collision**, chase
+camera, banked flight, helicopter and the F1 game. The walk demo drags a robot
+between props with a collider on every one, and has a switch to turn collision
+off and walk through them for comparison.
+
 ## Roadmap
 
-The 3D scene work is ordered in [ROADMAP.md](ROADMAP.md): a convincing
-environment first, walking around it (without collision) next, and collision
-later.
+The 3D scene work is ordered in [ROADMAP.md](ROADMAP.md): the environment, then
+walking around it, then collision. The first three are shipped; camera helpers,
+world bounds and grouping are next.
 
 ## Contributing
 

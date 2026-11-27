@@ -1,7 +1,49 @@
 ## Unreleased
 
+### Collision
+
+- `SpriteStackCollider` on `SpriteStackSceneObject`: a prop with a collider
+  blocks movement, a prop without one is walk-through. The proxy is a box on
+  the ground plane sized from `SpriteStackVolume.bounds` by default, so
+  collision follows the geometry and not the sprite pixels, stays independent
+  of the camera, and rotates with `object.yaw`. `padding`, `offset` and
+  `height` tune it; `size` replaces the volume for stacks built with
+  `SpriteStack.fromImage`, which have no raw pixels. The volume is built once
+  per object and cached.
+- `SpriteStackScene.move(position, delta:, radius:, ignore:, stepHeight:,
+  maxSubsteps:)`: sweeps a ground circle in substeps no longer than `radius`,
+  pushes it out along the contact normal and returns a `SpriteStackMoveResult`
+  (`position`, `applied`, `hits`, `collided`). Sliding falls out of the normal
+  resolution, and a broad-phase AABB reject skips the substeps in open space.
+- `SpriteStackScene.blocks(...)` and `collisionBodies(...)` expose the same
+  test for spawn checks and debug drawing; `SpriteStackCollisionBody` has
+  `overlaps`, `resolve` and a world `bounds` AABB.
+- `stepHeight` ignores bodies no taller than it, so a curb can be walked over.
+- New `CollisionScreen` example: drag a robot between the props, with a switch
+  to turn collision off and walk through them.
+
 ### Performance
 
+- `SpriteStackScene` detail tiers: `outlineMinimumPixels` and
+  `shadowMinimumPixels` skip the ink and the ground shadow for props that are
+  only a few pixels across (each is a full sweep of the rasterizer's buffer,
+  and at that size reads as a blot). `drawOutlines` / `drawShadows` switch a
+  whole pass off. `SpriteStackSceneDetail` bundles them into `sharp`,
+  `balanced`, `fast` and `minimal` presets, applied with `scene.applyDetail`.
+  Measured on CI: 60 tiny props went from 20.45 ms to 17.90 ms median.
+- `SpriteStackScene.cacheStillFrames`: records the frame once and replays a
+  `Picture` while nothing that affects it changes. Moving scenes pay only a
+  hash per frame; a still diorama skips the software rasterizer entirely.
+  `stillFrameHits` counts the replays and `clearStillCache()` drops the frame.
+  Measured on CI: a 13-prop still frame went from 2.27 ms to 0.06 ms median
+  (about 38x).
+- `SpriteStackQualityGovernor`: a pure Dart governor that picks a
+  `SpriteStackSceneDetail` from frame gaps, judging windows (median plus share
+  of long frames), waiting for the camera to move so a change does not pop,
+  dropping two levels at once when frames crawl, and backing off exponentially
+  after a level-up proves slow.
+- The benchmark now reports still frames with and without the cache, and 60
+  tiny props with and without the detail tiers.
 - `SpriteStackScene` ground painting skips cells that are fully behind the
   near plane or far enough outside the canvas that they cannot contribute a
   pixel, before building and clipping their polygon. `colorAt` is now called

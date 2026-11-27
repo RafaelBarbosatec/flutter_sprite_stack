@@ -4,9 +4,12 @@ import 'dart:ui';
 import 'slice_cut.dart';
 import 'sprite_stack.dart';
 import 'sprite_stack_camera.dart';
+import 'sprite_stack_collision.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_point.dart';
+import 'sprite_stack_quality.dart';
 import 'sprite_stack_sky.dart';
+import 'sprite_stack_volume.dart';
 
 /// Optional ground plane painted under the objects of a `SpriteStackScene`.
 ///
@@ -109,6 +112,7 @@ class SpriteStackSceneObject {
     this.shadowColor = const Color(0xFFBAC6D4),
     this.roll = 0,
     this.rollPivot = 0,
+    this.collider,
   });
 
   final SpriteStack stack;
@@ -145,6 +149,35 @@ class SpriteStackSceneObject {
   /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
   /// `1` the top.
   double rollPivot;
+
+  /// Collision proxy for this prop, or `null` for a walk-through prop.
+  ///
+  /// A plain `const SpriteStackCollider()` derives the footprint from the
+  /// stack volume (see [SpriteStack.toVolume]); give it an explicit `size` for
+  /// stacks built with `SpriteStack.fromImage`, which cannot be read back.
+  ///
+  /// The volume is built once and cached on this object, so a scene can query
+  /// [SpriteStackScene.collisionBodies] every frame without re-scanning the
+  /// atlas.
+  SpriteStackCollider? collider;
+
+  SpriteStackVolume? _collisionVolume;
+  int? _collisionVolumeThreshold;
+
+  /// Volume backing [collider], built on first use and reused afterwards.
+  ///
+  /// Throws [StateError] when the stack has no raw pixels and the collider
+  /// does not provide an explicit [SpriteStackCollider.size].
+  SpriteStackVolume collisionVolume(int alphaThreshold) {
+    final cached = _collisionVolume;
+    if (cached != null && _collisionVolumeThreshold == alphaThreshold) {
+      return cached;
+    }
+    final volume = stack.toVolume(alphaThreshold: alphaThreshold);
+    _collisionVolume = volume;
+    _collisionVolumeThreshold = alphaThreshold;
+    return volume;
+  }
 }
 
 /// Where a [SpriteStackSceneObject] lands on screen.
@@ -280,6 +313,68 @@ class SpriteStackScene {
   /// saves the software rasterizer's full pass.
   double minimumProjectedPixels = 0.5;
 
+  /// Props whose projected bounds are smaller than this many pixels on **both**
+  /// axes skip the 1 px outline pass.
+  ///
+  /// At that size the ink ring is most of the prop, so it reads as a blot and
+  /// costs a full second sweep of the rasterizer's buffer. `0` keeps the
+  /// outline at every size.
+  double outlineMinimumPixels = 0;
+
+  /// Props below this size on both axes skip their ground shadow. `0` keeps
+  /// the shadow at every size.
+  double shadowMinimumPixels = 0;
+
+  /// Whether props draw their outline at all. Turning it off saves one buffer
+  /// sweep per prop; [SpriteStackSceneObject.outline] still applies per object.
+  bool drawOutlines = true;
+
+  /// Whether props draw their ground shadow at all. [SpriteStackSceneObject.shadow]
+  /// still applies per object.
+  bool drawShadows = true;
+
+  /// Replays the last painted frame while nothing that affects it changes.
+  ///
+  /// A still diorama costs one `drawPicture` instead of re-rasterising every
+  /// prop, which is the single biggest saving this renderer has: the software
+  /// rasterizer is CPU-bound per pixel, and a still scene repeats the same
+  /// pixels every frame.
+  ///
+  /// Off by default, because the cache cannot see two things:
+  /// [SpriteStackGround.colorAt] reading state other than its arguments, and a
+  /// stack image changing behind the scene's back. Turn it on when the paint is
+  /// a pure function of the scene's fields, and call [clearStillCache] if you
+  /// dispose a stack that a cached frame still references.
+  bool cacheStillFrames = false;
+
+  /// How many paints replayed a cached still frame. Useful in a demo or a test.
+  int get stillFrameHits => _stillFrameHits;
+  int _stillFrameHits = 0;
+
+  int? _stillKey;
+  Picture? _stillPicture;
+  SpriteStackSceneStats _stillStats = const SpriteStackSceneStats();
+
+  /// Drops the cached still frame and the next paint re-renders everything.
+  void clearStillCache() {
+    _stillPicture?.dispose();
+    _stillPicture = null;
+    _stillKey = null;
+    _stillFrameHits = 0;
+  }
+
+  /// Applies a [SpriteStackSceneDetail]: the culling size, the outline and
+  /// shadow size floors, and the two global passes.
+  ///
+  /// A [SpriteStackQualityGovernor] returns one of these from frame times.
+  void applyDetail(SpriteStackSceneDetail detail) {
+    minimumProjectedPixels = detail.minimumProjectedPixels;
+    outlineMinimumPixels = detail.outlineMinimumPixels;
+    shadowMinimumPixels = detail.shadowMinimumPixels;
+    drawOutlines = detail.outlines;
+    drawShadows = detail.shadows;
+  }
+
   // Cached backdrop paint. The gradient only changes when the sky, the canvas
   // size or the horizon move, so an orbit keeps reusing the same shader.
   Paint? _skyPaint;
@@ -394,8 +489,274 @@ class SpriteStackScene {
     return size.height / 2 - (unit.dot(basis.up) / along) * focal;
   }
 
+  /// Resolves [object]'s [SpriteStackSceneObject.collider] to a world-space
+  /// body, or `null` when the prop is walk-through or has an empty footprint.
+  ///
+  /// The box faces are derived from the volume bounds, which are in source
+  /// pixels, and placed with the same anchor the renderer uses: the source
+  /// row `0` sits at the prop's ground point, and the slice centre sits half a
+  /// slice depth forward of it, rotating in place as the prop turns. Sizes are
+  /// scaled by the object's `scale`; the height also takes `spacing` into
+  /// account.
+  SpriteStackCollisionBody? collisionBodyOf(SpriteStackSceneObject object) {
+    final collider = object.collider;
+    if (collider == null) return null;
+    final scale = object.scale;
+    if (scale <= 0) return null;
+
+    final double halfWidth;
+    final double halfDepth;
+    final double centerSide;
+    final double centerForward;
+    final double sliceDepth;
+    final double height;
+
+    final size = collider.size;
+    if (size != null) {
+      halfWidth = size.width / 2;
+      halfDepth = size.height / 2;
+      centerSide = collider.offset.dx;
+      centerForward = collider.offset.dy;
+      sliceDepth = size.height / 2;
+      height = collider.height ?? double.infinity;
+    } else {
+      final volume = object.collisionVolume(collider.alphaThreshold);
+      final bounds = volume.bounds;
+      if (bounds == null) return null;
+      // Centre of the tight voxel bounds in source pixels, relative to the
+      // slice centre. The renderer anchors a stack at the ground slice's
+      // bottom-centre and keeps that slice centre at `depth / 2` forward of
+      // the anchor; the slice content rotates around it.
+      final centerX = (bounds.minX + bounds.maxX + 1) / 2;
+      final centerY = (bounds.minY + bounds.maxY + 1) / 2;
+      halfWidth = bounds.width / 2;
+      halfDepth = bounds.depth / 2;
+      centerSide = volume.width / 2 - centerX;
+      centerForward = centerY - volume.depth / 2;
+      sliceDepth = volume.depth / 2;
+      height = collider.height ?? (bounds.maxZ + 1) * object.spacing;
+    }
+
+    final padding = collider.padding;
+    final boxHalfWidth = (halfWidth + padding) * scale;
+    final boxHalfDepth = (halfDepth + padding) * scale;
+    if (boxHalfWidth <= 0 || boxHalfDepth <= 0) return null;
+
+    final yaw = object.yaw;
+    final cosYaw = math.cos(yaw);
+    final sinYaw = math.sin(yaw);
+    // Prop-local to world. The slice centre stays `sliceDepth` forward of the
+    // anchor as the prop turns; only the footprint rotates around it.
+    final offsetX = (centerSide * cosYaw - centerForward * sinYaw) * scale;
+    final offsetY =
+        (sliceDepth + centerSide * sinYaw + centerForward * cosYaw) * scale;
+
+    return SpriteStackCollisionBody(
+      center: Offset(
+        object.position.x + offsetX,
+        object.position.y + offsetY,
+      ),
+      halfWidth: boxHalfWidth,
+      halfDepth: boxHalfDepth,
+      // The mirror above is a rotation by `yaw + pi` on the rectangle; a
+      // footprint is centrally symmetric, so the same box comes out.
+      yaw: yaw + math.pi,
+      height: height * scale,
+    );
+  }
+
+  /// Resolves every blocking prop to a world-space body.
+  ///
+  /// [ignore] skips one object, normally the character being moved (pass the
+  /// same object to [move]). Bodies no taller than [stepHeight] are left out,
+  /// so a character can step over curbs and low props.
+  ///
+  /// Objects without a [SpriteStackSceneObject.collider] are walk-through and
+  /// cost nothing. Volume resolution is cached per object, so repeated calls
+  /// only redo the projection maths.
+  List<SpriteStackCollisionBody> collisionBodies({
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+  }) {
+    final bodies = <SpriteStackCollisionBody>[];
+    for (final object in objects) {
+      if (identical(object, ignore)) continue;
+      final body = collisionBodyOf(object);
+      if (body == null) continue;
+      if (body.height <= stepHeight) continue;
+      bodies.add(body);
+    }
+    return bodies;
+  }
+
+  /// Whether a circle at [position] with [radius] overlaps any blocking prop.
+  ///
+  /// A cheap query for "can I stand here?"; [move] uses the same bodies.
+  bool blocks(
+    SpriteStackPoint position, {
+    double radius = 0,
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+  }) {
+    final point = Offset(position.x, position.y);
+    for (final body in collisionBodies(
+      ignore: ignore,
+      stepHeight: stepHeight,
+    )) {
+      if (body.overlaps(point, radius)) return true;
+    }
+    return false;
+  }
+
+  /// Moves a circle from [position] by [delta], sliding along blocking props.
+  ///
+  /// The move is swept in substeps no longer than [radius] (or four world
+  /// units when [radius] is `0`) so a fast character cannot tunnel through a
+  /// prop between frames, and every substep is pushed out of contact along
+  /// the contact normal. Pushing along the normal is what keeps the tangential
+  /// part of the movement: walking diagonally into a wall slides along it
+  /// instead of stopping dead.
+  ///
+  /// * [radius] is the character's ground radius in world units. `0` is a
+  ///   point.
+  /// * [ignore] skips one object, normally the character itself.
+  /// * [stepHeight] ignores bodies no taller than this, so a curb can be
+  ///   walked over.
+  /// * [maxSubsteps] caps the sweep cost. The substep is always at most
+  ///   [radius], so a move longer than `maxSubsteps × radius` is **truncated**
+  ///   instead of taking a long step through a prop. The default covers
+  ///   `32 × radius` world units per frame.
+  ///
+  /// The returned position keeps the requested `z`. Nothing here mutates the
+  /// object: move it yourself with the result.
+  ///
+  /// ```dart
+  /// final result = scene.move(
+  ///   player.position,
+  ///   delta: Offset(vx * dt, vy * dt),
+  ///   radius: 12,
+  ///   ignore: player,
+  /// );
+  /// player.position = result.position;
+  /// ```
+  SpriteStackMoveResult move(
+    SpriteStackPoint position, {
+    required Offset delta,
+    double radius = 0,
+    SpriteStackSceneObject? ignore,
+    double stepHeight = 0,
+    int maxSubsteps = 32,
+  }) {
+    final start = Offset(position.x, position.y);
+    final end = start + delta;
+    final bodies = collisionBodies(ignore: ignore, stepHeight: stepHeight);
+    if (bodies.isEmpty || (delta.dx == 0 && delta.dy == 0)) {
+      return SpriteStackMoveResult(
+        position: SpriteStackPoint(end.dx, end.dy, position.z),
+        applied: delta,
+      );
+    }
+
+    // Broad phase: nothing whose world AABB misses the swept box (inflated by
+    // the character radius) can be touched, so open-space movement skips the
+    // substep loop entirely.
+    final swept = Rect.fromLTRB(
+      math.min(start.dx, end.dx) - radius,
+      math.min(start.dy, end.dy) - radius,
+      math.max(start.dx, end.dx) + radius,
+      math.max(start.dy, end.dy) + radius,
+    );
+    var blockedCandidate = false;
+    for (final body in bodies) {
+      if (body.bounds.overlaps(swept)) {
+        blockedCandidate = true;
+        break;
+      }
+    }
+    if (!blockedCandidate) {
+      return SpriteStackMoveResult(
+        position: SpriteStackPoint(end.dx, end.dy, position.z),
+        applied: delta,
+      );
+    }
+
+    final stride = radius > 1e-6 ? radius : 4.0;
+    var steps = (delta.distance / stride).ceil();
+    if (steps < 1) steps = 1;
+    // Never lengthen a substep to fit the budget: truncate the sweep instead.
+    // A substep longer than the radius could land the circle deep inside a
+    // prop and resolve out through its far face, which is tunnelling.
+    var sweep = delta;
+    if (steps > maxSubsteps) {
+      steps = maxSubsteps;
+      sweep = delta / delta.distance * (maxSubsteps * stride);
+    }
+    final step = sweep / steps.toDouble();
+
+    var current = start;
+    final hits = <SpriteStackCollisionBody>[];
+    for (var i = 0; i < steps; i++) {
+      var next = current + step;
+      // Settle corners where one body pushes the circle into another; more
+      // passes than this tend to fight between two overlapping props.
+      for (var pass = 0; pass < 4; pass++) {
+        var pushed = false;
+        for (final body in bodies) {
+          final resolved = body.resolve(next, radius);
+          if (resolved == null) continue;
+          next = resolved;
+          if (!hits.contains(body)) hits.add(body);
+          pushed = true;
+        }
+        if (!pushed) break;
+      }
+      current = next;
+    }
+
+    return SpriteStackMoveResult(
+      position: SpriteStackPoint(current.dx, current.dy, position.z),
+      applied: current - start,
+      hits: hits,
+    );
+  }
+
   /// Draws the backdrop, the ground grid and every visible prop, far to near.
+  ///
+  /// With [cacheStillFrames] on, the frame is recorded once and replayed while
+  /// the scene's fields stay the same; see [stillFrameHits].
   void paint(Canvas canvas, Size size) {
+    if (!cacheStillFrames) {
+      _paint(canvas, size);
+      return;
+    }
+
+    final key = _stillKeyFor(size);
+    if (key == _stillKey) {
+      var picture = _stillPicture;
+      if (picture == null) {
+        // The second identical frame: record it once, then replay. Recording
+        // runs the rasterizer exactly like a normal paint; every frame after
+        // this one is a display-list replay.
+        final recorder = PictureRecorder();
+        _paint(Canvas(recorder), size);
+        picture = recorder.endRecording();
+        _stillPicture = picture;
+        _stillStats = stats;
+      } else {
+        stats = _stillStats;
+      }
+      _stillFrameHits++;
+      canvas.drawPicture(picture);
+      return;
+    }
+
+    _stillKey = key;
+    _stillPicture?.dispose();
+    _stillPicture = null;
+    _paint(canvas, size);
+  }
+
+  void _paint(Canvas canvas, Size size) {
     final basis = camera.basis;
     _paintBackdrop(canvas, size);
 
@@ -436,9 +797,25 @@ class SpriteStackScene {
       return byDepth != 0 ? byDepth : a.index.compareTo(b.index);
     });
 
+    final outlineFloor = outlineMinimumPixels;
+    final shadowFloor = shadowMinimumPixels;
     for (final item in drawables) {
       final object = item.object;
       final projection = item.projection;
+      final projectedWidth = projection.bounds.width;
+      final projectedHeight = projection.bounds.height;
+      // Detail tiers: ink and shadow are each a full sweep of the rasterizer's
+      // buffer, and below a few pixels they read as a blot rather than detail.
+      final outline = drawOutlines &&
+          object.outline &&
+          !(outlineFloor > 0 &&
+              projectedWidth < outlineFloor &&
+              projectedHeight < outlineFloor);
+      final shadow = drawShadows &&
+          object.shadow &&
+          !(shadowFloor > 0 &&
+              projectedWidth < shadowFloor &&
+              projectedHeight < shadowFloor);
       object.stack.render(
         canvas,
         position: projection.position,
@@ -450,8 +827,8 @@ class SpriteStackScene {
         motion: object.motion,
         time: object.time,
         cut: object.cut,
-        outline: object.outline,
-        shadow: object.shadow,
+        outline: outline,
+        shadow: shadow,
         pixelSnap: object.pixelSnap,
         outlineColor: object.outlineColor,
         shadowColor: object.shadowColor,
@@ -459,6 +836,119 @@ class SpriteStackScene {
         rollPivot: object.rollPivot,
       );
     }
+  }
+
+  /// A hash of everything [paint] reads. Equal hash means an equal frame.
+  ///
+  /// Written next to the paint code on purpose: a new field that affects the
+  /// picture has to be added here too, or the still-frame cache would replay a
+  /// stale one. The cache tests change each field in turn.
+  int _stillKeyFor(Size size) {
+    var hash = size.width.hashCode;
+    hash = Object.hash(hash, size.height);
+
+    final camera = this.camera;
+    hash = Object.hash(
+      hash,
+      camera.yaw,
+      camera.pitch,
+      camera.distance,
+      camera.near,
+      camera.target.x,
+      camera.target.y,
+      camera.target.z,
+    );
+    hash = Object.hash(hash, zoom, background);
+    hash = Object.hash(
+      hash,
+      minimumProjectedPixels,
+      outlineMinimumPixels,
+      shadowMinimumPixels,
+      drawOutlines,
+      drawShadows,
+    );
+
+    final sky = this.sky;
+    if (sky == null) {
+      hash = Object.hash(hash, 0);
+    } else {
+      hash = Object.hash(
+        hash,
+        1,
+        sky.top,
+        sky.horizon,
+        sky.bottom,
+        sky.horizonFraction,
+      );
+    }
+
+    final ground = this.ground;
+    if (ground == null) {
+      hash = Object.hash(hash, 0);
+    } else {
+      hash = Object.hash(
+        hash,
+        1,
+        ground.extent,
+        ground.step,
+        ground.color,
+        ground.axisColor,
+        ground.strokeWidth,
+        ground.cellSize,
+        ground.fill,
+        ground.colorAt,
+        ground.fadeColor,
+        ground.fadeDistance,
+        Object.hashAll(ground.checker),
+      );
+    }
+
+    final objects = this.objects;
+    hash = Object.hash(hash, objects.length);
+    for (final object in objects) {
+      hash = Object.hash(
+        hash,
+        identityHashCode(object.stack),
+        object.position.x,
+        object.position.y,
+        object.position.z,
+        object.yaw,
+        object.billboard,
+        object.scale,
+        object.spacing,
+        object.frame,
+        object.outline,
+        object.shadow,
+        object.pixelSnap,
+        object.outlineColor,
+        object.shadowColor,
+        object.roll,
+        object.rollPivot,
+      );
+      final motion = object.motion;
+      if (motion == null) {
+        hash = Object.hash(hash, 0);
+      } else {
+        // `time` only affects the picture when a motion reads it.
+        hash = Object.hash(
+          hash,
+          1,
+          object.time,
+          motion.sway,
+          motion.speed,
+          motion.wave,
+          motion.phase,
+          motion.lean,
+        );
+      }
+      final cut = object.cut;
+      if (cut == null) {
+        hash = Object.hash(hash, 0);
+      } else {
+        hash = Object.hash(hash, cut.top, cut.bottom);
+      }
+    }
+    return hash;
   }
 
   void _paintBackdrop(Canvas canvas, Size size) {

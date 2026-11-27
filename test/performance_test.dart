@@ -77,24 +77,88 @@ void main() {
       final scene = buildScene();
       final groundOnly = buildScene()..objects.clear();
 
+      // A still frame: the same pixels every time. The cache should turn the
+      // whole scene into one display-list replay.
+      final still = buildScene()..cacheStillFrames = false;
+      final stillCached = buildScene()..cacheStillFrames = true;
+
+      // Many tiny props: ink and shadow are what the detail tiers drop.
+      SpriteStackScene tinyPropsScene({required bool tiers}) {
+        final tiny = SpriteStackScene(
+          camera: SpriteStackCamera.orbit(
+            yaw: 0.85,
+            pitch: 0.6,
+            distance: 900,
+          ),
+          zoom: 1,
+          ground: const SpriteStackGround(
+            extent: 700,
+            step: 70,
+            cellSize: 70,
+            checker: [fade, ui.Color(0xFF1D303D)],
+          ),
+        );
+        final props = <SpriteStack>[house, tree, palm, car];
+        for (var i = 0; i < 60; i++) {
+          final angle = i * 2 * math.pi / 60;
+          tiny.objects.add(
+            SpriteStackSceneObject(
+              stack: props[i % props.length],
+              position: SpriteStackPoint(
+                math.cos(angle) * 320,
+                math.sin(angle) * 320,
+                0,
+              ),
+              yaw: angle,
+              scale: 0.22,
+            ),
+          );
+        }
+        if (tiers) {
+          tiny
+            ..outlineMinimumPixels = 30
+            ..shadowMinimumPixels = 30;
+        }
+        return tiny;
+      }
+
+      final inkOn = tinyPropsScene(tiers: false);
+      final inkOff = tinyPropsScene(tiers: true);
+
       // Warm up the JIT and the image cache.
       _measure(scene, size, frames: 12);
       _measure(groundOnly, size, frames: 12);
+      _measureStill(still, size, frames: 12);
+      _measureStill(stillCached, size, frames: 12);
+      _measure(inkOn, size, frames: 12);
+      _measure(inkOff, size, frames: 12);
 
       // Three rounds in the same process: shared CI runners vary a lot between
       // jobs, so the spread matters as much as the median.
       final full = <_Stats>[];
       final ground = <_Stats>[];
       final single = <_Stats>[];
+      final stillOff = <_Stats>[];
+      final stillOn = <_Stats>[];
+      final tiersOff = <_Stats>[];
+      final tiersOn = <_Stats>[];
       for (var round = 0; round < 3; round++) {
         full.add(_measure(scene, size, frames: 40));
         ground.add(_measure(groundOnly, size, frames: 40));
         single.add(_measureProp(car, size, frames: 80));
+        stillOff.add(_measureStill(still, size, frames: 40));
+        stillOn.add(_measureStill(stillCached, size, frames: 40));
+        tiersOff.add(_measure(inkOn, size, frames: 40));
+        tiersOn.add(_measure(inkOff, size, frames: 40));
       }
 
       _report('scene_paint_13_props_400_cells', full);
       _report('ground_400_cells', ground);
       _report('single_prop_render', single);
+      _report('still_frame_13_props_no_cache', stillOff);
+      _report('still_frame_13_props_cached', stillOn);
+      _report('tiny_props_60_ink_and_shadow', tiersOff);
+      _report('tiny_props_60_detail_tiers', tiersOn);
 
       // Loose sanity checks so a catastrophic regression fails the build
       // instead of only printing a slow number.
@@ -102,6 +166,8 @@ void main() {
           reason: 'scene paint is 10x slower');
       expect(ground.first.medianMs, lessThan(40),
           reason: 'ground paint regressed');
+      expect(stillCached.stillFrameHits, greaterThan(0),
+          reason: 'the still frame never came from the cache');
     },
     skip: !enabled,
   );
@@ -122,6 +188,27 @@ _Stats _measure(SpriteStackScene scene, ui.Size size, {required int frames}) {
   final samples = <double>[];
   for (var i = 0; i < frames; i++) {
     scene.camera.yaw += 0.01;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final watch = Stopwatch()..start();
+    scene.paint(canvas, size);
+    watch.stop();
+    recorder.endRecording().dispose();
+    samples.add(watch.elapsedMicroseconds / 1000);
+  }
+  return _stats(samples);
+}
+
+/// Paints the same frame every time: no camera or scene change. With
+/// `cacheStillFrames` on, every frame after the first replay is a display-list
+/// draw.
+_Stats _measureStill(
+  SpriteStackScene scene,
+  ui.Size size, {
+  required int frames,
+}) {
+  final samples = <double>[];
+  for (var i = 0; i < frames; i++) {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
     final watch = Stopwatch()..start();

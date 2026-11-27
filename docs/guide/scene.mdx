@@ -135,8 +135,83 @@ textured rasterizer to be perspective-correct.
 
 Sorting is per object (painter's algorithm) by the depth of the ground point, so
 two intersecting props cannot resolve per pixel. The volume/mesh is not drawn;
-pair the scene with `toVolume()` / `SpriteStackMesher` when you need collision or
-exact bounds.
+`SpriteStackCollider` uses the volume for collision (see below), and
+`SpriteStackMesher` is available when you need the exact geometry.
+
+## Collision
+
+Give a prop a `collider` and it blocks movement; leave it `null` and it stays
+walk-through scenery. The proxy is a **box on the ground plane**, sized from the
+stack volume by default — collision never reads sprite pixels, so a transparent
+margin in the art does not make a prop passable, and the result does not change
+with the yaw the camera happens to pick.
+
+```dart
+final house = SpriteStackSceneObject(
+  stack: houseStack,
+  position: const SpriteStackPoint(120, 40, 0),
+  collider: const SpriteStackCollider(),
+);
+
+final result = scene.move(
+  player.position,
+  delta: Offset(vx * dt, vy * dt),
+  radius: 12,          // the character's ground radius, world units
+  ignore: player,      // do not collide with yourself
+);
+player.position = result.position;
+
+if (result.collided) {
+  // result.hits holds the bodies that pushed the character out.
+}
+```
+
+`move` sweeps the movement in substeps no longer than `radius`, and each substep
+is pushed out along the contact normal. That is what makes a diagonal move into
+a wall **slide**: the normal component is removed and the tangent survives.
+`stepHeight` ignores bodies no taller than it, so a low curb can be walked over.
+`maxSubsteps` (default `32`) caps the cost; a single frame can cover
+`32 × radius` world units without tunnelling.
+
+`blocks(position, radius: 12)` is the same test without moving, useful for
+spawn checks and "can I interact from here?".
+
+### Where the footprint comes from
+
+`SpriteStackCollider()` derives the footprint from `stack.toVolume()`: the tight
+bounds of the solid voxels in the ground plane, plus `padding`. The volume also
+gives the proxy height, used only by `stepHeight`. It is built once per object
+and cached, so querying every frame does not re-scan the atlas.
+
+Stacks built with `SpriteStack.fromImage` have no raw pixels to read. Give them
+an explicit box instead:
+
+```dart
+SpriteStackSceneObject(
+  stack: house,
+  position: const SpriteStackPoint(120, 40, 0),
+  collider: const SpriteStackCollider(
+    size: Size(40, 30),   // art px: width x slice depth
+    height: 29,           // art px above the ground
+    padding: 2,
+  ),
+)
+```
+
+Lengths are in art pixels and scale with `object.scale`, so the same collider
+works at any prop size. `offset` shifts the box in the prop's local frame:
+`+y` is forward — the direction the footprint extends from the prop's ground
+point, matching the asset convention where the front of a prop is `+Y`.
+
+The box rotates with `object.yaw`, so turning a prop turns its footprint.
+
+### What it does not do
+
+Collision is confined to the ground plane: there are no slopes, ramps or
+vertical movement, and a body is either blocking or not. Props do not collide
+with each other — only the circle you pass to `move` is tested. Two props with
+overlapping footprints simply overlap; `maxSubsteps` and the resolution passes
+settle a character between them without pushing the props apart.
 
 ## Following a moving prop
 

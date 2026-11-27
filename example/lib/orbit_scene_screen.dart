@@ -19,6 +19,7 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
   final ValueNotifier<int> _frame = ValueNotifier<int>(0);
   late final SpriteStackScene _scene;
   late final Ticker _ticker;
+  late final SpriteStackQualityGovernor _governor;
 
   double _yaw = 0.85;
   double _pitch = 0.6;
@@ -57,6 +58,10 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
       ),
     );
     _ticker = createTicker(_tick)..start();
+    _governor = SpriteStackQualityGovernor();
+    // A paused orbit paints the same frame over and over: replay it instead of
+    // re-rasterising every prop.
+    _scene.cacheStillFrames = true;
     _load();
   }
 
@@ -116,6 +121,16 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
     _lastElapsed = elapsed;
     _time += dt;
     if (_autoRotate && !_dragging) _yaw += dt * 0.18;
+
+    // The picture only changes while the camera does. A change of detail waits
+    // for exactly that: it is invisible while the view moves.
+    if (dt > 0) {
+      final detail = _governor.frame(
+        dt * 1000,
+        moving: _dragging || _autoRotate,
+      );
+      if (detail != null) _scene.applyDetail(detail);
+    }
 
     _scene.camera
       ..yaw = _yaw
@@ -178,16 +193,27 @@ class _OrbitSceneScreenState extends State<OrbitSceneScreen>
                   color: Colors.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.view_in_ar, size: 13, color: Colors.white70),
-                    SizedBox(width: 6),
-                    Text(
-                      'Drag to orbit · tilt down for the sky',
-                      style: TextStyle(fontSize: 10, color: Colors.white70),
-                    ),
-                  ],
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _frame,
+                  builder: (context, _, __) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.view_in_ar,
+                        size: 13,
+                        color: Colors.white70,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'q${_governor.level} · '
+                        '${_scene.stillFrameHits} cached · drag to orbit',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

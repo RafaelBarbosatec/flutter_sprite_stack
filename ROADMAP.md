@@ -49,11 +49,11 @@ Polish that makes the environment read as a place (still no gameplay):
 - [ ] a scene-level clock (`update(dt)`) so `StackMotion` and animated frames
       advance without every caller wiring its own ticker.
 
-## Next (tentative) — walk around the environment, no collision
+## Next (tentative) — walk around the environment
 
 Goal: a controllable character moving on the ground plane with a camera that
-follows it. Props are pass-through **on purpose**; this phase is about movement
-feel and framing, not blockers.
+follows it. Collision landed ahead of schedule (see below), so the walk demo
+ships with it and a switch to turn it off.
 
 - [x] a controller that moves a `SpriteStackSceneObject` on `z = 0` and derives
       `object.yaw` from velocity (`atan2(vy, vx) - pi / 2`, the convention from
@@ -63,28 +63,38 @@ feel and framing, not blockers.
       distance/pitch remain user-controlled.
 - [ ] optional first-person toggle and an orbit-while-standing mode.
 - [ ] soft world bounds so the character cannot walk off the ground.
-- [ ] walk demo in `example/`: character stack moving between the props, with
-      touch controls on mobile.
+- [x] walk demo in `example/`: `CollisionScreen` drags a robot between the
+      props, with a collision on/off switch.
 - [ ] frame/animation hooks for a walk cycle (`SpriteStackAnimation` +
       `object.frame`).
 
 Acceptance: you can cross the diorama, walk around the house and between the
 trees, and the camera keeps the character readable from any orbit angle.
 
-## Later — collision and world interaction
+## Shipped — collision and world interaction
 
-Deferred until the environment and (if it happens) walk mode feel right.
-
-- [ ] per-prop collision proxy from `SpriteStackVolume.bounds` or the merged
-      quads (AABB first, capsule if needed). Collision uses the volume, never the
-      sprite pixels.
-- [ ] swept movement with sliding against props and a step height for curbs.
-- [ ] walkable vs blocking authoring metadata, so the ground plane and props are
-      classified once.
+- [x] per-prop collision proxy from `SpriteStackVolume.bounds`: a yaw-rotated
+      box on the ground plane (`SpriteStackCollider`), with an explicit
+      `size`/`offset`/`height` for stacks without raw pixels.
+- [x] swept movement with sliding: `SpriteStackScene.move` substeps the move
+      and pushes the character out along the contact normal, so a diagonal move
+      into a wall slides instead of stopping.
+- [x] `stepHeight` to walk over short props, `blocks()` for overlap queries and
+      `scene.stats`-style coverage through `SpriteStackMoveResult.hits`.
+- [x] blocking vs walk-through authoring: a prop blocks iff it has a
+      `collider`.
+- [ ] true step-up onto props (the character rises to the prop surface) rather
+      than only ignoring short bodies.
 - [ ] camera occlusion: pull the camera in when a prop sits between it and the
       avatar.
 - [ ] picking/placement: ray vs volume bounds.
 - [ ] optional character/ground height sampling if the environment gets ramps.
+
+## Later — beyond the ground plane
+
+- [ ] textured ground and ramps, which need height sampling and a real surface.
+- [ ] camera collision and first-person mode.
+- [ ] scene composition blocks ("room", "island", "street") with baked colliders.
 
 ## Explicit non-goals for now
 
