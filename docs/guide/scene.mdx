@@ -301,6 +301,11 @@ debugPrint('slices ${scene.stats.slicesDrawn}/${scene.stats.slicesTotal} '
 Set `sliceLod = false`, or use `SpriteStackSceneObject.sliceStep = 1`, when you
 want every cross-section regardless of distance.
 
+A `SpriteStackQualityGovernor` also moves `sliceLodPixels` as it steps down:
+`sharp` keeps `1` device pixel between drawn slices, `balanced` `1.5`, `fast`
+`2` and `minimal` `3`. It never flips `sliceLod` itself, so a manual
+`sliceLod = false` survives an `applyDetail`.
+
 ## Banking an aircraft
 
 `roll` is a **render** parameter, like `pitch` — it is not part of the scene. It

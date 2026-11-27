@@ -98,7 +98,7 @@ collapses to nothing.
 
 | Member | Meaning |
 | --- | --- |
-| `SpriteStackSceneDetail(minimumProjectedPixels:, outlineMinimumPixels:, shadowMinimumPixels:, outlines:, shadows:)` | One preset of how much a scene draws |
+| `SpriteStackSceneDetail(minimumProjectedPixels:, outlineMinimumPixels:, shadowMinimumPixels:, outlines:, shadows:, sliceLodPixels:)` | One preset of how much a scene draws |
 | `SpriteStackSceneDetail.sharp` | Current behaviour: every pass on, no size floors |
 | `SpriteStackSceneDetail.balanced` / `.fast` / `.minimal` | Cheaper steps: drop ink and shadow on small props, then no shadows, then no ink |
 | `scene.applyDetail(detail)` | Writes a preset into the scene's switches |
