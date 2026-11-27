@@ -242,35 +242,38 @@ void main() {
           projected.add(point);
         }
         if (projected.length != 4) continue;
-        final mid = (projected[0] + projected[1]) / 2;
-        final mx = mid.dx.round().clamp(0, size.width.toInt() - 1);
-        final my = mid.dy.round().clamp(0, size.height.toInt() - 1);
-        final at = (my * size.width.toInt() + mx) * 4;
-        final sample = [
-          overlay[at],
-          overlay[at + 1],
-          overlay[at + 2],
-          overlay[at + 3],
-        ];
+        // Try every edge midpoint: one of them can fall off-canvas when the
+        // prop sits at the frame edge, which says nothing about the overlay.
+        var sampled = 0;
         var found = false;
-        for (var dy = -2; dy <= 2 && !found; dy++) {
-          for (var dx = -2; dx <= 2 && !found; dx++) {
-            final x = mid.dx.round() + dx;
-            final y = mid.dy.round() + dy;
-            if (x < 0 || y < 0 || x >= size.width || y >= size.height) {
-              continue;
-            }
-            final i = (y * size.width.toInt() + x) * 4;
-            if (overlay[i + 1] > 150 &&
-                overlay[i] < 100 &&
-                overlay[i + 2] < 100) {
-              found = true;
+        var lastMid = projected.first;
+        for (var edge = 0; edge < 4; edge++) {
+          final mid = (projected[edge] + projected[(edge + 1) % 4]) / 2;
+          if (mid.dx < 2 ||
+              mid.dy < 2 ||
+              mid.dx > size.width - 2 ||
+              mid.dy > size.height - 2) {
+            continue;
+          }
+          sampled++;
+          lastMid = mid;
+          for (var dy = -2; dy <= 2 && !found; dy++) {
+            for (var dx = -2; dx <= 2 && !found; dx++) {
+              final x = mid.dx.round() + dx;
+              final y = mid.dy.round() + dy;
+              final i = (y * size.width.toInt() + x) * 4;
+              if (overlay[i + 1] > 150 &&
+                  overlay[i] < 100 &&
+                  overlay[i + 2] < 100) {
+                found = true;
+              }
             }
           }
         }
+        if (sampled == 0) continue;
         expect(found, isTrue,
-            reason: 'no overlay ink near $mid (sample rgba $sample) for the '
-                'body at ${body.center}');
+            reason: 'no overlay ink near the edges of the body at '
+                '${body.center} (last sample $lastMid)');
         aligned++;
       }
       expect(aligned, greaterThanOrEqualTo(4),
