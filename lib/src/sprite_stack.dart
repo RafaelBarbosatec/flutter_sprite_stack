@@ -11,6 +11,29 @@ import 'sprite_stack_bounds.dart';
 import 'sprite_stack_motion.dart';
 import 'sprite_stack_volume.dart';
 
+/// Where [SpriteStack.render] puts its `position` relative to the sprite.
+///
+/// A sprite stack is a strip of cross-sections, so the only rotation-invariant
+/// point of the ground slice is its **centre**: it is what stays put when the
+/// slices turn. Classic sprite anchoring uses the bottom edge instead, which is
+/// the edge facing the viewer — fine for a lone sprite, wrong for a prop in a
+/// scene, because the drawn footprint then swings around the scene point every
+/// time the camera orbits.
+enum SpriteStackAnchor {
+  /// Bottom-centre of the ground slice, i.e. the front edge of the footprint.
+  ///
+  /// The historical behaviour of [SpriteStack.render], kept as the default so
+  /// a plain sprite keeps its feet on the position it is given.
+  bottomCentre,
+
+  /// Centre of the opaque footprint: the union of every slice of the frame.
+  ///
+  /// `position` is then the point the prop stands on — the same point its
+  /// footprint (and a `SpriteStackCollider`) is centred on — so the prop turns
+  /// in place while the camera goes round it.
+  footprintCentre,
+}
+
 /// A sprite-stacked prop.
 ///
 /// The asset is a **horizontal strip of cross-sections**, ground slice first
@@ -194,6 +217,73 @@ class SpriteStack {
   double heightFor({double pitch = defaultPitch, double spacing = 1}) =>
       sliceHeight * squashFor(pitch) + (sliceCount - 1) * spacing;
 
+  /// Union of the opaque rectangles of every slice in [frame], in source
+  /// pixels, or `null` when the stack has no readable pixels.
+  ///
+  /// This is the 2D footprint of the art. Its centre is the pivot
+  /// [SpriteStackAnchor.footprintCentre] uses, so a rotating prop turns around
+  /// the middle of what is actually drawn instead of around the transparent
+  /// padding of the strip.
+  ///
+  /// Stacks built with [fromImage] cannot be read back and return `null`.
+  Rect? footprintFor({int frame = 0}) {
+    final opaque = _opaqueBounds;
+    if (opaque == null) return null;
+    final index = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
+    final cache = _footprints ??= List<Rect?>.filled(frameCount, null);
+    final cached = cache[index];
+    if (cached != null) return cached;
+
+    var minX = sliceWidth;
+    var minY = sliceHeight;
+    var maxX = -1;
+    var maxY = -1;
+    for (var slice = 0; slice < sliceCount; slice++) {
+      final at = (index * sliceCount + slice) * 4;
+      if (opaque[at + 2] < opaque[at]) continue; // fully transparent slice
+      if (opaque[at] < minX) minX = opaque[at];
+      if (opaque[at + 1] < minY) minY = opaque[at + 1];
+      if (opaque[at + 2] > maxX) maxX = opaque[at + 2];
+      if (opaque[at + 3] > maxY) maxY = opaque[at + 3];
+    }
+    if (maxX < minX || maxY < minY) return null;
+    return cache[index] = Rect.fromLTRB(
+      minX.toDouble(),
+      minY.toDouble(),
+      maxX + 1.0,
+      maxY + 1.0,
+    );
+  }
+
+  List<Rect?>? _footprints;
+
+  /// Offset from `position` to the point [anchor] puts on it, in device pixels.
+  ///
+  /// [SpriteStackAnchor.bottomCentre] is `Offset.zero`. The footprint anchor
+  /// shifts the drawing so the centre of [footprintFor] lands on `position`;
+  /// the shift depends on [yaw] because the slices turn around their centre,
+  /// which is exactly the term that used to make a prop drift across its own
+  /// footprint as the camera orbited.
+  Offset anchorOffset({
+    SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
+    double yaw = 0,
+    double pitch = defaultPitch,
+    double scale = 1,
+    int frame = 0,
+  }) {
+    if (anchor == SpriteStackAnchor.bottomCentre) return Offset.zero;
+    final footprint = footprintFor(frame: frame);
+    final u = footprint == null ? 0.0 : footprint.center.dx - sliceWidth / 2;
+    final v = footprint == null ? 0.0 : footprint.center.dy - sliceHeight / 2;
+    final ca = math.cos(yaw);
+    final sa = math.sin(yaw);
+    final squash = squashFor(pitch);
+    return Offset(
+      -(u * ca - v * sa) * scale,
+      (sliceHeight / 2 - (u * sa + v * ca)) * squash * scale,
+    );
+  }
+
   /// Reconstructs the voxel volume of this stack, for 3D scenes and tooling.
   ///
   /// Every slice is a horizontal cross-section, so stacking them in order
@@ -254,6 +344,12 @@ class SpriteStack {
   /// top). Like [pitch], it is a drawing effect, not a re-projection: the
   /// silhouette rotates but no new side of the prop is revealed.
   ///
+  /// [anchor] selects which point of the sprite lands on [position]. The
+  /// default [SpriteStackAnchor.bottomCentre] is classic sprite anchoring;
+  /// [SpriteStackAnchor.footprintCentre] pivots on the centre of the drawn
+  /// footprint, so a stack that turns with the camera stays in place instead of
+  /// swinging around its front edge.
+  ///
   /// [sliceStep] draws every `N`th cross-section instead of all of them, always
   /// keeping the ground slice and the top one. Each drawn slice stays at its
   /// true height, so the silhouette and [heightFor] do not change: what goes
@@ -280,8 +376,23 @@ class SpriteStack {
     double roll = 0,
     double rollPivot = 0,
     int sliceStep = 1,
+    SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
   }) {
     final squash = squashFor(pitch);
+    final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
+    // `position` names the point the caller wants the prop to occupy; the
+    // renderer works from the bottom-centre of the ground slice, so the anchor
+    // translates between the two. Zero for [SpriteStackAnchor.bottomCentre].
+    final drawPosition = anchor == SpriteStackAnchor.bottomCentre
+        ? position
+        : position +
+            anchorOffset(
+              anchor: anchor,
+              yaw: yaw,
+              pitch: pitch,
+              scale: scale,
+              frame: frameIndex,
+            );
 
     // Roll tilts the finished sprite in screen space, around a pivot
     // `rollPivot` of the way up the body (`0` keeps the ground point planted).
@@ -290,8 +401,8 @@ class SpriteStack {
     final pivot = roll == 0
         ? null
         : Offset(
-            position.dx,
-            position.dy -
+            drawPosition.dx,
+            drawPosition.dy -
                 heightFor(pitch: pitch, spacing: spacing) * scale * rollPivot,
           );
     if (pivot != null) {
@@ -300,14 +411,13 @@ class SpriteStack {
       canvas.rotate(roll);
       canvas.translate(-pivot.dx, -pivot.dy);
     }
-    final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final activeMotion = (motion == null || motion.isEmpty) ? null : motion;
     final activeCut = (cut == null || !cut.isActive) ? null : cut;
 
     if (_pixels != null && paint == null) {
       _renderSoftware(
         canvas,
-        position: position,
+        position: drawPosition,
         yaw: yaw,
         squash: squash,
         scale: scale,
@@ -326,7 +436,7 @@ class SpriteStack {
     } else {
       _renderSlices(
         canvas,
-        position: position,
+        position: drawPosition,
         yaw: yaw,
         squash: squash,
         scale: scale,
@@ -362,6 +472,10 @@ class SpriteStack {
   /// offset) when [shadow] is `true`, so culling never clips the drop shadow.
   /// The software rasterizer rounds the lift per slice, so allow one pixel of
   /// slack.
+  ///
+  /// Pass the same [anchor] (and [frame]) as [render] and the rectangle is the
+  /// box the sprite is actually drawn in: the reported [SpriteStackBounds.ground]
+  /// moves with the anchor, so `rectAt(position)` stays correct.
   SpriteStackBounds boundsFor({
     double yaw = 0,
     double pitch = defaultPitch,
@@ -372,6 +486,8 @@ class SpriteStack {
     bool shadow = true,
     double roll = 0,
     double rollPivot = 0,
+    SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
+    int frame = 0,
   }) {
     final ca = math.cos(yaw).abs();
     final sa = math.sin(yaw).abs();
@@ -398,8 +514,22 @@ class SpriteStack {
     final boxH = (above + below) * scale;
     final gx = boxW / 2;
     final gy = above * scale;
+    // The same translation `render` applies for the anchor, so the rectangle
+    // keeps describing the pixels the caller actually gets.
+    final anchorShift = anchor == SpriteStackAnchor.bottomCentre
+        ? Offset.zero
+        : anchorOffset(
+            anchor: anchor,
+            yaw: yaw,
+            pitch: pitch,
+            scale: scale,
+            frame: frame,
+          );
     if (roll == 0) {
-      return SpriteStackBounds(size: Size(boxW, boxH), ground: Offset(gx, gy));
+      return SpriteStackBounds(
+        size: Size(boxW, boxH),
+        ground: Offset(gx, gy) + anchorShift,
+      );
     }
 
     // Rotate the box around the roll pivot and return its axis-aligned
@@ -431,7 +561,8 @@ class SpriteStack {
     final anchorDy = (gy - pivotY) * c;
     return SpriteStackBounds(
       size: Size(maxX - minX, maxY - minY),
-      ground: Offset(gx + anchorDx - minX, pivotY + anchorDy - minY),
+      ground:
+          Offset(gx + anchorDx - minX, pivotY + anchorDy - minY) + anchorShift,
     );
   }
 
@@ -457,6 +588,7 @@ class SpriteStack {
     double roll = 0,
     double rollPivot = 0,
     int sliceStep = 1,
+    SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
   }) {
     final frameIndex = frameCount == 1 ? 0 : frame.clamp(0, frameCount - 1);
     final recorder = PictureRecorder();
@@ -480,6 +612,7 @@ class SpriteStack {
       roll: roll,
       rollPivot: rollPivot,
       sliceStep: sliceStep,
+      anchor: anchor,
     );
     return BakedSpriteStack.fromPicture(
       recorder.endRecording(),
@@ -491,6 +624,8 @@ class SpriteStack {
         cut: cut,
         outline: outline,
         shadow: shadow,
+        anchor: anchor,
+        frame: frameIndex,
       ),
       yaw,
       frame: frameIndex,

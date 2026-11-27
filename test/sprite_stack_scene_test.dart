@@ -335,6 +335,49 @@ void main() {
 
       stack.dispose();
     });
+
+    test('the drawn prop stays on its point while the camera orbits', () async {
+      // Regression: the sprite used to be anchored by the bottom edge of the
+      // ground slice — the edge facing the camera — so orbiting swung the drawn
+      // footprint around the prop's world point. Props drifted across their own
+      // collision box as the camera moved.
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.55, distance: 600),
+        zoom: 3,
+        background: const ui.Color(0xFF000000),
+      );
+      const size = ui.Size(200, 200);
+      final object = SpriteStackSceneObject(
+        stack: stack,
+        shadow: false,
+        outline: false,
+        pixelSnap: false,
+        collider: const SpriteStackCollider(),
+      );
+      scene.objects.add(object);
+      expect(scene.collisionBodyOf(object)!.center, Offset.zero);
+
+      for (final yaw in <double>[0, 0.7, 1.4, 2.1, 2.8, 3.5, 4.2, 4.9, 5.6]) {
+        scene.camera.yaw = yaw;
+        final ground = scene.projectPoint(object.position, size)!;
+        final ink = _inkBounds(await _render(scene), 200, 200);
+
+        expect(ink, isNotNull, reason: 'yaw $yaw drew nothing');
+        expect(
+          ink!.center.dx,
+          closeTo(ground.dx, 3),
+          reason: 'the prop slid sideways at yaw $yaw',
+        );
+        expect(
+          ink.center.dy,
+          closeTo(ground.dy, 3),
+          reason: 'the prop slid in depth at yaw $yaw',
+        );
+      }
+
+      stack.dispose();
+    });
   });
 
   group('SpriteStackGround painting', () {

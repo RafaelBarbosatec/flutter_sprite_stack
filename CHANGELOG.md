@@ -1,5 +1,27 @@
 ## Unreleased
 
+### Fixed
+
+- **Props no longer drift across their own footprint when the camera orbits.**
+  `SpriteStack.render` anchors a stack at the bottom-centre of the ground slice,
+  and that edge is by definition the one facing the viewer: a scene that passed
+  the projected ground point there re-read it as a different world spot for
+  every camera yaw, so props slid by up to half their footprint depth (30–130 px
+  in the diorama) and looked tilted against their collision boxes.
+  `SpriteStack.render`, `boundsFor` and `bake` now take an `anchor`:
+  `SpriteStackAnchor.bottomCentre` (the old behaviour, still the default) or
+  `SpriteStackAnchor.footprintCentre`, which pivots on the centre of the opaque
+  footprint. `SpriteStackScene` draws props with `footprintCentre`.
+- `SpriteStackSceneObject.position` is now the centre of the ground footprint:
+  `collisionBodyOf` centres the box there instead of half a slice depth forward,
+  and `SpriteStackCollider.offset` is measured from that centre. The sprite and
+  its collision proxy now coincide as the camera moves.
+- `SpriteStack.footprintFor({frame})` exposes the union of the opaque art of a
+  frame — the pivot the new anchor uses — and `SpriteStack.anchorOffset(...)`
+  reports the screen-space shift it applies.
+- `SpriteStackSceneObject.anchor` restores the old anchoring per prop when set
+  to `SpriteStackAnchor.bottomCentre`.
+
 ### Collision
 
 - `SpriteStackCollider` on `SpriteStackSceneObject`: a prop with a collider

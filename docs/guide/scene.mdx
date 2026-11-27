@@ -10,11 +10,19 @@ engine-free: it only needs a `Canvas`, and it draws every prop with the same
 `SpriteStack.render` you already use — just with a `yaw`, a scale and a screen
 position derived from the camera.
 
-The scene does **not** draw a mesh. It projects each prop's ground point,
+The scene does **not** draw a mesh. It projects each prop's footprint centre,
 derives the sprite yaw and pitch from the camera-to-prop vector, scales by depth
 and paints far to near. Props are **world-aligned by default**, so they follow
 the projected ground grid and read as fixed objects on the map while the camera
 moves — orbiting reveals every side of their cross-sections.
+
+`position` is the point the prop stands on: the scene pivots the sprite on the
+centre of its opaque footprint (`SpriteStackAnchor.footprintCentre`), not on the
+edge facing the camera, and a `collider` is centred on the same point. That is
+what keeps the pixels inside the collision box when the camera orbits. Pass
+`anchor: SpriteStackAnchor.bottomCentre` (or set `object.anchor`) to restore the
+classic "feet on the point" anchoring, where the sprite extends away from the
+viewer.
 
 ## A minimal scene
 
@@ -97,7 +105,7 @@ never gimbal-locks.
 | --- | --- |
 | `camera.yaw` / `camera.pitch` / `camera.distance` | Free to mutate every frame |
 | `camera.target` | World point the camera looks at |
-| `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
+| `scene.projectObject(object, size)` | Screen footprint centre, depth, scale, render yaw, render pitch and bounds |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 
 ## Sky and horizon
@@ -199,9 +207,13 @@ SpriteStackSceneObject(
 ```
 
 Lengths are in art pixels and scale with `object.scale`, so the same collider
-works at any prop size. `offset` shifts the box in the prop's local frame:
-`+y` is forward — the direction the footprint extends from the prop's ground
-point, matching the asset convention where the front of a prop is `+Y`.
+works at any prop size. The box is centred on `object.position`; `offset` shifts
+it in the prop's local frame (`+y` is the prop's forward), which is the escape
+hatch for art whose solid part is not centred in the strip.
+
+Because the sprite is pivoted on the same footprint centre, the drawn prop stays
+inside its box while the camera orbits. `paintCollisionDebug` is the quickest
+way to confirm that on your own assets.
 
 The box rotates with `object.yaw`, so turning a prop turns its footprint.
 

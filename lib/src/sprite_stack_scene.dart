@@ -82,10 +82,13 @@ class SpriteStackGround {
 
 /// A prop placed in a [SpriteStackScene].
 ///
-/// [position] is the ground contact point in world space. [yaw] is the prop's
-/// world rotation. By default the scene derives the visible sprite yaw from the
-/// camera basis, so the prop stays aligned with the projected ground plane and
-/// reads as a fixed object on the map while the camera moves.
+/// [position] is the point the prop stands on: the centre of its ground
+/// footprint. The sprite is drawn around it with [anchor], so the prop turns in
+/// place while the camera orbits and its pixels stay inside its collision box.
+/// [yaw] is the prop's world rotation. By default the scene derives the visible
+/// sprite yaw from the camera basis, so the prop stays aligned with the
+/// projected ground plane and reads as a fixed object on the map while the
+/// camera moves.
 ///
 /// Set [billboard] to `true` for a true billboard: the prop is drawn with its
 /// [yaw] as a fixed screen-space angle, so it always keeps one facing on screen
@@ -112,6 +115,7 @@ class SpriteStackSceneObject {
     this.shadowColor = const Color(0xFFBAC6D4),
     this.roll = 0,
     this.rollPivot = 0,
+    this.anchor = SpriteStackAnchor.footprintCentre,
     this.collider,
   });
 
@@ -149,6 +153,16 @@ class SpriteStackSceneObject {
   /// its ground point: `0` is the feet (it leans, grounded), `0.5` the middle,
   /// `1` the top.
   double rollPivot;
+
+  /// Which point of the sprite lands on [position].
+  ///
+  /// Defaults to [SpriteStackAnchor.footprintCentre]: the centre of what is
+  /// drawn stands on [position], which is also where [collider] is centred, so
+  /// the sprite and its collision box stay together as the camera orbits.
+  /// [SpriteStackAnchor.bottomCentre] restores the old anchoring, where the
+  /// front edge of the footprint sits on [position] and the body extends away
+  /// from the viewer (it drifts across the ground when the camera moves).
+  SpriteStackAnchor anchor;
 
   /// Collision proxy for this prop, or `null` for a walk-through prop.
   ///
@@ -198,8 +212,12 @@ class SpriteStackSceneProjection {
     required this.bounds,
   });
 
-  /// Ground contact point in screen coordinates, ready for
-  /// `SpriteStack.render(position:)`.
+  /// Ground point of the prop in screen coordinates: the centre of its
+  /// footprint, ready for `SpriteStack.render(position:, anchor: anchor)`.
+  ///
+  /// This point does not depend on the camera's yaw: it is the projection of
+  /// [SpriteStackSceneObject.position], so it stays on the grid cell the prop
+  /// occupies while the camera orbits.
   final Offset position;
 
   /// Camera-space depth: smaller is closer to the camera.
@@ -514,6 +532,8 @@ class SpriteStackScene {
       shadow: object.shadow,
       roll: object.roll,
       rollPivot: object.rollPivot,
+      anchor: object.anchor,
+      frame: object.frame,
     );
     return SpriteStackSceneProjection(
       position: screen,
@@ -575,12 +595,15 @@ class SpriteStackScene {
   /// Resolves [object]'s [SpriteStackSceneObject.collider] to a world-space
   /// body, or `null` when the prop is walk-through or has an empty footprint.
   ///
-  /// The box faces are derived from the volume bounds, which are in source
-  /// pixels, and placed with the same anchor the renderer uses: the source
-  /// row `0` sits at the prop's ground point, and the slice centre sits half a
-  /// slice depth forward of it, rotating in place as the prop turns. Sizes are
-  /// scaled by the object's `scale`; the height also takes `spacing` into
-  /// account.
+  /// The body is centred on the same point the sprite stands on — the centre of
+  /// the prop's footprint at [SpriteStackSceneObject.position] — and its faces
+  /// come from the volume bounds, in source pixels, or from an explicit
+  /// [SpriteStackCollider.size]. Because the renderer also pivots the sprite on
+  /// that centre ([SpriteStackAnchor.footprintCentre]), the drawn prop and its
+  /// proxy stay on top of each other while the camera orbits.
+  ///
+  /// Sizes are scaled by the object's `scale`; the height also takes `spacing`
+  /// into account.
   SpriteStackCollisionBody? collisionBodyOf(SpriteStackSceneObject object) {
     final collider = object.collider;
     if (collider == null) return null;
@@ -589,34 +612,19 @@ class SpriteStackScene {
 
     final double halfWidth;
     final double halfDepth;
-    final double centerSide;
-    final double centerForward;
-    final double sliceDepth;
     final double height;
 
     final size = collider.size;
     if (size != null) {
       halfWidth = size.width / 2;
       halfDepth = size.height / 2;
-      centerSide = collider.offset.dx;
-      centerForward = collider.offset.dy;
-      sliceDepth = size.height / 2;
       height = collider.height ?? double.infinity;
     } else {
       final volume = object.collisionVolume(collider.alphaThreshold);
       final bounds = volume.bounds;
       if (bounds == null) return null;
-      // Centre of the tight voxel bounds in source pixels, relative to the
-      // slice centre. The renderer anchors a stack at the ground slice's
-      // bottom-centre and keeps that slice centre at `depth / 2` forward of
-      // the anchor; the slice content rotates around it.
-      final centerX = (bounds.minX + bounds.maxX + 1) / 2;
-      final centerY = (bounds.minY + bounds.maxY + 1) / 2;
       halfWidth = bounds.width / 2;
       halfDepth = bounds.depth / 2;
-      centerSide = volume.width / 2 - centerX;
-      centerForward = centerY - volume.depth / 2;
-      sliceDepth = volume.depth / 2;
       height = collider.height ?? (bounds.maxZ + 1) * object.spacing;
     }
 
@@ -628,11 +636,11 @@ class SpriteStackScene {
     final yaw = object.yaw;
     final cosYaw = math.cos(yaw);
     final sinYaw = math.sin(yaw);
-    // Prop-local to world. The slice centre stays `sliceDepth` forward of the
-    // anchor as the prop turns; only the footprint rotates around it.
-    final offsetX = (centerSide * cosYaw - centerForward * sinYaw) * scale;
-    final offsetY =
-        (sliceDepth + centerSide * sinYaw + centerForward * cosYaw) * scale;
+    // The offset is from the footprint centre, in the prop's local frame, so
+    // it rotates with the prop and never with the camera.
+    final offset = collider.offset * scale;
+    final offsetX = offset.dx * cosYaw - offset.dy * sinYaw;
+    final offsetY = offset.dx * sinYaw + offset.dy * cosYaw;
 
     return SpriteStackCollisionBody(
       center: Offset(
@@ -641,9 +649,7 @@ class SpriteStackScene {
       ),
       halfWidth: boxHalfWidth,
       halfDepth: boxHalfDepth,
-      // The mirror above is a rotation by `yaw + pi` on the rectangle; a
-      // footprint is centrally symmetric, so the same box comes out.
-      yaw: yaw + math.pi,
+      yaw: yaw,
       height: height * scale,
     );
   }
@@ -1056,6 +1062,7 @@ class SpriteStackScene {
         roll: object.roll,
         rollPivot: object.rollPivot,
         sliceStep: item.step,
+        anchor: object.anchor,
       );
     }
   }
@@ -1149,6 +1156,7 @@ class SpriteStackScene {
         object.roll,
         object.rollPivot,
         object.sliceStep,
+        object.anchor,
       );
       final motion = object.motion;
       if (motion == null) {

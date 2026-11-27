@@ -32,7 +32,8 @@ collapses to nothing.
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
-| `position` | required | Bottom-centre ground contact point |
+| `position` | required | Point the sprite occupies; which part of it lands here is set by `anchor` |
+| `anchor` | `bottomCentre` | `bottomCentre` puts the front edge of the footprint on `position` (classic sprite anchoring). `footprintCentre` puts the centre of the drawn footprint there, so the prop turns in place |
 | `yaw` | `0` | Rotation around the vertical axis, radians |
 | `pitch` | `defaultPitch` | Camera tilt, `0` (edge-on) to `π/2` (top-down) |
 | `roll` | `0` | Screen-space tilt of the finished sprite, radians. A drawing effect, not a re-projection: it does not reveal a new side — turn `yaw` for that |
@@ -57,12 +58,12 @@ collapses to nothing.
 | --- | --- |
 | `SpriteStackScene(camera:, zoom:, background:, sky:, ground:, objects:)` | Projects, depth-sorts and draws the props; `sky` wins over the flat `background` |
 | `SpriteStackCamera.orbit(yaw:, pitch:, distance:, target:, near:)` | Camera on a sphere around `target`; `pitch` is clamped just short of top-down |
-| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, roll:, rollPivot:, scale:, frame:, cut:, motion:, collider:)` | A prop; `position` is its ground point, `yaw` its world facing (`billboard: false`, the default) or a fixed screen facing (`billboard: true`), `roll` the screen-space bank, `collider` its collision proxy |
+| `SpriteStackSceneObject(stack:, position:, yaw:, billboard:, roll:, rollPivot:, scale:, frame:, cut:, motion:, anchor:, collider:)` | A prop; `position` is the centre of its ground footprint (the sprite is pivoted on it with `anchor`, `footprintCentre` by default), `yaw` its world facing (`billboard: false`, the default) or a fixed screen facing (`billboard: true`), `roll` the screen-space bank, `collider` its collision proxy |
 | `SpriteStackSky(top:, horizon:, bottom:, horizonFraction:)` | Gradient backdrop anchored to the ground plane's vanishing line |
 | `SpriteStackGround(extent:, step:, color:, axisColor:, cellSize:, fill:, checker:, colorAt:, fadeColor:, fadeDistance:)` | Ground plane + grid; painted cells, procedural colors and distance fade |
 | `SpriteStackFollowCamera(positionRate:, yawRate:, lookAhead:, height:, deadZone:)` | Third-person follow with exponential lag |
 | `scene.paint(canvas, size)` | Projects and draws every object, far to near |
-| `scene.projectObject(object, size)` | Screen ground point, depth, scale, render yaw, render pitch and bounds |
+| `scene.projectObject(object, size)` | Screen footprint centre, depth, scale, render yaw, render pitch and bounds |
 | `scene.horizonY(size)` | Screen y of the horizon; can fall outside the canvas |
 | `scene.stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `total` / `slicesDrawn` / `slicesTotal` / `sliceLodSaving` from the last paint |
 | `scene.minimumProjectedPixels` | Props whose scaled bounds are smaller than this many pixels are skipped (default `0.5`) |
@@ -87,7 +88,7 @@ collapses to nothing.
 | `SpriteStackCollider(padding:, size:, offset:, height:, alphaThreshold:)` | Authored on `object.collider`; all lengths in art pixels, scaled by `object.scale` |
 | `SpriteStackCollider.size` | Explicit footprint (`width` × slice `y` depth). `null` derives it from the stack volume |
 | `SpriteStackCollider.padding` | Extra margin around the footprint, art pixels |
-| `SpriteStackCollider.offset` | Footprint centre offset from the ground point, prop-local art pixels: `+y` is forward |
+| `SpriteStackCollider.offset` | Footprint centre offset from the prop's `position`, prop-local art pixels: `+y` is forward |
 | `SpriteStackCollider.height` | Proxy height, art pixels; `null` derives it from the volume (unlimited with an explicit `size`) |
 | `SpriteStackCollider.alphaThreshold` | Alpha that counts as solid when reading the volume (default `128`) |
 | `SpriteStackCollisionBody(center:, halfWidth:, halfDepth:, yaw:, height:)` | A resolved, world-space box on the ground plane |
