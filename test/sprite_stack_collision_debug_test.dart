@@ -237,7 +237,8 @@ Future<Uint8List> _paint(
   return data!.buffer.asUint8List();
 }
 
-int _count(Uint8List rgba, int rgb) {
+int _count(Uint8List rgba, int argb) {
+  final rgb = argb & 0xFFFFFF;
   var count = 0;
   for (var i = 0; i < rgba.length; i += 4) {
     if (rgba[i + 3] == 0) continue;
