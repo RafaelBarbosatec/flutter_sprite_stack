@@ -69,29 +69,34 @@ void main() {
             stack: house,
             position: const SpriteStackPoint(-230, -40, 0),
             yaw: 0.5,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: tree,
             position: const SpriteStackPoint(180, 130, 0),
             yaw: 0.2,
             scale: 1.1,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: palm,
             position: const SpriteStackPoint(260, -140, 0),
             yaw: 1.2,
+            collider: const SpriteStackCollider(padding: 2),
           ),
           SpriteStackSceneObject(
             stack: car,
             position: const SpriteStackPoint(-40, 150, 0),
             yaw: 2.4,
             scale: 0.9,
+            collider: const SpriteStackCollider(),
           ),
           SpriteStackSceneObject(
             stack: car,
             position: const SpriteStackPoint(-80, -170, 0),
             yaw: 0.6,
             scale: 0.9,
+            collider: const SpriteStackCollider(),
           ),
         ],
       );
@@ -177,6 +182,39 @@ void main() {
           );
         }
       }
+
+      // Collision overlay: the same diorama with the debug proxies drawn on
+      // top, so a review can see what `paintCollisionDebug` actually draws.
+      scene.camera
+        ..yaw = 0.85
+        ..pitch = 0.6
+        ..distance = 900;
+      final overlay = await _renderPng(
+        scene,
+        size,
+        File('${output.path}/collision_overlay.png'),
+        overdraw: (canvas, canvasSize) => scene.paintCollisionDebug(
+          canvas,
+          canvasSize,
+          color: const ui.Color(0xFF00FF00),
+          fillColor: const ui.Color(0x2600FF00),
+          strokeWidth: 2,
+        ),
+      );
+      var green = 0;
+      for (var i = 0; i < overlay.length; i += 4) {
+        if (overlay[i] == 0 &&
+            overlay[i + 1] == 255 &&
+            overlay[i + 2] == 0 &&
+            overlay[i + 3] != 0) {
+          green++;
+        }
+      }
+      expect(
+        green,
+        greaterThan(400),
+        reason: 'the collision overlay drew only $green outline pixels',
+      );
 
       for (final stack in stacks) {
         stack.dispose();
@@ -579,11 +617,13 @@ Future<SpriteStack> _loadFile(String path, int sliceCount) async {
 Future<Uint8List> _renderPng(
   SpriteStackScene scene,
   ui.Size size,
-  File file,
-) async {
+  File file, {
+  void Function(ui.Canvas canvas, ui.Size size)? overdraw,
+}) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
   scene.paint(canvas, size);
+  overdraw?.call(canvas, size);
   final picture = recorder.endRecording();
   final image = await picture.toImage(
     size.width.toInt(),
