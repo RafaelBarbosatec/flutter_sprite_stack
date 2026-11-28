@@ -15,7 +15,7 @@ billboard you can spin in any direction. It is the same trick pixel-art games
 have used since the 90s, with a **1x art-pixel software rasterizer** and no 3D
 pipeline.
 
-![Turntable of the example F1 car](https://github.com/RafaelBarbosatec/flutter_sprite_stack/blob/fb92cb362cd765698cdd5f64f6d8d578480e933a/doc/turntable.gif)
+![Turntable of the example F1 car](https://raw.githubusercontent.com/RafaelBarbosatec/flutter_sprite_stack/32573314f88fc7c9f1e936ae54706f03b7c9e67f/doc/turntable.gif)
 
 *The example F1 car spinning at runtime — four arbitrary angles of a 15-slice
 strip, not 8 pre-baked directions.*
