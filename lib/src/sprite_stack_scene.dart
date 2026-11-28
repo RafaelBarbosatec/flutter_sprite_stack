@@ -411,7 +411,7 @@ class SpriteStackScene {
   }
 
   /// Applies a [SpriteStackSceneDetail]: the culling size, the outline and
-  /// shadow size floors, and the two global passes.
+  /// shadow size floors, the two global passes and the slice LOD budget.
   ///
   /// A [SpriteStackQualityGovernor] returns one of these from frame times.
   void applyDetail(SpriteStackSceneDetail detail) {
@@ -420,6 +420,7 @@ class SpriteStackScene {
     shadowMinimumPixels = detail.shadowMinimumPixels;
     drawOutlines = detail.outlines;
     drawShadows = detail.shadows;
+    sliceLodPixels = detail.sliceLodPixels;
   }
 
   // Cached backdrop paint. The gradient only changes when the sky, the canvas

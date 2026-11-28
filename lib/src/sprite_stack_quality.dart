@@ -12,7 +12,8 @@ import 'dart:math' as math;
 ///
 /// [minimumProjectedPixels], [outlines] and [shadows] are the global switches:
 /// the first culls sub-pixel props entirely, the other two turn a whole pass
-/// off for a scene in trouble.
+/// off for a scene in trouble. [sliceLodPixels] sets how many cross-sections a
+/// distant prop still rasterises, so a cheaper level also thins the slices.
 ///
 /// Apply one with `SpriteStackScene.applyDetail`, or let a
 /// [SpriteStackQualityGovernor] pick between [levels] from the frame times.
@@ -23,6 +24,7 @@ class SpriteStackSceneDetail {
     this.shadowMinimumPixels = 0,
     this.outlines = true,
     this.shadows = true,
+    this.sliceLodPixels = 1,
   });
 
   /// Props whose projected bounds are smaller than this many pixels on **both**
@@ -43,6 +45,15 @@ class SpriteStackSceneDetail {
   /// Whether the scene draws ground shadows at all.
   final bool shadows;
 
+  /// Maximum distance between drawn cross-sections, in device pixels.
+  ///
+  /// Forwarded to `SpriteStackScene.sliceLodPixels`, which decides how many
+  /// slices a distant prop still rasterises. A level that is already dropping
+  /// ink and shadow can afford fatter slices too: below two pixels the
+  /// silhouette difference is hard to see on anything the player is not
+  /// looking at directly.
+  final double sliceLodPixels;
+
   /// Everything on, exactly as before this class existed.
   static const SpriteStackSceneDetail sharp = SpriteStackSceneDetail();
 
@@ -52,6 +63,7 @@ class SpriteStackSceneDetail {
     minimumProjectedPixels: 1,
     outlineMinimumPixels: 10,
     shadowMinimumPixels: 14,
+    sliceLodPixels: 1.5,
   );
 
   /// No shadows at all; outlines only on props over sixteen pixels.
@@ -59,6 +71,7 @@ class SpriteStackSceneDetail {
     minimumProjectedPixels: 2,
     outlineMinimumPixels: 16,
     shadows: false,
+    sliceLodPixels: 2,
   );
 
   /// Flat and cheap: no ink, no shadow, props under four pixels culled.
@@ -66,6 +79,7 @@ class SpriteStackSceneDetail {
     minimumProjectedPixels: 4,
     outlines: false,
     shadows: false,
+    sliceLodPixels: 3,
   );
 
   /// Sharpest first. The indices are what [SpriteStackQualityGovernor] moves
@@ -84,6 +98,7 @@ class SpriteStackSceneDetail {
     double? shadowMinimumPixels,
     bool? outlines,
     bool? shadows,
+    double? sliceLodPixels,
   }) =>
       SpriteStackSceneDetail(
         minimumProjectedPixels:
@@ -92,13 +107,14 @@ class SpriteStackSceneDetail {
         shadowMinimumPixels: shadowMinimumPixels ?? this.shadowMinimumPixels,
         outlines: outlines ?? this.outlines,
         shadows: shadows ?? this.shadows,
+        sliceLodPixels: sliceLodPixels ?? this.sliceLodPixels,
       );
 
   @override
   String toString() => 'SpriteStackSceneDetail('
       'cull: $minimumProjectedPixels, outline: $outlineMinimumPixels, '
       'shadow: $shadowMinimumPixels, outlines: $outlines, '
-      'shadows: $shadows)';
+      'shadows: $shadows, sliceLod: $sliceLodPixels)';
 
   @override
   bool operator ==(Object other) =>
@@ -107,7 +123,8 @@ class SpriteStackSceneDetail {
       other.outlineMinimumPixels == outlineMinimumPixels &&
       other.shadowMinimumPixels == shadowMinimumPixels &&
       other.outlines == outlines &&
-      other.shadows == shadows;
+      other.shadows == shadows &&
+      other.sliceLodPixels == sliceLodPixels;
 
   @override
   int get hashCode => Object.hash(
@@ -116,6 +133,7 @@ class SpriteStackSceneDetail {
         shadowMinimumPixels,
         outlines,
         shadows,
+        sliceLodPixels,
       );
 }
 

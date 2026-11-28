@@ -75,6 +75,12 @@
   each other (default `1`); `SpriteStackSceneObject.sliceStep` overrides it per
   prop. `scene.stats.slicesDrawn` / `slicesTotal` and `sliceLodSaving` report
   the saving.
+- The quality ladder now includes the slice LOD budget:
+  `SpriteStackSceneDetail` carries `sliceLodPixels` (`sharp` `1`, `balanced`
+  `1.5`, `fast` `2`, `minimal` `3`) and `scene.applyDetail` forwards it, so a
+  `SpriteStackQualityGovernor` thins distant cross-sections as it steps down.
+  `applyDetail` never changes `sliceLod`, so a manual `sliceLod = false`
+  survives.
 - The benchmark now reports still frames with and without the cache, 60 tiny
   props with and without the detail tiers, and the same props with slice LOD
   off and on.
