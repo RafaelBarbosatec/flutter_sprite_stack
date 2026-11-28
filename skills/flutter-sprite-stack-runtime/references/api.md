@@ -1,4 +1,4 @@
-# API reference (0.4.0)
+# API reference (0.5.0)
 
 Everything is exported from `package:flutter_sprite_stack/flutter_sprite_stack.dart`.
 
@@ -16,6 +16,9 @@ Everything is exported from `package:flutter_sprite_stack/flutter_sprite_stack.d
 | `render(...)` | Draw one frame (see below) |
 | `boundsFor(...)` | Projected `SpriteStackBounds` |
 | `bake(...)` | Record into a `BakedSpriteStack` |
+| `footprintFor({frame = 0})` | Union of the opaque art of a frame, or `null` — the pivot `footprintCentre` uses |
+| `anchorOffset(...)` | Screen-space shift the chosen `SpriteStackAnchor` applies |
+| `SpriteStackAnchor` | `bottomCentre` (default, historical) or `footprintCentre` |
 | `toVolume({frame = 0, alphaThreshold = 128})` | Rebuild the voxel volume (needs `load`/`decode`) |
 | `dispose()` | Releases the decoded `ui.Image` |
 
@@ -39,6 +42,7 @@ void render(
   bool outline = true,        // crisp 1 px outer ring
   bool shadow = true,         // projected ground shadow
   bool pixelSnap = true,
+  SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
   Color outlineColor = const Color(0xFF181C24),
   Color shadowColor = const Color(0xFFBAC6D4),
 })
@@ -57,6 +61,7 @@ SpriteStackBounds boundsFor({
   SliceCut? cut,
   bool outline = true,
   bool shadow = true,
+  SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
 })
 ```
 
@@ -231,8 +236,23 @@ culling, collision and depth sorting. The sprite stack still draws.
 | `SpriteStackScene({camera, zoom = 1, background, sky, ground, objects})` | Projects, depth-sorts and draws the props |
 | `paint(Canvas, Size)` | Draws backdrop, ground and every visible prop, far to near |
 | `projectObject(object, size)` | `SpriteStackSceneProjection?` — null when behind the camera |
+| `projectPoint(point, size)` | Raw world → screen projection; `null` behind the near plane |
 | `horizonY(size)` | Screen y of the ground plane's vanishing line; may be off-canvas |
+| `move(position, {delta, radius, ignore, stepHeight, maxSubsteps})` | Sweeps a ground circle and returns a `SpriteStackMoveResult` |
+| `blocks(position, {radius, ignore})` | `bool` — the same test `move` uses, for spawn checks |
+| `collisionBodies({ignore, stepHeight})` | The resolved `SpriteStackCollisionBody` list |
+| `collisionBodyOf(object)` | `SpriteStackCollisionBody?` for one prop |
+| `applyDetail(SpriteStackSceneDetail)` | Applies a quality tier (culling, ink, shadow, slice LOD) |
+| `paintCollisionDebug(canvas, size, {...})` | Draws the collision proxies: the oriented box, corner posts, optional circle |
+| `sliceLod`, `sliceLodPixels` | Decimate cross-sections when a prop is drawn below 1:1 |
+| `cacheStillFrames`, `stillFrameHits`, `clearStillCache()` | Replay the last frame as a `Picture` while nothing changes |
+| `stats` | `drawn` / `culled` / `behindCamera` / `tooSmall` / `slicesDrawn` / `slicesTotal` / `sliceLodSaving` |
 | `camera`, `zoom`, `background`, `sky`, `ground`, `objects` | Mutable scene state |
+
+`SpriteStackSceneObject.position` is the **centre of the ground footprint**, and
+the scene draws the sprite with `SpriteStackAnchor.footprintCentre` so the art
+and the collision box share that point. `object.collider` opts a prop into
+blocking; without one it is walk-through.
 
 `SpriteStackSceneProjection` exposes `position` (screen ground point), `depth`
 (camera-space, smaller is closer), `scale`, `yaw` (prop yaw minus camera yaw),
@@ -303,6 +323,109 @@ cellSize = 100, fill, checker = const [], colorAt, fadeColor, fadeDistance = 0})
   disables the fade.
 - `step: 0` hides the grid lines; `cellSize: 0` disables cell painting.
 - Cells are flat colours projected as quads — no textures.
+
+## Collision
+
+### SpriteStackCollider
+
+Opt a prop into blocking by setting `object.collider`. Without one the prop is
+walk-through.
+
+`SpriteStackCollider({padding = 0, size, offset = Offset.zero, height,
+alphaThreshold = 128})`
+
+| Member | Meaning |
+| --- | --- |
+| `padding` | Extra margin around the footprint, art pixels (foliage, art gaps) |
+| `size` | Explicit `Size(width, depth)` — needed for `SpriteStack.fromImage`, which has no raw pixels |
+| `offset` | Shift of the footprint centre in the prop's local frame; rotates with `yaw`. `zero` centres it on `object.position` |
+| `height` | Proxy height in art pixels; only used by `move(stepHeight:)` |
+| `alphaThreshold` | Alpha at or above which a voxel counts as solid when deriving the footprint |
+
+By default the footprint is the tight bounds of the volume's solid voxels, so
+collision follows the geometry rather than the sprite pixels, is independent of
+the camera and rotates with `object.yaw`.
+
+### SpriteStackCollisionBody
+
+`SpriteStackCollisionBody({required center, required halfWidth, required
+halfDepth, yaw = 0, height = double.infinity})` — an oriented box on the ground
+plane. Exposes `overlaps`, `resolve` and a world-space `bounds` AABB.
+
+### SpriteStackMoveResult
+
+```dart
+final result = scene.move(
+  player.position,
+  delta: Offset(dx, dy),
+  radius: 12,          // character radius, world units
+  ignore: player,      // don't collide with yourself
+  stepHeight: 6,       // walk over curbs this tall
+);
+player.position = result.position;
+// result.applied, result.hits, result.collided
+```
+
+`move` sweeps the circle in substeps no longer than `radius`, pushes out along
+the contact normal and slides along the wall. A broad-phase AABB reject skips
+the whole loop in open space.
+
+### Collision debug overlay
+
+```dart
+scene.paint(canvas, size);
+scene.paintCollisionDebug(
+  canvas, size,
+  ignore: player,
+  circle: player.position,
+  circleRadius: 12,
+  stepHeight: 6,
+);
+```
+
+Draws the **same oriented box `move` resolves** (not the axis-aligned `bounds`),
+a post at each corner up to the proxy height, and the character circle as 24
+projected segments. `stepHeight` recolours bodies you can walk over. Parameters:
+`color`, `fillColor`, `steppedOverColor`, `steppedOverFillColor`, `strokeWidth`,
+`ignore`, `stepHeight`, `circle`, `circleRadius`, `heightPosts`. Read-only: it
+never changes `move`, sorting or cost when unused.
+
+## Quality tiers
+
+### SpriteStackSceneDetail
+
+`SpriteStackSceneDetail({minimumProjectedPixels = 0.5, outlineMinimumPixels = 0,
+shadowMinimumPixels = 0, outlines = true, shadows = true, sliceLodPixels = 1})`
+
+Presets, sharpest first, in `SpriteStackSceneDetail.levels`:
+
+| Preset | Cull below | Ink below | Shadow below | `sliceLodPixels` |
+| --- | ---: | ---: | ---: | ---: |
+| `sharp` | 0.5 px | — | — | 1 |
+| `balanced` | 1 px | 10 px | 14 px | 1.5 |
+| `fast` | 2 px | 16 px | off | 2 |
+| `minimal` | 4 px | off | off | 3 |
+
+`scene.applyDetail(detail)` forwards all of it, including the slice LOD budget.
+It never changes `scene.sliceLod`, so a manual `sliceLod = false` survives.
+
+### SpriteStackQualityGovernor
+
+```dart
+final governor = SpriteStackQualityGovernor();
+// per frame
+final detail = governor.frame(gapMs, moving: cameraIsMoving);
+if (detail != null) scene.applyDetail(detail);
+```
+
+Pure Dart (no clock, no bindings, no per-frame allocation). It judges **windows**
+(default 2 s) by median frame time plus the share of long frames, steps down
+after two slow windows, waits for the picture to move before changing level,
+drops two levels at once when frames crawl, and backs off exponentially from a
+level that proved slow. Constructor knobs: `levels`, `startLevel`, `windowMs`,
+`settleMs`, `waitForMotionMs`, `backoffMs`, `fewestFrames`, `slowMedianMs`,
+`slowWindows`, `verySlowMedianMs`, `crawlMedianMs`, `longFrameMs`, `longShare`,
+`fastMedianMs`, `fastP90Ms`, `fastWindows`, `trialMs`.
 
 ## SpriteStackPoint
 
