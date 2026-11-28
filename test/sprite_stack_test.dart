@@ -825,6 +825,124 @@ void main() {
       stack.dispose();
     });
   });
+
+  group('footprint anchor', () {
+    /// Three 8×8 slices with an opaque 3×2 block in the top-left corner: the
+    /// footprint centre (1.5, 1) sits well away from the image centre (4, 4).
+    Future<SpriteStack> offCentre() async {
+      const sliceWidth = 8;
+      const sliceHeight = 8;
+      const slices = 3;
+      final width = sliceWidth * slices;
+      final pixels = Uint8List(width * sliceHeight * 4);
+      for (var slice = 0; slice < slices; slice++) {
+        for (var y = 0; y < 2; y++) {
+          for (var x = 0; x < 3; x++) {
+            final column = slice * sliceWidth + x;
+            _writeColor(pixels, (y * width + column) * 4, 0xFFFF0000);
+          }
+        }
+      }
+      final image = await _decode(pixels, width, sliceHeight);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      return SpriteStack.decode(
+        png!.buffer.asUint8List(),
+        sliceCount: slices,
+      );
+    }
+
+    test('footprintFor unions the opaque art of the slices', () async {
+      final stack = await offCentre();
+
+      final footprint = stack.footprintFor();
+
+      expect(footprint, const ui.Rect.fromLTRB(0, 0, 3, 2));
+      expect(footprint!.center, const ui.Offset(1.5, 1));
+
+      stack.dispose();
+    });
+
+    test('footprintFor returns null without raw pixels', () async {
+      final image = await _solidImage(width: 4, height: 4, color: 0xFFFFFFFF);
+      final stack = SpriteStack.fromImage(image, sliceCount: 1);
+
+      expect(stack.footprintFor(), isNull);
+      // Without pixels the image centre is the best pivot available: the offset
+      // still lifts the strip by half a slice so that centre lands on the
+      // position.
+      expect(
+        stack.anchorOffset(
+          anchor: SpriteStackAnchor.footprintCentre,
+          pitch: math.pi / 2,
+        ),
+        const ui.Offset(0, 2),
+      );
+
+      stack.dispose();
+    });
+
+    test('bottomCentre is the default and does not move the sprite', () async {
+      final stack = await offCentre();
+
+      expect(stack.anchorOffset(), ui.Offset.zero);
+
+      final defaultPixels = await _renderToPixels(
+        stack,
+        width: 48,
+        height: 48,
+        position: const ui.Offset(24, 40),
+        pitch: math.pi / 2,
+      );
+      final explicitPixels = await _renderToPixels(
+        stack,
+        width: 48,
+        height: 48,
+        position: const ui.Offset(24, 40),
+        pitch: math.pi / 2,
+        anchor: SpriteStackAnchor.bottomCentre,
+      );
+
+      expect(explicitPixels, defaultPixels);
+
+      stack.dispose();
+    });
+
+    test('footprintCentre puts the drawn footprint centre on the position',
+        () async {
+      final stack = await offCentre();
+      const position = ui.Offset(24, 40);
+
+      final pixels = await _renderToPixels(
+        stack,
+        width: 48,
+        height: 48,
+        position: position,
+        pitch: math.pi / 2,
+        anchor: SpriteStackAnchor.footprintCentre,
+      );
+      final ink = _inkRect(pixels, 48, 48)!;
+
+      expect(ink.center.dx, closeTo(position.dx, 1.5));
+      expect(ink.center.dy, closeTo(position.dy, 1.5));
+
+      // The same drawing, anchored the old way, is off by half the strip.
+      final classic = _inkRect(
+        await _renderToPixels(
+          stack,
+          width: 48,
+          height: 48,
+          position: position,
+          pitch: math.pi / 2,
+        ),
+        48,
+        48,
+      )!;
+      expect((classic.center - position).distance, greaterThan(2));
+
+      stack.dispose();
+    });
+  });
 }
 
 Future<ui.Image> _solidImage({
@@ -962,6 +1080,7 @@ Future<Uint8List> _renderToPixels(
   StackMotion? motion,
   double time = 0,
   SliceCut? cut,
+  SpriteStackAnchor anchor = SpriteStackAnchor.bottomCentre,
 }) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -981,6 +1100,7 @@ Future<Uint8List> _renderToPixels(
     outline: outline,
     shadow: shadow,
     pixelSnap: pixelSnap,
+    anchor: anchor,
   );
   final picture = recorder.endRecording();
   final image = await picture.toImage(width, height);

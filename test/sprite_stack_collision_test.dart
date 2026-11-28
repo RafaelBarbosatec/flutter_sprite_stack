@@ -106,18 +106,19 @@ void main() {
 
       final body = scene.collisionBodyOf(object)!;
 
-      // The footprint extends forward from the ground point: half of the
-      // 4 px depth, scaled by 2.
-      expect(body.center, const Offset(100, 204));
+      // The footprint is centred on the prop: half of the 4 px depth, scaled
+      // by 2, on each side. The renderer pivots the sprite on the same point.
+      expect(body.center, const Offset(100, 200));
       expect(body.halfWidth, 4);
       expect(body.halfDepth, 4);
-      expect(body.yaw, closeTo(math.pi, 1e-9));
+      expect(body.yaw, closeTo(0, 1e-9));
       expect(body.height, 2); // one slice x spacing 1 x scale 2.
 
       stack.dispose();
     });
 
-    test('mirrors the source x axis like the renderer does', () async {
+    test('centres the footprint on the prop when the art is off-centre',
+        () async {
       // Solid only on the right half of the slice.
       final stack = await _stackFromSlices(
         [_solidMask(width: 6, depth: 4, minX: 4, maxX: 5)],
@@ -134,11 +135,12 @@ void main() {
 
       final body = scene.collisionBodyOf(object)!;
 
-      // The ground slice is drawn rotated by pi, so source +x lands on world
-      // -x; the collision proxy has to follow the drawn pixels, not the
-      // asset's raw orientation.
-      expect(body.center.dx, lessThan(100));
-      expect(body.center.dy, 204);
+      // The prop stands on its footprint centre: the renderer shifts the art so
+      // that centre lands on `position`, and the proxy is centred there too, so
+      // solid pixels sitting to one side of the strip do not drag it away.
+      expect(body.center, const Offset(100, 200));
+      expect(body.halfWidth, 2); // two solid columns x scale 2 / 2.
+      expect(body.halfDepth, 4);
 
       stack.dispose();
     });
@@ -190,8 +192,8 @@ void main() {
       expect(body.halfWidth, 15);
       expect(body.halfDepth, 9);
       expect(body.height, 12);
-      expect(body.center, const Offset(10, 29)); // 3 px forward x scale 3.
-      expect(body.yaw, closeTo(math.pi, 1e-9));
+      expect(body.center, const Offset(10, 20)); // centred on the prop.
+      expect(body.yaw, closeTo(0, 1e-9));
 
       stack.dispose();
     });
@@ -215,7 +217,7 @@ void main() {
 
       final body = scene.collisionBodyOf(object)!;
 
-      expect(body.center, const Offset(2, 4));
+      expect(body.center, const Offset(2, 1));
 
       stack.dispose();
     });
@@ -349,12 +351,12 @@ void main() {
 
     tearDown(() => stack.dispose());
 
-    // Footprint 20 x 20 starting at the prop's ground point, so it spans
-    // y 20..40 with the prop placed at (0, 20).
+    // Footprint 20 x 20 centred on the prop, so with the prop at (0, 30) it
+    // spans y 20..40.
     SpriteStackScene sceneWithWall({double height = 10}) {
       final wall = SpriteStackSceneObject(
         stack: stack,
-        position: const SpriteStackPoint(0, 20, 0),
+        position: const SpriteStackPoint(0, 30, 0),
         collider: SpriteStackCollider(
           size: const Size(20, 20),
           height: height,

@@ -51,15 +51,11 @@ class SpriteStackCollider {
   /// Offset of the footprint centre from its natural position, in art pixels,
   /// in the prop's local frame.
   ///
-  /// `+y` points the way the footprint extends from the ground anchor (the
-  /// prop's front, following the asset convention), `+x` is the prop's local
-  /// right, and the offset rotates with the prop. With an explicit [size] the
-  /// footprint is centred `size.height / 2` forward of the ground point, so
-  /// `Offset.zero` keeps it flush with the anchor. Use it to shift the proxy
-  /// for art with a wide transparent margin.
-  ///
-  /// Ignored when [size] is `null`: a volume-derived footprint is already
-  /// centred on its own bounds.
+  /// The natural position is `SpriteStackSceneObject.position` itself, which is
+  /// also where the sprite is drawn from, so `Offset.zero` keeps the proxy
+  /// centred on the prop. `+x` is the prop's local right, `+y` its local
+  /// forward, and the offset rotates with the prop. Use it to shift the proxy
+  /// for art whose solid part is not centred in the strip.
   final Offset offset;
 
   /// Height of the proxy above the ground, in art pixels (one unit per
