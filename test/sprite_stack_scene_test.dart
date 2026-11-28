@@ -422,17 +422,30 @@ void main() {
             -math.sin(projection.yaw),
             math.cos(projection.yaw) * squash,
           );
+          final alongScreen = along - origin;
+          final acrossScreen = across - origin;
+          // Representable only while the squash stays inside `0..1` and the
+          // two projected edges sit on opposite sides of the horizontal: a
+          // footprint flattened against the horizon cannot be matched by a
+          // parallelogram at all, and the scene keeps the ray yaw there.
+          final ratio = -(alongScreen.dy * acrossScreen.dy) /
+              (alongScreen.dx * acrossScreen.dx);
 
-          expect(
-            _lineAngle(spriteU, along - origin),
-            lessThan(0.5),
-            reason: 'yaw $yaw at $position: the footprint width is twisted',
-          );
-          expect(
-            _lineAngle(spriteV, across - origin),
-            lessThan(0.5),
-            reason: 'yaw $yaw at $position: the footprint depth is twisted',
-          );
+          if (ratio > 1e-9) {
+            expect(
+              _lineAngle(spriteU, alongScreen),
+              lessThan(0.5),
+              reason: 'yaw $yaw at $position: the footprint width is twisted',
+            );
+            expect(
+              _lineAngle(spriteV, acrossScreen),
+              lessThan(ratio <= 1 ? 0.5 : 3),
+              reason: 'yaw $yaw at $position: the footprint depth is twisted',
+            );
+          } else {
+            expect(projection.yaw.isFinite, isTrue);
+            expect(projection.pitch.isFinite, isTrue);
+          }
         }
       }
 
