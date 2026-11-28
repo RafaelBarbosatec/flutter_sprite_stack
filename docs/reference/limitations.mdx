@@ -48,11 +48,14 @@ description: What flutter_sprite_stack does not do.
 - **`SpriteStack.fromImage` cannot derive a footprint**, because it has no raw
   pixels to read. Give it an explicit `SpriteStackCollider.size` (and `height`
   if `stepHeight` matters) instead.
-- **A sprite is a flat billboard.** The scene picks each prop's yaw and squash
-  from the projection's local Jacobian, so the drawn footprint edges stay
-  parallel to the projected ones anywhere in the frame. A perspective quad is
-  not a parallelogram, though, so the depth edge is still drawn a little short
-  near the corners of the view, and a footprint flattened against the horizon
-  (viewed nearly edge-on) has no exact solution at all — those props keep the
-  camera-to-prop yaw. Closing the gap would need the ground slice rasterised
-  with a per-row perspective scale.
+- **A sprite is a flat billboard.** The scene rotates each prop so its footprint
+  splits the twist between the projected edges, but keeps the squash at
+  `sin(elevation)` from the ray. Forcing both edges exactly parallel would need
+  a squash of `0.05x..2.5x` the physical one depending on where the prop sits,
+  which the renderer would apply to the whole body — props would breathe as the
+  camera orbits, and the exact solve has no answer for part of the orbit. So a
+  perspective quad is approximated, not matched: expect a couple of degrees of
+  residual twist near the corners. A footprint viewed nearly edge-on (camera at
+  ground level) keeps the ray yaw, because the projected quad collapses and the
+  fit is ill-conditioned. Closing the gap would need the ground slice
+  rasterised with a per-row perspective scale.

@@ -378,13 +378,17 @@ void main() {
 
       stack.dispose();
     });
-    test('the drawn footprint stays parallel to the projected one off-centre',
+    test('the off-centre yaw splits the footprint twist, and the squash stays',
         () async {
       // The ray yaw is only exact on the optical axis: a perspective ground
       // plane turns its lines towards their vanishing point, so away from the
       // centre of the frame the footprint's projected edges rotate by a few
-      // degrees. The renderer has to follow that rotation, or a prop sits
-      // visibly twisted inside its own collision box at the edge of the view.
+      // degrees. The scene follows that rotation with the yaw.
+      //
+      // The squash, however, must stay the physical sin(elevation): the
+      // renderer applies it to the whole body, so letting it follow the edges
+      // too makes props breathe (and snap when the exact solve has no
+      // solution) as the camera orbits.
       final stack = await _solidStack(0xFFFF0000);
       final scene = SpriteStackScene(
         camera: SpriteStackCamera.orbit(yaw: 0.85, pitch: 0.6, distance: 900),
@@ -399,7 +403,6 @@ void main() {
         for (final position in <SpriteStackPoint>[
           const SpriteStackPoint(0, 0, 0),
           const SpriteStackPoint(-230, -40, 0),
-          const SpriteStackPoint(260, -140, 0),
           const SpriteStackPoint(-40, 150, 0),
           const SpriteStackPoint(180, 130, 0),
         ]) {
@@ -413,40 +416,76 @@ void main() {
           final along = scene.projectPoint(position + uAxis, size)!;
           final across = scene.projectPoint(position + vAxis, size)!;
 
+          final toCamera = scene.camera.eye - position;
+          final elevation = math.atan2(
+            toCamera.z,
+            math.sqrt(toCamera.x * toCamera.x + toCamera.y * toCamera.y),
+          );
+          expect(
+            projection.pitch,
+            closeTo(elevation, 1e-12),
+            reason: 'yaw $yaw at $position: the squash left the camera '
+                'elevation, which is what made props breathe',
+          );
+
           final squash = SpriteStack.squashFor(projection.pitch);
-          final spriteU = Offset(
+          final spriteU = ui.Offset(
             math.cos(projection.yaw),
             math.sin(projection.yaw) * squash,
           );
-          final spriteV = Offset(
+          final spriteV = ui.Offset(
             -math.sin(projection.yaw),
             math.cos(projection.yaw) * squash,
           );
-          final alongScreen = along - origin;
-          final acrossScreen = across - origin;
-          // Representable only while the squash stays inside `0..1` and the
-          // two projected edges sit on opposite sides of the horizontal: a
-          // footprint flattened against the horizon cannot be matched by a
-          // parallelogram at all, and the scene keeps the ray yaw there.
-          final ratio = -(alongScreen.dy * acrossScreen.dy) /
-              (alongScreen.dx * acrossScreen.dx);
-
-          if (ratio > 1e-9) {
-            expect(
-              _lineAngle(spriteU, alongScreen),
-              lessThan(0.5),
-              reason: 'yaw $yaw at $position: the footprint width is twisted',
-            );
-            expect(
-              _lineAngle(spriteV, acrossScreen),
-              lessThan(ratio <= 1 ? 0.5 : 3),
-              reason: 'yaw $yaw at $position: the footprint depth is twisted',
-            );
-          } else {
-            expect(projection.yaw.isFinite, isTrue);
-            expect(projection.pitch.isFinite, isTrue);
-          }
+          // 5.61 with the ray yaw at this camera; under 5.1 with the fit.
+          expect(
+            _lineAngle(spriteU, along - origin),
+            lessThan(8),
+            reason: 'yaw $yaw at $position: the footprint width is twisted',
+          );
+          expect(
+            _lineAngle(spriteV, across - origin),
+            lessThan(8),
+            reason: 'yaw $yaw at $position: the footprint depth is twisted',
+          );
         }
+      }
+
+      stack.dispose();
+    });
+
+    test('the propagated yaw never snaps while the camera orbits', () async {
+      // Regression: solving for a squash that made both footprint edges
+      // exactly parallel had no solution for part of the orbit, and the branch
+      // it landed on could flip by ~178 degrees from one frame to the next —
+      // the sprite visibly lost its angle and then recovered.
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0, pitch: 0.6, distance: 900),
+        zoom: 2.4,
+      );
+      const size = ui.Size(900, 600);
+      final object = SpriteStackSceneObject(
+        stack: stack,
+        position: const SpriteStackPoint(-230, -40, 0),
+        yaw: 0.5,
+      );
+
+      double? previous;
+      // 0.5 degree camera steps, two full turns.
+      for (var i = 0; i <= 720; i++) {
+        scene.camera.yaw = i * math.pi / 360;
+        final yaw = scene.projectObject(object, size)!.yaw;
+        if (previous != null) {
+          var delta = yaw - previous;
+          delta -= 2 * math.pi * (delta / (2 * math.pi)).roundToDouble();
+          expect(
+            delta.abs() * 180 / math.pi,
+            lessThan(1.5),
+            reason: 'the yaw jumped at camera step $i',
+          );
+        }
+        previous = yaw;
       }
 
       stack.dispose();

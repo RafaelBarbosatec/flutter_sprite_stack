@@ -495,7 +495,7 @@ class SpriteStackScene {
     final toCamera = basis.eye - object.position;
     final horizontal =
         math.sqrt(toCamera.x * toCamera.x + toCamera.y * toCamera.y);
-    var pitch =
+    final pitch =
         horizontal < 1e-9 ? math.pi / 2 : math.atan2(toCamera.z, horizontal);
 
     var yaw = object.yaw;
@@ -515,9 +515,20 @@ class SpriteStackScene {
       // ground plane does not keep its lines parallel: away from the centre of
       // the frame the projected footprint turns towards its vanishing point,
       // and a sprite drawn with the ray yaw sits slightly rotated against its
-      // own collider. Solve for the yaw and squash whose drawn footprint edges
-      // are parallel to the projected ones, from the projection's local
-      // Jacobian at the prop.
+      // own collider.
+      //
+      // Only the yaw is corrected. The squash has to stay the physical
+      // `sin(elevation)`, because the renderer applies it to the whole body,
+      // not just to the footprint: solving for the squash that makes **both**
+      // edges exactly parallel forces it to `0.05x..2.5x` of the physical
+      // value as the camera orbits, and has no solution at all for roughly a
+      // tenth of the angles. That reads as props breathing and snapping, which
+      // is far worse than the few degrees it removes.
+      //
+      // So the squash stays put and the yaw splits the residual between the
+      // two edges: the least-squares fit of the footprint parallelogram to the
+      // projected quad, in closed form, taking the branch nearest the ray
+      // azimuth so the sprite never flips its facing.
       final focal = zoom * camera.distance;
       final depthSquared = depth * depth;
       final eyeRight = relative.dot(basis.right);
@@ -538,22 +549,60 @@ class SpriteStackScene {
       // prop's world `x` axis, and keeps `y` pointing the same way.
       final along = groundDerivative(-cosY, -sinY);
       final across = groundDerivative(-sinY, cosY);
-      final denominator = along.dx * across.dx;
-      final numerator = -along.dy * across.dy;
-      // `q * q = -(along.y * across.y) / (along.x * across.x)`: the squash that
-      // makes both footprint edges land on the projected ones. It has no
-      // solution when an edge runs exactly along a screen axis, which is a
-      // genuine degeneracy of a 3-parameter sprite against a perspective quad.
-      if (denominator != 0) {
-        final ratio = numerator / denominator;
-        if (ratio > 1e-9) {
-          // `squash` cannot exceed 1 in the renderer, so a footprint stretched
-          // further than that keeps the yaw (the base line still lands on the
-          // projected edge) and caps the depth.
-          final squash = math.sqrt(ratio).clamp(0.08, 1.0).toDouble();
-          yaw = math.atan2(along.dy, squash * along.dx);
-          pitch = math.asin(squash);
+      final squash = SpriteStack.squashFor(pitch);
+      final rayYaw = yaw;
+      final alongX = along.dx;
+      final alongY = along.dy;
+      final acrossX = across.dx;
+      final acrossY = across.dy;
+      final alongLengthSquared = alongX * alongX + alongY * alongY;
+      final acrossLengthSquared = acrossX * acrossX + acrossY * acrossY;
+      // With the camera at ground level the two footprint axes project onto
+      // almost the same screen line: the quad has collapsed, any yaw fits it
+      // equally badly, and the fit is ill-conditioned. Keep the ray there.
+      final opening = alongLengthSquared > 1e-12 && acrossLengthSquared > 1e-12
+          ? (alongX * acrossY - alongY * acrossX).abs() /
+              math.sqrt(alongLengthSquared * acrossLengthSquared)
+          : 0.0;
+      if (opening > 0.02) {
+        final squashSquared = squash * squash;
+        // `J(theta) = k1 cos^2 + k2 sin^2 + k3 cos sin` is the squared
+        // cross-product residual of the two drawn edges against the projected
+        // ones; its minimum is a closed-form `atan2`, and the function has
+        // period pi so the candidates are pi/2 apart.
+        final k1 = alongY * alongY / alongLengthSquared +
+            squashSquared * acrossX * acrossX / acrossLengthSquared;
+        final k2 = squashSquared * alongX * alongX / alongLengthSquared +
+            acrossY * acrossY / acrossLengthSquared;
+        final k3 = 2 *
+            squash *
+            (-alongY * alongX / alongLengthSquared +
+                acrossY * acrossX / acrossLengthSquared);
+        var bestYaw = rayYaw;
+        var bestCost = double.infinity;
+        for (var quadrant = 0; quadrant < 4; quadrant++) {
+          final candidate =
+              0.5 * math.atan2(k3, k1 - k2) + quadrant * math.pi / 2;
+          final cosCandidate = math.cos(candidate);
+          final sinCandidate = math.sin(candidate);
+          final cost = k1 * cosCandidate * cosCandidate +
+              k2 * sinCandidate * sinCandidate +
+              k3 * cosCandidate * sinCandidate;
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestYaw = candidate;
+          }
         }
+        // A yaw is a facing, not a line, and the cost has period pi: reduce
+        // modulo pi, then take the branch nearest the ray azimuth so the
+        // sprite never swaps front for back.
+        var correction = bestYaw - rayYaw;
+        correction -= math.pi * (correction / math.pi).roundToDouble();
+        // A prop seen almost edge-on can beg for a wild correction; capping it
+        // keeps the sprite sane and still follows the projected edges.
+        const maxCorrection = 0.35; // ~20 degrees
+        yaw =
+            rayYaw + correction.clamp(-maxCorrection, maxCorrection).toDouble();
       }
     }
 
