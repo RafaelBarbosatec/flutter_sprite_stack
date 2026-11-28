@@ -19,6 +19,13 @@
 - `SpriteStack.footprintFor({frame})` exposes the union of the opaque art of a
   frame — the pivot the new anchor uses — and `SpriteStack.anchorOffset(...)`
   reports the screen-space shift it applies.
+- **No more twist at the edge of the frame.** The sprite yaw used to come from
+  the ray to the prop, which is exact on the optical axis but ignores that a
+  perspective ground turns its lines towards their vanishing points: a house in
+  the corner of the view sat up to ~10° rotated against its own collision lines.
+  `SpriteStackScene` now solves the projection's local Jacobian at the prop for
+  the yaw and squash whose footprint edges are parallel to the projected ones.
+  Measured on the diorama, the residual twist went from ~6–10° to < 0.5°.
 
 ### Collision
 
