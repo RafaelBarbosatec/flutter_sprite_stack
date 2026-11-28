@@ -494,13 +494,11 @@ class SpriteStackScene {
     final toCamera = basis.eye - object.position;
     final horizontal =
         math.sqrt(toCamera.x * toCamera.x + toCamera.y * toCamera.y);
-    final pitch =
+    var pitch =
         horizontal < 1e-9 ? math.pi / 2 : math.atan2(toCamera.z, horizontal);
 
-    final double yaw;
-    if (object.billboard) {
-      yaw = object.yaw;
-    } else {
+    var yaw = object.yaw;
+    if (!object.billboard) {
       // World-aligned: express the camera direction in the prop's local
       // horizontal axes (right = source +X, forward = source +Y) and take its
       // azimuth. At the orbit target this reduces to
@@ -511,6 +509,51 @@ class SpriteStackScene {
         -(toCamera.x * cosY + toCamera.y * sinY),
         -toCamera.x * sinY + toCamera.y * cosY,
       );
+
+      // The ray azimuth is exact on the optical axis, but a perspective
+      // ground plane does not keep its lines parallel: away from the centre of
+      // the frame the projected footprint turns towards its vanishing point,
+      // and a sprite drawn with the ray yaw sits slightly rotated against its
+      // own collider. Solve for the yaw and squash whose drawn footprint edges
+      // are parallel to the projected ones, from the projection's local
+      // Jacobian at the prop.
+      final focal = zoom * camera.distance;
+      final depthSquared = depth * depth;
+      final eyeRight = relative.dot(basis.right);
+      final eyeUp = relative.dot(basis.up);
+      Offset groundDerivative(double wx, double wy) {
+        // Derivative of the projection along the horizontal world direction
+        // `(wx, wy, 0)`.
+        final dRight = wx * basis.right.x + wy * basis.right.y;
+        final dUp = wx * basis.up.x + wy * basis.up.y;
+        final dForward = wx * basis.forward.x + wy * basis.forward.y;
+        return Offset(
+          focal * (dRight * depth - eyeRight * dForward) / depthSquared,
+          -focal * (dUp * depth - eyeUp * dForward) / depthSquared,
+        );
+      }
+
+      // The renderer turns the source `x` axis the other way round from the
+      // prop's world `x` axis, and keeps `y` pointing the same way.
+      final along = groundDerivative(-cosY, -sinY);
+      final across = groundDerivative(-sinY, cosY);
+      final denominator = along.dx * across.dx;
+      final numerator = -along.dy * across.dy;
+      // `q * q = -(along.y * across.y) / (along.x * across.x)`: the squash that
+      // makes both footprint edges land on the projected ones. It has no
+      // solution when an edge runs exactly along a screen axis, which is a
+      // genuine degeneracy of a 3-parameter sprite against a perspective quad.
+      if (denominator != 0) {
+        final ratio = numerator / denominator;
+        if (ratio > 1e-9) {
+          // `squash` cannot exceed 1 in the renderer, so a footprint stretched
+          // further than that keeps the yaw (the base line still lands on the
+          // projected edge) and caps the depth.
+          final squash = math.sqrt(ratio).clamp(0.08, 1.0).toDouble();
+          yaw = math.atan2(along.dy, squash * along.dx);
+          pitch = math.asin(squash);
+        }
+      }
     }
 
     final bounds = object.stack.boundsFor(

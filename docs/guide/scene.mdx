@@ -23,6 +23,15 @@ what keeps the pixels inside the collision box when the camera orbits. The
 `anchor` option on `SpriteStack.render` itself still defaults to the classic
 `bottomCentre`, so a plain sprite outside a scene is unaffected.
 
+**Yaw and squash come from the projection, not just from the ray to the prop.**
+A perspective ground plane does not keep its lines parallel: away from the
+centre of the frame they turn towards their vanishing points. The scene solves
+the local Jacobian of the projection at each prop for the `yaw` and squash that
+make the sprite's footprint edges parallel to the projected ones — otherwise a
+house in the corner of the view sits a few degrees twisted inside its own
+collision box. On the optical axis this reduces to the camera-to-prop azimuth
+and `sin(pitch)`.
+
 ## A minimal scene
 
 ```dart

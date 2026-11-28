@@ -378,6 +378,66 @@ void main() {
 
       stack.dispose();
     });
+    test('the drawn footprint stays parallel to the projected one off-centre',
+        () async {
+      // The ray yaw is only exact on the optical axis: a perspective ground
+      // plane turns its lines towards their vanishing point, so away from the
+      // centre of the frame the footprint's projected edges rotate by a few
+      // degrees. The renderer has to follow that rotation, or a prop sits
+      // visibly twisted inside its own collision box at the edge of the view.
+      final stack = await _solidStack(0xFFFF0000);
+      final scene = SpriteStackScene(
+        camera: SpriteStackCamera.orbit(yaw: 0.85, pitch: 0.6, distance: 900),
+        zoom: 2.4,
+      );
+      const size = ui.Size(900, 600);
+      const step = 25.0;
+
+      for (final yaw in <double>[0.5, 2.3]) {
+        final uAxis = SpriteStackPoint(math.cos(yaw), math.sin(yaw), 0) * step;
+        final vAxis = SpriteStackPoint(-math.sin(yaw), math.cos(yaw), 0) * step;
+        for (final position in <SpriteStackPoint>[
+          const SpriteStackPoint(0, 0, 0),
+          const SpriteStackPoint(-230, -40, 0),
+          const SpriteStackPoint(260, -140, 0),
+          const SpriteStackPoint(-40, 150, 0),
+          const SpriteStackPoint(180, 130, 0),
+        ]) {
+          final object = SpriteStackSceneObject(
+            stack: stack,
+            position: position,
+            yaw: yaw,
+          );
+          final projection = scene.projectObject(object, size)!;
+          final origin = scene.projectPoint(position, size)!;
+          final along = scene.projectPoint(position + uAxis, size)!;
+          final across = scene.projectPoint(position + vAxis, size)!;
+
+          final squash = SpriteStack.squashFor(projection.pitch);
+          final spriteU = Offset(
+            math.cos(projection.yaw),
+            math.sin(projection.yaw) * squash,
+          );
+          final spriteV = Offset(
+            -math.sin(projection.yaw),
+            math.cos(projection.yaw) * squash,
+          );
+
+          expect(
+            _lineAngle(spriteU, along - origin),
+            lessThan(0.5),
+            reason: 'yaw $yaw at $position: the footprint width is twisted',
+          );
+          expect(
+            _lineAngle(spriteV, across - origin),
+            lessThan(0.5),
+            reason: 'yaw $yaw at $position: the footprint depth is twisted',
+          );
+        }
+      }
+
+      stack.dispose();
+    });
   });
 
   group('SpriteStackGround painting', () {
@@ -926,6 +986,14 @@ void main() {
       expect(_pixelAt(pixels, 200, 0, 0), 0xFF445566);
     });
   });
+}
+
+/// Smallest angle between two screen lines, in degrees (`0..90`).
+double _lineAngle(ui.Offset a, ui.Offset b) {
+  final difference =
+      (math.atan2(a.dy, a.dx) - math.atan2(b.dy, b.dx)) * 180 / math.pi;
+  final wrapped = difference % 180;
+  return (wrapped > 90 ? 180 - wrapped : wrapped).abs();
 }
 
 Future<SpriteStack> _solidStack(int argb, {int sliceCount = 1}) async {
