@@ -52,7 +52,7 @@ Or add it manually:
 
 ```yaml
 dependencies:
-  flutter_sprite_stack: ^0.4.0
+  flutter_sprite_stack: ^0.5.0
 ```
 
 Requires Flutter 3.22+ and Dart 3.5+. Works on every platform Flutter supports,
@@ -618,10 +618,11 @@ whether to keep your version or take the upstream one.
 | Broken asset | trial and error in game | `validate_atlas.py` reports the gap, pivot drift or opaque background |
 | Performance | one `load` per entity | `SpriteStackCache`, `bake`, `SpriteStackTurntable` |
 
-#### Before 0.4.0 is published
+#### Version note
 
-The skills travel with the package version, so this path needs a published
-`0.4.0`. Until then, install them straight from the repository:
+The skills travel with the package version, so `-p flutter_sprite_stack` needs a
+published `0.5.0` or newer. To track the repository's `main` instead, install
+them straight from the repository:
 
 ```bash
 dart run skills@ add https://github.com/RafaelBarbosatec/flutter_sprite_stack

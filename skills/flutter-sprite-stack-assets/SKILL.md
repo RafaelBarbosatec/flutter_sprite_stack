@@ -4,7 +4,7 @@ description: Author, slice, pack and validate sprite-stack PNGs for the flutter_
 license: MIT
 metadata:
   package: flutter_sprite_stack
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Sprite-stack assets

@@ -1,4 +1,20 @@
-## Unreleased
+## 0.5.0 — 2026-11-28
+
+### Migration from 0.4.x
+
+- **`SpriteStackSceneObject.position` now means the centre of the ground
+  footprint**, not its camera-facing edge. `SpriteStackScene` draws every prop
+  with the new `SpriteStackAnchor.footprintCentre` pivot and centres
+  `collisionBodyOf` on the same point, so sprites and collision boxes coincide
+  from any camera angle. Props keep their look but their world position moves by
+  roughly half a footprint depth; if you had tuned spawn points against the old
+  edge semantics, shift them by half the prop's footprint.
+- **`SpriteStack.render`, `boundsFor` and `bake` take a new `anchor:`
+  argument.** The default is `SpriteStackAnchor.bottomCentre`, the historical
+  behaviour, so standalone rendering is byte-for-byte unchanged. Pass
+  `SpriteStackAnchor.footprintCentre` when you want the sprite centred on
+  `position` the way the scene does.
+- `SpriteStackCollider.offset` is now measured from that footprint centre.
 
 ### Fixed
 

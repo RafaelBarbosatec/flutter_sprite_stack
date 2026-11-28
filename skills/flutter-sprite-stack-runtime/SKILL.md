@@ -1,10 +1,10 @@
 ---
 name: flutter-sprite-stack-runtime
-description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, extracting the voxel volume and greedy mesh, and placing props in an orbit-camera 3D scene.
+description: Use the flutter_sprite_stack package in Flutter and any canvas-based engine — loading strips and frame atlases, drawing with CustomPainter, turning props with yaw, animating frames, adding wind/sway with StackMotion, opening roofs with SliceCut, choosing between live render, bake, turntable and cache, extracting the voxel volume and greedy mesh, placing props in an orbit-camera 3D scene, walking a character with ground-plane collision, drawing the collision proxies, and picking a detail tier from frame times.
 license: MIT
 metadata:
   package: flutter_sprite_stack
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Sprite-stack runtime
@@ -146,6 +146,23 @@ just short of straight down.
 - The volume/mesh is not drawn — pair it with `toVolume()` for collision or
   exact bounds.
 - Update `object.time` yourself when using `StackMotion`; the scene has no clock.
+
+### Walking: collision, debug and quality
+
+- `object.collider = const SpriteStackCollider()` makes a prop blocking; the
+  proxy is an oriented box derived from the volume's solid footprint. No
+  collider means walk-through.
+- `scene.move(position, delta:, radius:, ignore:, stepHeight:)` sweeps the
+  character circle, pushes out on contact and slides; it returns a
+  `SpriteStackMoveResult` (`position`, `applied`, `hits`, `collided`).
+- `scene.paintCollisionDebug(canvas, size, ...)` draws the same box `move`
+  resolves, with corner posts for the height and an optional character circle.
+  Turn it on before tuning a collider: it is the fastest way to see that a
+  sprite and its box disagree.
+- `SpriteStackSceneDetail` presets (`sharp`, `balanced`, `fast`, `minimal`) plus
+  `SpriteStackQualityGovernor.frame(gapMs, moving:)` pick the detail tier from
+  frame times. `applyDetail` also raises `sliceLodPixels`, so distant props draw
+  fewer cross-sections as the level drops.
 
 ## Animation (frame atlas)
 
